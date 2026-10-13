@@ -19,3 +19,18 @@
 [submodule "dbus"]
 	path = dbus
 	url = https://gitlab.freedesktop.org/dbus/dbus/
+[submodule "cairo"]
+	path = cairo
+	url = https://github.com/msteinert/cairo
+[submodule "pango"]
+	path = pango
+	url = https://gitlab.gnome.org/GNOME/pango
+[submodule "json-c"]
+	path = json-c
+	url = https://github.com/json-c/json-c
+[submodule "pcre2"]
+	path = pcre2
+	url = https://github.com/PCRE2Project/pcre2
+[submodule "gdk-pixbuf"]
+	path = gdk-pixbuf
+	url = https://gitlab.gnome.org/GNOME/gdk-pixbuf/
