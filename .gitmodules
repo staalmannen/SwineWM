@@ -16,3 +16,6 @@
 [submodule "waybar"]
 	path = waybar
 	url = https://github.com/alexays/waybar
+[submodule "dbus"]
+	path = dbus
+	url = https://gitlab.freedesktop.org/dbus/dbus/
