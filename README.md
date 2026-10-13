@@ -45,14 +45,15 @@ emerge.
 
 ## Current status
 
-The repository is an early experiment, not a usable shell or a Windows port of
-Sway. The `windows/` directory contains a small MSVC-oriented HWND bridge, a
-platform-independent binary tiling policy, and a demo that lists windows, logs
-WinEvent notifications, and switches the visibility group of windows found at
-startup. The tiling policy is not yet connected to HWND geometry. There is no
-shell UI, complete input/keybinding system, notification handling, or reliable
-shell recovery. The demo is a smoke-test starting point, not a production
-window manager.
+The repository is an early experiment, not a production shell or a Windows
+port of Sway. The `sway-hwnd/` directory contains a minimal native HWND shell
+proof of concept using a platform-independent binary tiling policy and the
+Win32 bridge in `windows/`. It tiles visible windows, switches visibility
+workspaces, and requests directional focus through fixed global hotkeys. It is
+not login-integrated and does not yet provide Sway configuration, a bar,
+notifications, complete window lifecycle handling, or reliable shell
+recovery. The upstream Sway source remains unmodified and is not yet compiled
+by this target.
 
 The root-level `sway/`, `wlroots/`, `wayland/`, `wayland-protocols/`, `mako/`,
 `waybar/`, and `dbus/` directories are upstream source checkouts. Their
@@ -76,6 +77,19 @@ visible windows it finds to workspace 1. Use **Ctrl+Alt+1** through
 [`windows/README.md`](windows/README.md) for implementation notes and current
 limitations.
 
+## Trying the native shell proof of concept
+
+On Windows, configure and build `sway-hwnd/` with the same Visual Studio
+Developer PowerShell:
+
+```powershell
+cmake -S sway-hwnd -B build/sway-hwnd -G "Visual Studio 17 2022" -A x64
+cmake --build build/sway-hwnd --config Debug
+.\build\sway-hwnd\Debug\sway-hwnd.exe
+```
+
+See [`sway-hwnd/README.md`](sway-hwnd/README.md) for shortcuts and limitations.
+
 ## Development direction
 
 The intended progression is to make the native shell useful, bring up a minimal
@@ -84,3 +98,6 @@ where Wayland clients and native Windows applications coexist. Only after
 those foundations work should the project broaden compatibility and shell
 session integration. The detailed rationale and milestones are in
 [`doc/wayland_windows_shell_project_summary.md`](doc/wayland_windows_shell_project_summary.md).
+The proposed upstream reuse strategy and future `sway-win/` layout are in
+[`doc/sway_win_design.md`](doc/sway_win_design.md); the native HWND proof of
+concept is described in [`sway-hwnd/README.md`](sway-hwnd/README.md).
