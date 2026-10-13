@@ -16,10 +16,19 @@ Build from a Visual Studio Developer PowerShell:
 ```powershell
 cmake -S windows -B build/windows -G "Visual Studio 17 2022" -A x64
 cmake --build build/windows --config Debug
+./build/windows/Debug/swine_window_bridge_demo.exe
 ```
 
-The WinEvent hook is delivered on the thread that installed it, so construct
-the bridge and call `dispatch_one()` on the shell's UI thread. Foreground
+The demo prints its initial HWND/title list and logs events. It assigns the
+windows present at startup to workspace 1; use Ctrl+Alt+1 through Ctrl+Alt+9
+to switch their visibility group, and Ctrl+C to exit. Run a few ordinary apps
+first so the initial list is useful. Switching away hides the grouped windows;
+switching back shows them without activation.
+
+For an embedding application, the WinEvent hook is delivered on the thread
+that installed it, so construct the bridge and pump that thread's messages
+(with `dispatch_one()` or the application's own message loop). Foreground
 activation is subject to Windows focus-stealing rules. This initial bridge
 does not attempt to embed/reparent windows or promise reliable behavior for
-elevated, fullscreen, owned-dialog, or tool windows.
+elevated, fullscreen, owned-dialog, or tool windows. It is still only a library
+and smoke-test demo, not a Sway port or complete shell.
