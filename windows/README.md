@@ -11,6 +11,11 @@ operations. The caller remains responsible for tiling, focus policy, key
 bindings, and the shell UI. Workspace switching currently groups HWNDs by
 visibility, while DWM retains composition of native applications.
 
+`swine::windows::TileLayout` is a platform-independent binary split-tree
+policy that calculates window placements and directional neighbors. It is
+compiled into the same library, but the demo does not yet connect its
+placements to HWND geometry or provide directional-focus keybindings.
+
 Build from a Visual Studio Developer PowerShell:
 
 ```powershell

@@ -6,6 +6,7 @@ if(NOT WIN32)
 endif()
 
 add_library(swine_win32_bridge STATIC
+  src/tile_layout.cpp
   src/window_bridge.cpp
 )
 target_include_directories(swine_win32_bridge PUBLIC include)

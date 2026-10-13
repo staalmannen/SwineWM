@@ -46,12 +46,13 @@ emerge.
 ## Current status
 
 The repository is an early experiment, not a usable shell or a Windows port of
-Sway. The `windows/` directory contains a small MSVC-oriented HWND bridge and
-a demo that lists windows, logs WinEvent notifications, and switches the
-visibility group of windows found at startup. It does not yet implement
-tiling, shell UI, a complete input/keybinding system, notification handling,
-or reliable shell recovery. The demo is a smoke-test starting point, not a
-production window manager.
+Sway. The `windows/` directory contains a small MSVC-oriented HWND bridge, a
+platform-independent binary tiling policy, and a demo that lists windows, logs
+WinEvent notifications, and switches the visibility group of windows found at
+startup. The tiling policy is not yet connected to HWND geometry. There is no
+shell UI, complete input/keybinding system, notification handling, or reliable
+shell recovery. The demo is a smoke-test starting point, not a production
+window manager.
 
 The root-level `sway/`, `wlroots/`, `wayland/`, `wayland-protocols/`, `mako/`,
 `waybar/`, and `dbus/` directories are upstream source checkouts. Their
