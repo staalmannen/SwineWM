@@ -54,6 +54,13 @@ Windows toast notifications. See [`doc/compatibility.md`](doc/compatibility.md).
 To try it, see [`swinewm/README.md`](swinewm/README.md). It runs as an
 ordinary program next to Explorer and shows all windows again when it exits.
 
+## Default config
+
+`swinewm` use [Alacritty](https://alacritty.org/) as default terminal ($mod+Enter) and 
+[Flow Launcher](https://www.flowlauncher.com/) as default application launcher ($mod+d).
+Config files are compatible with upstream Sway, Waybar and Mako. Your Waybar, mako and sway config files go in `%USERPROFILE%\.swinewm\` under the same names as on Linux (`waybar\config.jsonc`, `waybar\style.css`, `mako\config`, `config`). 
+
+
 ## License
 
 MIT; see [LICENSE](LICENSE). Code ported from Sway, Waybar or Mako (also MIT)
