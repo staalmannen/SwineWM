@@ -14,11 +14,11 @@ Status column: ✅ implemented in SwineWM, 🔜 planned, ❌ not planned.
 
 | Topic | How Cairo/ManagedShell does it | SwineWM |
 | --- | --- | --- |
-| Am I the shell? | `GetShellWindow() == NULL` at start-up, before creating any window; `/shell` and `/noshell` override (Cairo `CairoApplicationInitializationService`) | ✅ `win32/shell.c`, `--shell`, `--no-shell` |
+| Am I the shell? | `GetShellWindow() == NULL` at start-up, before creating any window; `/shell` and `/noshell` override (Cairo `CairoApplicationInitializationService`) | ✅ `win32/shell.c`, `--shell` (refused while another shell runs), `--no-shell` |
 | Shell window | Full virtual-screen tool window registered with the undocumented-but-exported `SetShellWindow` (`ShellWindow.cs`) | ✅ `swinewm-desktop`, looked up with `GetProcAddress` |
 | Logon "shell ready" | Set the event `ShellDesktopSwitchEvent` (`ShellHelper.SetShellReadyEvent`) so Windows finishes the logon | ✅ |
 | Startup programs | Only as the shell and not on a restart: HKLM/HKCU `Run` (+ `Wow6432Node`), `Policies\Explorer\Run`, HKCU `RunOnce` (deleted after use; HKLM `RunOnce` skipped because it cannot be deleted), both Startup folders; entries disabled in Task Manager are recognised by an odd first byte in `Explorer\StartupApproved\*` (`StartupRunner.cs`) | ✅ Once per logon session via a volatile registry key instead of a restart flag |
-| Work area | As the shell, `SystemParametersInfo(SPI_SETWORKAREA)` = monitor minus own bars; reset on exit (`AppBarManager.SetWorkArea/ResetWorkArea`) | ✅ per monitor |
+| Work area | As the shell, `SystemParametersInfo(SPI_SETWORKAREA)` = monitor minus own bars; reset on exit (`AppBarManager.SetWorkArea/ResetWorkArea`) | ✅ per monitor; announced with a posted `WM_SETTINGCHANGE` so a slow or competing window cannot block or loop |
 | Exit code | Exit code 1 when quitting on purpose, so Winlogon's `AutoRestartShell` does not start Explorer (Cairo `CairoApplication.OnExit`) | ✅ differently: `exit` logs off as in sway; after a crash Explorer is started as a rescue |
 | Single instance | Named mutex | ✅ already: the IPC pipe is created with `FILE_FLAG_FIRST_PIPE_INSTANCE` |
 | Set as login shell | Installer writes the Winlogon `Shell` value | ✅ `swinewm --set-shell` / `--unset-shell` (HKCU, per user) |

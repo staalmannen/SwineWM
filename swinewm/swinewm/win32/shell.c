@@ -51,20 +51,33 @@ static char *local_state_path(const char *file) {
 
 void win32_shell_detect(void) {
 	// Like Cairo: if no shell window exists at start-up, we are the shell.
+	bool other_shell = GetShellWindow() != NULL;
 	win32_shell_mode = shell_mode_override >= 0 ? shell_mode_override == 1 :
-		GetShellWindow() == NULL;
+		!other_shell;
+	if (win32_shell_mode && other_shell) {
+		// Two shells fight over the work area and the desktop window.
+		swine_log(SWINE_ERROR, "Another shell (Explorer) is running; not "
+			"acting as the shell. Use 'explorer_taskbar autohide' to run "
+			"next to Explorer.");
+		win32_shell_mode = false;
+	}
 	if (!win32_shell_mode) {
 		return;
 	}
-	// Started by Winlogon there is nobody to read the console: log to a file.
-	char *path = local_state_path("swinewm.log");
-	if (path) {
-		wchar_t *wpath = utf8_to_utf16(path);
-		if (_wfreopen(wpath, L"w", stderr)) {
-			FreeConsole();
+	// Started by Winlogon, Windows opens a console just for us that nobody
+	// reads: log to a file and close it. Started from a terminal (the
+	// console has other processes), keep logging there.
+	DWORD pids[2];
+	if (GetConsoleProcessList(pids, 2) == 1) {
+		char *path = local_state_path("swinewm.log");
+		if (path) {
+			wchar_t *wpath = utf8_to_utf16(path);
+			if (_wfreopen(wpath, L"w", stderr)) {
+				FreeConsole();
+			}
+			free(wpath);
+			free(path);
 		}
-		free(wpath);
-		free(path);
 	}
 	swine_log(SWINE_INFO, "Running as the Windows shell");
 }
@@ -285,6 +298,7 @@ void win32_shell_update_work_area(bool reset) {
 	if (!win32_shell_mode) {
 		return;
 	}
+	bool changed = false;
 	for (int i = 0; i < root->outputs->length; ++i) {
 		struct swine_output *o = root->outputs->items[i];
 		struct swine_box area = reset ? o->box : output_get_usable_area(o);
@@ -294,7 +308,14 @@ void win32_shell_update_work_area(bool reset) {
 				EqualRect(&mi.rcWork, &want)) {
 			continue;
 		}
-		SystemParametersInfoW(SPI_SETWORKAREA, 0, &want, SPIF_SENDCHANGE);
+		// SPIF_SENDCHANGE would broadcast with SendMessage and wait for
+		// every window (ours included, re-entering the layout code); the
+		// change is announced below without waiting instead.
+		SystemParametersInfoW(SPI_SETWORKAREA, 0, &want, 0);
+		changed = true;
+	}
+	if (changed) {
+		PostMessageW(HWND_BROADCAST, WM_SETTINGCHANGE, SPI_SETWORKAREA, 0);
 	}
 }
 

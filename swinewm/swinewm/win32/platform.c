@@ -64,8 +64,9 @@ static LRESULT CALLBACK shell_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 		transaction_commit_dirty();
 		return 0;
 	case WM_SETTINGCHANGE:
-		if (wparam == SPI_SETWORKAREA) {
-			// The taskbar or an app bar changed size.
+		if (wparam == SPI_SETWORKAREA && !win32_shell_mode) {
+			// The taskbar or an app bar changed size. As the shell we set
+			// the work area ourselves and do not follow it.
 			win32_outputs_update();
 			transaction_commit_dirty();
 		}

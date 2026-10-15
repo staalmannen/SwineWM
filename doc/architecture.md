@@ -283,10 +283,13 @@ dismiss|restore|invoke|mode|reload` likewise. `exec makoctl ...` and
 ## Running as the Windows shell
 
 `win32/shell.c`. swinewm acts as the shell when no shell window exists at
-start-up (or with `--shell`), typically after `swinewm --set-shell` made it
-the user's logon shell. Then it:
+start-up, typically after `swinewm --set-shell` made it the user's logon
+shell. `--shell` and `--no-shell` override the detection, but `--shell` is
+refused while Explorer (or any other shell) runs: two shells would fight
+over the work area. Then it:
 
-- logs to `%LOCALAPPDATA%\swinewm\swinewm.log` instead of a console;
+- logs to `%LOCALAPPDATA%\swinewm\swinewm.log` instead of a console when
+  started without a terminal (by Winlogon);
 - creates a bottom-most desktop window and registers it with
   `SetShellWindow` (some programs look for the shell through
   `GetShellWindow`);
@@ -295,7 +298,9 @@ the user's logon shell. Then it:
   honouring entries disabled in Task Manager), once per logon session;
 - owns the work area: each monitor's work area is set to the monitor minus
   the bar, so maximized windows outside the tiling respect the bar, and
-  reset on exit;
+  reset on exit. The change is announced with a posted `WM_SETTINGCHANGE`
+  (not `SPIF_SENDCHANGE`, which waits for every window), and swinewm does
+  not follow work area changes made by others;
 - makes `exit` log off, as sway's does;
 - after a crash, starts Explorer (with a short delay, so that Explorer finds
   no shell window and becomes the shell) so the user is never stranded.
