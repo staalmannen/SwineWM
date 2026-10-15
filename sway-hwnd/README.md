@@ -1,5 +1,10 @@
 # sway-hwnd
 
+> This C++ prototype predates [`swinewm/`](../swinewm/), the from-scratch C
+> implementation that the project now develops. It is kept for testing on
+> Windows and for comparison; its hide-based workspaces are the same
+> approach swinewm uses.
+
 Minimal native Windows shell proof of concept. It applies the project's
 platform-independent split-tree layout to ordinary visible top-level HWNDs,
 then uses the Win32 bridge to request geometry, visibility, and activation.

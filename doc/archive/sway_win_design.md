@@ -1,11 +1,19 @@
 # Draft design: Sway-Win
 
+> **Archived (October 2026).** This note belongs to SwineWM's original
+> strategy: porting Wayland, wlroots and Sway to Windows. The project now
+> builds a from-scratch Windows-native clone of Sway, Waybar and Mako
+> instead; see [`../project_summary.md`](../project_summary.md) and
+> [`../architecture.md`](../architecture.md). Its HWND bridge contract
+> (asynchronous calls, request/outcome activation, events queued to the main
+> thread) carried over into `swinewm/swinewm/win32/`.
+
 This draft proposes a Windows build area at the repository root, separate from
 the upstream `sway/` and `wlroots/` submodules. It aims to reuse upstream Sway
 source by reference wherever its existing interfaces permit, and to put
 Windows API/ABI code in `sway-win/`.
 
-The separate [`sway-hwnd/` proof of concept](../sway-hwnd/README.md) now
+The separate [`sway-hwnd/` proof of concept](../../sway-hwnd/README.md) now
 implements the native HWND-first track described below. It is intentionally a
 small, independent prototype; `sway-win/` remains a possible future build area
 for the broader Wayland Sway port and upstream-source reuse work.
@@ -61,8 +69,8 @@ builds its Wayland server and common compositor types alongside backend
 selection for DRM, libinput, and X11. A Windows backend needs to fit wlroots'
 backend/renderer/output/input abstractions and remove or replace Linux-only
 build requirements. See the current
-[`wlroots` build definition](../wlroots/meson.build) and
-[`Sway` dependency/source definition](../sway/sway/meson.build) as the versioned
+[`wlroots` build definition](../../wlroots/meson.build) and
+[`Sway` dependency/source definition](../../sway/sway/meson.build) as the versioned
 source of truth when implementation begins.
 
 Do not assume that this path automatically manages arbitrary Windows HWNDs.

@@ -1,5 +1,13 @@
 # Wayland Desktop Shells on Windows — Project Summary
 
+> **Archived (October 2026).** This note belongs to SwineWM's original
+> strategy: porting Wayland, wlroots and Sway to Windows. The project now
+> builds a from-scratch Windows-native clone of Sway, Waybar and Mako
+> instead; see [`../project_summary.md`](../project_summary.md) and
+> [`../architecture.md`](../architecture.md). The parts about the
+> native-window bridge, focus restrictions and a reliable way back to Explorer
+> still apply.
+
 ## Vision
 
 Build a platform that lets Wayland compositors and desktop environments run on Windows as **true shell replacements**, not merely as Linux desktops inside a fullscreen window.

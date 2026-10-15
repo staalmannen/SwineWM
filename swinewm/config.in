@@ -1,0 +1,194 @@
+# Default config for swinewm
+#
+# Adapted from sway's default config (MIT, Copyright (c) 2016-2024 Drew DeVault
+# and sway contributors). Copy this to %USERPROFILE%\.swinewm\config or
+# %APPDATA%\swinewm\config and edit it to your liking.
+#
+# The syntax is sway's; read `man 5 sway` or sway(5) online for a complete
+# reference. doc/compatibility.md lists what swinewm supports so far.
+# Commands that have no effect on Windows yet (output, input, bar, font, ...)
+# are accepted and ignored, so an existing sway config should load.
+
+### Variables
+#
+# Logo key. Use Mod1 for Alt.
+# Note: Windows reserves Win+L (lock screen) and no program can intercept
+# it, so "$mod+l" below locks the session unless you set $mod to Mod1 or
+# disable the shortcut with the DisableLockWorkstation policy.
+set $mod Mod4
+# Home row direction keys, like vim
+set $left h
+set $down j
+set $up k
+set $right l
+# Your preferred terminal emulator (https://alacritty.org)
+set $term alacritty.exe
+# Your preferred application launcher (https://www.flowlauncher.com).
+# Starting it again while it runs in the background opens its search box.
+# %VAR% references are expanded in exec commands.
+set $menu %LOCALAPPDATA%\FlowLauncher\Flow.Launcher.exe
+
+### Output configuration
+#
+# Not implemented yet. Windows display settings decide resolution and
+# position; swinewm uses each monitor's work area.
+#
+#   output DISPLAY1 resolution 1920x1080 position 1920,0
+#
+# You can get the names of your outputs by running: swinemsg -t get_outputs
+
+### Key bindings
+#
+# Basics:
+#
+    # Start a terminal
+    bindsym $mod+Return exec $term
+
+    # Kill focused window
+    bindsym $mod+Shift+q kill
+
+    # Start your launcher
+    bindsym $mod+d exec $menu
+
+    # Drag floating windows by holding down $mod and left mouse button.
+    # (Mouse handling is not implemented yet.)
+    floating_modifier $mod normal
+
+    # Reload the configuration file
+    bindsym $mod+Shift+c reload
+
+    # Exit swinewm (all hidden windows are shown again)
+    bindsym $mod+Shift+e exit
+#
+# Moving around:
+#
+    # Move your focus around
+    bindsym $mod+$left focus left
+    bindsym $mod+$down focus down
+    bindsym $mod+$up focus up
+    bindsym $mod+$right focus right
+    # Or use $mod+[up|down|left|right]
+    bindsym $mod+Left focus left
+    bindsym $mod+Down focus down
+    bindsym $mod+Up focus up
+    bindsym $mod+Right focus right
+
+    # Move the focused window with the same, but add Shift
+    bindsym $mod+Shift+$left move left
+    bindsym $mod+Shift+$down move down
+    bindsym $mod+Shift+$up move up
+    bindsym $mod+Shift+$right move right
+    # Ditto, with arrow keys
+    bindsym $mod+Shift+Left move left
+    bindsym $mod+Shift+Down move down
+    bindsym $mod+Shift+Up move up
+    bindsym $mod+Shift+Right move right
+#
+# Workspaces:
+#
+    # Switch to workspace
+    bindsym $mod+1 workspace number 1
+    bindsym $mod+2 workspace number 2
+    bindsym $mod+3 workspace number 3
+    bindsym $mod+4 workspace number 4
+    bindsym $mod+5 workspace number 5
+    bindsym $mod+6 workspace number 6
+    bindsym $mod+7 workspace number 7
+    bindsym $mod+8 workspace number 8
+    bindsym $mod+9 workspace number 9
+    bindsym $mod+0 workspace number 10
+    # Move focused container to workspace
+    bindsym $mod+Shift+1 move container to workspace number 1
+    bindsym $mod+Shift+2 move container to workspace number 2
+    bindsym $mod+Shift+3 move container to workspace number 3
+    bindsym $mod+Shift+4 move container to workspace number 4
+    bindsym $mod+Shift+5 move container to workspace number 5
+    bindsym $mod+Shift+6 move container to workspace number 6
+    bindsym $mod+Shift+7 move container to workspace number 7
+    bindsym $mod+Shift+8 move container to workspace number 8
+    bindsym $mod+Shift+9 move container to workspace number 9
+    bindsym $mod+Shift+0 move container to workspace number 10
+    # Note: workspaces can have any name you want, not just numbers.
+    # We just use 1-10 as the default.
+#
+# Layout stuff:
+#
+    # You can "split" the current object of your focus with
+    # $mod+b or $mod+v, for horizontal and vertical splits
+    # respectively.
+    bindsym $mod+b splith
+    bindsym $mod+v splitv
+
+    # Switch the current container between different layout styles
+    bindsym $mod+s layout stacking
+    bindsym $mod+w layout tabbed
+    bindsym $mod+e layout toggle split
+
+    # Make the current focus fullscreen
+    bindsym $mod+f fullscreen
+
+    # Toggle the current focus between tiling and floating mode
+    bindsym $mod+Shift+space floating toggle
+
+    # Swap focus between the tiling area and the floating area
+    bindsym $mod+space focus mode_toggle
+
+    # Move focus to the parent container
+    bindsym $mod+a focus parent
+#
+# Scratchpad:
+#
+    # Move the currently focused window to the scratchpad
+    bindsym $mod+Shift+minus move scratchpad
+
+    # Show the next scratchpad window or hide the focused scratchpad window.
+    # If there are multiple scratchpad windows, this command cycles through them.
+    bindsym $mod+minus scratchpad show
+#
+# Resizing containers:
+#
+mode "resize" {
+    # left will shrink the containers width
+    # right will grow the containers width
+    # up will shrink the containers height
+    # down will grow the containers height
+    bindsym $left resize shrink width 10px
+    bindsym $down resize grow height 10px
+    bindsym $up resize shrink height 10px
+    bindsym $right resize grow width 10px
+
+    # Ditto, with arrow keys
+    bindsym Left resize shrink width 10px
+    bindsym Down resize grow height 10px
+    bindsym Up resize shrink height 10px
+    bindsym Right resize grow width 10px
+
+    # Return to default mode
+    bindsym Return mode "default"
+    bindsym Escape mode "default"
+}
+bindsym $mod+r mode "resize"
+#
+# Utilities:
+#
+# Volume, media and Print Screen keys are left to Windows, which already
+# handles them. Bind them here only if you want to override that.
+#
+# Notifications:
+#
+# swinewm shows notifications itself, configured like mako in mako\config
+# next to this file. Send them with "notify-send" (as a binding, over
+# swinemsg, or from exec); control them with "makoctl".
+    bindsym $mod+n makoctl dismiss
+    bindsym $mod+Shift+n makoctl restore
+#
+# Status Bar:
+#
+# swinewm draws a Waybar-compatible bar itself. Its modules and look come
+# from waybar\config.jsonc and waybar\style.css next to this file, in
+# Waybar's own formats; without them a built-in default is used. In an
+# existing sway config, "exec waybar" or "bar { swaybar_command waybar }"
+# work as well.
+bar {
+    position top
+}
