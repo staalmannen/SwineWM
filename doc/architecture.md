@@ -120,8 +120,8 @@ handling of dialogs and fixed-size windows.
 ### Workspaces
 
 Windows on inactive workspaces are hidden with `ShowWindowAsync(SW_HIDE)`,
-the same approach as the `sway-hwnd/` prototype. Each view counts the
-show/hide events it caused, so they are not mistaken for the application
+the same approach as the earlier C++ prototype (removed; see git history).
+Each view counts the show/hide events it caused, so they are not mistaken for the application
 hiding itself (minimizing to the tray). An application that shows a hidden
 window by itself (activated from its tray icon) pulls the user to that
 workspace.

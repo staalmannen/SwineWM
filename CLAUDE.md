@@ -36,8 +36,6 @@ status changes.
   - `swinewm/swinewm/notify/` — the built-in Mako (store, config, modes);
     drawn by `win32/notify.c`. `notify-send`/`makoctl` are commands in
     `commands/notify.c`.
-- `sway-hwnd/`, `windows/` — earlier C++ prototype; the owner uses it for
-  testing on Windows. Do not delete; do not build new features on it.
 - `sway/`, `waybar/`, `mako/` — upstream reference submodules. **Never edit
   files inside submodules.** Fetch them with
   `git submodule update --init --depth 1 sway waybar mako`.

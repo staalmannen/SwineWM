@@ -34,7 +34,6 @@ program it replaces.
 | --- | --- |
 | [`swinewm/`](swinewm/) | `swinewm` (window manager, bar, notifications) and `swinemsg`, in C11 ([README](swinewm/README.md)) |
 | [`doc/`](doc/) | [Project summary](doc/project_summary.md), [architecture](doc/architecture.md), [Sway compatibility](doc/compatibility.md) |
-| [`sway-hwnd/`](sway-hwnd/), [`windows/`](windows/) | Earlier C++ prototype of an HWND tiling shell, kept for testing and comparison |
 | `sway/`, `waybar/`, `mako/` | Upstream sources (submodules), used as reference |
 
 Clone with `git clone --recurse-submodules` to get the reference sources.

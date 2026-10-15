@@ -13,7 +13,7 @@ the upstream `sway/` and `wlroots/` submodules. It aims to reuse upstream Sway
 source by reference wherever its existing interfaces permit, and to put
 Windows API/ABI code in `sway-win/`.
 
-The separate [`sway-hwnd/` proof of concept](../../sway-hwnd/README.md) now
+The separate `sway-hwnd/` proof of concept (since removed from the repository) now
 implements the native HWND-first track described below. It is intentionally a
 small, independent prototype; `sway-win/` remains a possible future build area
 for the broader Wayland Sway port and upstream-source reuse work.
