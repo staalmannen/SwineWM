@@ -1,7 +1,9 @@
 # Native Windows shell bridge
 
 This is the first native-shell building block described in
-[`doc/wayland_windows_shell_project_summary.md`](../doc/wayland_windows_shell_project_summary.md).
+[`doc/archive/wayland_port_summary.md`](../doc/archive/wayland_port_summary.md),
+and the library behind the [`sway-hwnd/`](../sway-hwnd/) prototype. New
+development happens in [`swinewm/`](../swinewm/).
 It is an independent C++20/MSVC library in a root-level sibling directory; no
 upstream submodule sources are modified.
 

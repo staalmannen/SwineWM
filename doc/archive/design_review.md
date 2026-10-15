@@ -1,7 +1,15 @@
 # Design review: Windows shell and Wayland platform
 
+> **Archived (October 2026).** This note belongs to SwineWM's original
+> strategy: porting Wayland, wlroots and Sway to Windows. The project now
+> builds a from-scratch Windows-native clone of Sway, Waybar and Mako
+> instead; see [`../project_summary.md`](../project_summary.md) and
+> [`../architecture.md`](../architecture.md). The sections on activation
+> outcomes and on keeping shell activation separate from shell policy still
+> apply and are summarised in the architecture document.
+
 This note records additional design considerations for the goals in
-[`wayland_windows_shell_project_summary.md`](wayland_windows_shell_project_summary.md).
+[`wayland_port_summary.md`](wayland_port_summary.md).
 It does not change the project's aims. It makes a few unresolved platform
 choices explicit so they can be tested before a broad port is attempted.
 

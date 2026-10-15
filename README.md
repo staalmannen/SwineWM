@@ -1,103 +1,58 @@
 # SwineWM
 
-SwineWM explores a native Windows desktop shell inspired by keyboard-driven
-Wayland compositors, with a longer-term goal of running Wayland applications
-and compositors on Windows. The project aims to keep upstream sources clean:
-Windows-specific glue and experiments live in root-level project directories
-alongside the upstream submodules.
+SwineWM is an alternative shell for Microsoft Windows that works like a
+[Sway](https://swaywm.org/) desktop: a keyboard-driven tiling window manager
+with workspaces, a [Waybar](https://github.com/Alexays/Waybar)-style bar and
+[Mako](https://github.com/emersion/mako)-style notifications. The aim is that
+Sway users can bring their config and habits to Windows.
 
-## Aims
+## Approach
 
-The work has two related goals:
+SwineWM is a **from-scratch, Windows-native clone**, not a port. It manages
+ordinary Windows application windows through Win32 APIs and leaves
+compositing to Windows (DWM). Sway, Waybar and Mako are the specification:
+their sources are included as submodules and used as reference for
+behaviour, config syntax, IPC protocol and defaults, which SwineWM
+reproduces as faithfully as Windows allows. The earlier plan of porting
+Wayland, wlroots and Sway to Windows is archived in
+[`doc/archive/`](doc/archive/).
 
-1. **Build a useful native shell early.** Manage ordinary Windows application
-   windows with Win32 APIs and DWM, with Sway-inspired tiling, focus, movement,
-   workspaces, keybindings, and a basic desktop UI. Restore the normal Windows
-   shell reliably if the experimental shell exits or fails.
-2. **Develop a Windows platform for Wayland software.** Add the output,
-   rendering, input, event-loop, and compatibility layers needed to run a
-   genuine Wayland compositor and clients on Windows. Use Sway and wlroots to
-   explore this path, while keeping platform-specific changes isolated from
-   upstream code where practical.
+| Linux | SwineWM | Status |
+| --- | --- | --- |
+| sway | `swinewm` — tiling window manager | Early draft, runs |
+| swaymsg | `swinemsg` — IPC client | Early draft, runs |
+| waybar | `swinebar` — status bar | Planned |
+| mako | `swinenotify` — notifications | Planned |
 
-The early native shell is useful independently of the Wayland port. It is also
-a place to explore window policy and user interaction before compositor
-support is mature.
+## Repository layout
 
-## Design
+| Path | What |
+| --- | --- |
+| [`swinewm/`](swinewm/) | The window manager and `swinemsg`, in C11 ([README](swinewm/README.md)) |
+| [`doc/`](doc/) | [Project summary](doc/project_summary.md), [architecture](doc/architecture.md), [Sway compatibility](doc/compatibility.md) |
+| [`sway-hwnd/`](sway-hwnd/), [`windows/`](windows/) | Earlier C++ prototype of an HWND tiling shell, kept for testing and comparison |
+| `sway/`, `waybar/`, `mako/` | Upstream sources, used as reference |
+| `wlroots/`, `wayland/`, `wayland-protocols/`, `cairo/`, `pango/`, `dbus/`, `json-c/`, `pcre2/`, `gdk-pixbuf/` | Dependencies imported for the abandoned port; no longer used |
 
-The target desktop has one owner for policy: the shell or compositor decides
-layout, focus, workspaces, and the overall desktop experience. Applications
-can reach that desktop through two paths:
+Clone with `git clone --recurse-submodules`, or run
+`git submodule update --init sway waybar mako` to get just the reference
+sources.
 
-- **Wayland clients** use compositor-owned Wayland surfaces and the compositor
-  rendering path.
-- **Windows applications** keep their native HWNDs and continue to be composed
-  by DWM. A bridge coordinates their geometry, activation, visibility, and
-  lifecycle with the shared desktop policy.
+## Status
 
-This is co-management, not a general mechanism for transferring HWND ownership
-to a Wayland compositor. Prefer documented Windows APIs, preserve the native
-application window model, and add POSIX or Linux API compatibility only when
-real dependencies require it. Notification services, D-Bus integration, and
-other desktop facilities should be introduced as concrete application needs
-emerge.
+`swinewm` implements Sway's layout tree, focus model and most everyday
+commands (focus, move, split, layout, workspaces, floating, fullscreen,
+scratchpad, resize, gaps, modes, exec), loads Sway config files and answers
+i3/Sway IPC requests over a named pipe. Its core is unit-tested on Linux and
+Windows, and it has been smoke-tested under Wine; it has not yet been used
+on a real Windows desktop. Not yet done: title bars and borders, mouse
+bindings, criteria rules, output configuration, IPC events, the bar and the
+notification daemon. See [`doc/compatibility.md`](doc/compatibility.md).
 
-## Current status
+To try it, see [`swinewm/README.md`](swinewm/README.md). It runs as an
+ordinary program next to Explorer and shows all windows again when it exits.
 
-The repository is an early experiment, not a production shell or a Windows
-port of Sway. The `sway-hwnd/` directory contains a minimal native HWND shell
-proof of concept using a platform-independent binary tiling policy and the
-Win32 bridge in `windows/`. It tiles visible windows, switches visibility
-workspaces, and requests directional focus through fixed global hotkeys. It is
-not login-integrated and does not yet provide Sway configuration, a bar,
-notifications, complete window lifecycle handling, or reliable shell
-recovery. The upstream Sway source remains unmodified and is not yet compiled
-by this target.
+## License
 
-The root-level `sway/`, `wlroots/`, `wayland/`, `wayland-protocols/`, `mako/`,
-`waybar/`, and `dbus/` directories are upstream source checkouts. Their
-presence does not mean they currently build or run on Windows as part of this
-project. Additional third-party libraries may be supplied by existing Windows
-ports and integrated through the Windows build as needed.
-
-## Trying the HWND bridge
-
-On Windows, open a Visual Studio Developer PowerShell and run:
-
-```powershell
-cmake -S windows -B build/windows -G "Visual Studio 17 2022" -A x64
-cmake --build build/windows --config Debug
-.\build\windows\Debug\swine_window_bridge_demo.exe
-```
-
-Start a few ordinary applications before launching the demo. It assigns the
-visible windows it finds to workspace 1. Use **Ctrl+Alt+1** through
-**Ctrl+Alt+9** to switch visibility groups, and **Ctrl+C** to exit. See
-[`windows/README.md`](windows/README.md) for implementation notes and current
-limitations.
-
-## Trying the native shell proof of concept
-
-On Windows, configure and build `sway-hwnd/` with the same Visual Studio
-Developer PowerShell:
-
-```powershell
-cmake -S sway-hwnd -B build/sway-hwnd -G "Visual Studio 17 2022" -A x64
-cmake --build build/sway-hwnd --config Debug
-.\build\sway-hwnd\Debug\sway-hwnd.exe
-```
-
-See [`sway-hwnd/README.md`](sway-hwnd/README.md) for shortcuts and limitations.
-
-## Development direction
-
-The intended progression is to make the native shell useful, bring up a minimal
-Wayland compositor and client on Windows, then demonstrate a shared desktop
-where Wayland clients and native Windows applications coexist. Only after
-those foundations work should the project broaden compatibility and shell
-session integration. The detailed rationale and milestones are in
-[`doc/wayland_windows_shell_project_summary.md`](doc/wayland_windows_shell_project_summary.md).
-The proposed upstream reuse strategy and future `sway-win/` layout are in
-[`doc/sway_win_design.md`](doc/sway_win_design.md); the native HWND proof of
-concept is described in [`sway-hwnd/README.md`](sway-hwnd/README.md).
+MIT; see [LICENSE](LICENSE). Code ported from Sway, Waybar or Mako (also MIT)
+keeps the original copyright notice.
