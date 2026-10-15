@@ -7,3 +7,6 @@
 [submodule "waybar"]
 	path = waybar
 	url = https://github.com/alexays/waybar
+[submodule "cairoshell"]
+	path = cairoshell
+	url = https://github.com/cairoshell/cairoshell
