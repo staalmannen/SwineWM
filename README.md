@@ -1,9 +1,9 @@
 # SwineWM
 
-SwineWM is an alternative shell for Microsoft Windows that works like a
-[Sway](https://swaywm.org/) desktop: a keyboard-driven tiling window manager
-with workspaces, a [Waybar](https://github.com/Alexays/Waybar)-style bar and
-[Mako](https://github.com/emersion/mako)-style notifications. The aim is that
+SwineWM is an [alternative shell](https://en.wikipedia.org/wiki/List_of_alternative_shells_for_Windows) 
+for Microsoft Windows that works like a [Sway](https://swaywm.org/) desktop:
+a keyboard-driven tiling window manager with workspaces, a [Waybar](https://github.com/Alexays/Waybar)
+-style bar and [Mako](https://github.com/emersion/mako)-style notifications. The aim is that
 Sway users can bring their config and habits to Windows.
 
 ## Approach
