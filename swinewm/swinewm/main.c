@@ -18,7 +18,7 @@ static const char usage[] =
 	"  -v, --version          Show the version number and quit.\n"
 	"  -V, --verbose          Enables more verbose logging.\n"
 	"      --recover          Show windows a crashed swinewm left hidden, then exit.\n"
-	"      --shell            Act as the Windows shell even if one is running.\n"
+	"      --shell            Act as the Windows shell (not while Explorer runs).\n"
 	"      --no-shell         Never act as the Windows shell.\n"
 	"      --set-shell        Start swinewm instead of Explorer at logon.\n"
 	"      --unset-shell      Start Explorer again at logon.\n"
