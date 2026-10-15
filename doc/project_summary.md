@@ -92,7 +92,7 @@ Win32 renderer.
 2. **Win32 platform layer** *(draft)* — window discovery, hide-based
    workspaces, low-level keyboard hook bindings, monitor/work-area outputs,
    crash recovery of hidden windows, named-pipe IPC. Needs testing on real
-   Windows machines; `sway-hwnd/` is the earlier prototype for comparison.
+   Windows machines.
 3. **Integrated bar and notifications** *(draft)* — Waybar's config and a
    CSS subset of its `style.css`; modules `sway/workspaces`, `sway/mode`,
    `sway/window`, `sway/scratchpad`, `clock`, `cpu`, `memory`, `battery`,
