@@ -81,7 +81,9 @@ void win32_outputs_update(void) {
 		output->handle = mi->handle;
 		output->primary = mi->primary;
 		output->box = box_from_rect(&mi->monitor);
-		output->usable = box_from_rect(&mi->work);
+		// As the shell, swinewm sets the work area itself (monitor minus
+		// the bar); its own reservation is applied on top of the monitor.
+		output->usable = win32_shell_mode ? output->box : box_from_rect(&mi->work);
 		UINT dpi_x = 96, dpi_y = 96;
 		if (SUCCEEDED(GetDpiForMonitor(mi->handle, MDT_EFFECTIVE_DPI, &dpi_x,
 				&dpi_y))) {

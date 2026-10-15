@@ -113,6 +113,35 @@ void view_destroy(struct swine_view *view) {
 	free(view);
 }
 
+void view_set_urgent(struct swine_view *view, bool enable) {
+	if (view->urgent == enable) {
+		return;
+	}
+	if (enable) {
+		if (view->urgency_denied || !view->container ||
+				seat_get_focused_container() == view->container) {
+			return;
+		}
+	}
+	view->urgent = enable;
+	if (view->container && view->container->workspace) {
+		workspace_detect_urgent(view->container->workspace);
+	}
+}
+
+void view_request_fullscreen(struct swine_view *view, bool enable) {
+	view->fullscreen_requested = enable;
+	struct swine_container *con = view->container;
+	if (!con) {
+		return;
+	}
+	bool is_fullscreen = con->fullscreen_mode != FULLSCREEN_NONE;
+	if (enable != is_fullscreen) {
+		container_set_fullscreen(con, enable ?
+			FULLSCREEN_WORKSPACE : FULLSCREEN_NONE);
+	}
+}
+
 bool view_is_visible(struct swine_view *view) {
 	return view->pending.visible;
 }

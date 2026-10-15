@@ -223,6 +223,18 @@ bool workspace_is_visible(struct swine_workspace *ws) {
 		ws->output->active_workspace == ws;
 }
 
+static void find_urgent(struct swine_container *con, void *data) {
+	if (con->view && con->view->urgent) {
+		*(bool *)data = true;
+	}
+}
+
+void workspace_detect_urgent(struct swine_workspace *ws) {
+	bool urgent = false;
+	workspace_for_each_container(ws, find_urgent, &urgent);
+	ws->urgent = urgent;
+}
+
 bool workspace_is_empty(struct swine_workspace *ws) {
 	return ws->tiling->length == 0 && ws->floating->length == 0;
 }

@@ -106,8 +106,11 @@ Win32 renderer.
    network, audio (pulseaudio module on Windows' audio API), tray (the
    notification-area icons), translucent backgrounds; notification icons,
    actions, grouping, and receiving Windows' own toast notifications.
-6. **Shell replacement** — run SwineWM instead of Explorer at login on
-   editions that support it, with a tested way back to Explorer.
+6. **Shell replacement** *(draft)* — `swinewm --set-shell` runs SwineWM
+   instead of Explorer at logon: shell window, logon "ready" event,
+   startup programs, work area, `exit` logs off, Explorer as a rescue after
+   a crash. Next: the tray (notification area icons) and AppBar support.
+   See [`research/windows-shell.md`](research/windows-shell.md).
 
 ## Open design questions
 
@@ -133,12 +136,21 @@ Win32 renderer.
   of elevated ones (UIPI). Running elevated, or skipping such windows, are
   the options.
 - **Shell activation.** Shell Launcher is only available on Enterprise,
-  Education and IoT editions; other editions need the `Shell` registry
-  value under `Winlogon`. Treat this as deployment, separate from the WM.
+  Education and IoT editions. SwineWM uses the per-user `Shell` value under
+  `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon`
+  (`--set-shell`), which needs no administrator rights; this has to be
+  confirmed on Home editions.
+- **Tray icons without Explorer.** Programs put their tray icons on
+  whatever window is called `Shell_TrayWnd`. As the shell, SwineWM must
+  host them (design in [`research/windows-shell.md`](research/windows-shell.md));
+  until then, tray-only programs cannot be reached when Explorer is not
+  running.
 
 ## Using the reference sources
 
-The submodules are documentation. The ones that matter now:
+The submodules are documentation. Notes on how other Windows shells solve
+Windows-specific problems (from Cairo Desktop / ManagedShell) are in
+[`research/windows-shell.md`](research/windows-shell.md). The submodules:
 
 - [`../sway/`](../sway/) — `sway/tree/` (layout tree), `sway/commands/`
   (one file per command), `sway/config.c`, `sway/input/seat.c` (focus

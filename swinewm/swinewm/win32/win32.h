@@ -38,6 +38,19 @@ double win32_output_scale(struct swine_output *output);
 void win32_bar_refresh(void);
 void win32_bar_finish(void);
 
+// shell.c: acting as the Windows shell, Explorer's taskbar
+extern bool win32_shell_mode;
+void win32_shell_detect(void);
+void win32_shell_start(void);
+void win32_shell_resize_desktop(void);
+void win32_shell_update_work_area(bool reset);
+void win32_shell_apply_taskbar(void);
+void win32_shell_restore_taskbar(void);
+bool win32_shell_recover_taskbar(void);
+void win32_shell_finish(void);
+void win32_shell_exit(void);
+void win32_shell_rescue(void);
+
 // wallpaper.c
 void win32_wallpaper_refresh(void);
 void win32_wallpaper_finish(void);
@@ -60,6 +73,8 @@ void win32_windows_finish(void);
 void win32_windows_drain_events(void);
 void win32_windows_manage_existing(void);
 void win32_windows_show_all(void);
+// A message from RegisterShellHookWindow (HSHELL_* code, window).
+void win32_windows_shell_hook(WPARAM code, LPARAM lparam);
 
 // keyboard.c
 bool win32_keyboard_init(void);

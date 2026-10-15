@@ -83,6 +83,7 @@ void platform_setup_environment(void) {
 	}
 	// Inherited by exec'd programs too, like SWAYSOCK.
 	SetEnvironmentVariableW(L"SWINEWM_DATA", path);
+	win32_shell_detect();
 }
 
 list_t *platform_config_paths(const char *name) {

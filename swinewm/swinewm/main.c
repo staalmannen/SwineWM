@@ -18,11 +18,15 @@ static const char usage[] =
 	"  -v, --version          Show the version number and quit.\n"
 	"  -V, --verbose          Enables more verbose logging.\n"
 	"      --recover          Show windows a crashed swinewm left hidden, then exit.\n"
+	"      --shell            Act as the Windows shell even if one is running.\n"
+	"      --no-shell         Never act as the Windows shell.\n"
+	"      --set-shell        Start swinewm instead of Explorer at logon.\n"
+	"      --unset-shell      Start Explorer again at logon.\n"
 	"\n";
 
 int main(int argc, char **argv) {
-	platform_setup_environment();
 	char *config_path = NULL;
+	int shell_mode = -1;
 	bool validate = false;
 	bool recover = false;
 	enum swine_log_importance verbosity = SWINE_ERROR;
@@ -47,12 +51,24 @@ int main(int argc, char **argv) {
 			return EXIT_SUCCESS;
 		} else if (strcmp(arg, "--recover") == 0) {
 			recover = true;
+		} else if (strcmp(arg, "--shell") == 0) {
+			shell_mode = 1;
+		} else if (strcmp(arg, "--no-shell") == 0) {
+			shell_mode = 0;
+		} else if (strcmp(arg, "--set-shell") == 0) {
+			return platform_set_login_shell(true);
+		} else if (strcmp(arg, "--unset-shell") == 0) {
+			return platform_set_login_shell(false);
 		} else {
 			fprintf(stderr, "%s", usage);
 			return EXIT_FAILURE;
 		}
 	}
 	swine_log_init(verbosity);
+	platform_set_shell_mode(shell_mode);
+	if (!recover) {
+		platform_setup_environment();
+	}
 
 	if (recover) {
 		int n = platform_recover_windows();

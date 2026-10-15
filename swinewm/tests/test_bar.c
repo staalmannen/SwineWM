@@ -233,6 +233,10 @@ static void test_bar_model(void) {
 	CHECK_INT(output->reserved.top, 0);
 	CHECK(!bar_get_rect(output, &rect));
 	CHECK(run("bar mode dock"));
+	CHECK(bar_get_rect(output, &rect));
+	output->external_fullscreen = true;   // e.g. a game
+	CHECK(!bar_get_rect(output, &rect));
+	output->external_fullscreen = false;
 	CHECK(run("fullscreen"));
 	CHECK(!bar_get_rect(output, &rect));
 	fake_teardown();

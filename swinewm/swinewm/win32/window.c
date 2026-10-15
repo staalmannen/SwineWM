@@ -23,6 +23,8 @@
 #include "swinewm/platform.h"
 #include "swinewm/server.h"
 #include "swinewm/tree/container.h"
+#include "swinewm/tree/output.h"
+#include "swinewm/tree/root.h"
 #include "swinewm/tree/view.h"
 #include "swinewm/tree/workspace.h"
 #include "win32.h"
@@ -48,7 +50,7 @@ struct queued_event {
 	HWND hwnd;
 };
 
-static HWINEVENTHOOK hooks[6];
+static HWINEVENTHOOK hooks[8];
 static int hook_count = 0;
 static struct queued_event *queue = NULL;
 static int queue_len = 0, queue_cap = 0;
@@ -79,8 +81,22 @@ static bool class_is_ignored(const wchar_t *cls) {
 	return false;
 }
 
-// Heuristic for "an application's top-level window", roughly what the
-// taskbar shows (Alt+Tab rules plus a few shell classes to skip).
+// Windows' own shell UI (Start, search, flyouts) uses these classes without
+// WS_EX_WINDOWEDGE; real UWP app frames have it. From ManagedShell's
+// ApplicationWindow.IsImmersiveShellWindow (Apache-2.0, Cairo Shell).
+static bool is_immersive_shell_window(HWND hwnd, const wchar_t *cls) {
+	if (wcscmp(cls, L"ApplicationFrameWindow") != 0 &&
+			wcscmp(cls, L"Windows.UI.Core.CoreWindow") != 0 &&
+			wcscmp(cls, L"StartMenuSizingFrame") != 0 &&
+			wcscmp(cls, L"Shell_LightDismissOverlay") != 0) {
+		return false;
+	}
+	return (GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_WINDOWEDGE) == 0;
+}
+
+// Heuristic for "an application's top-level window": the rules Explorer's
+// taskbar uses (as reimplemented by ManagedShell's CanAddToTaskbar) plus a
+// few shell classes to skip.
 static bool is_manageable(HWND hwnd) {
 	if (!IsWindow(hwnd) || !IsWindowVisible(hwnd) || is_cloaked(hwnd)) {
 		return false;
@@ -115,7 +131,11 @@ static bool is_manageable(HWND hwnd) {
 	}
 	wchar_t cls[256] = L"";
 	GetClassNameW(hwnd, cls, 256);
-	if (class_is_ignored(cls)) {
+	if (class_is_ignored(cls) || is_immersive_shell_window(hwnd, cls)) {
+		return false;
+	}
+	// Removed from the taskbar with ITaskbarList::DeleteTab.
+	if (GetPropW(hwnd, L"ITaskList_Deleted")) {
 		return false;
 	}
 	RECT r;
@@ -235,6 +255,110 @@ void win32_windows_manage_existing(void) {
 	list_free(found);
 }
 
+// The rectangle that counts for fullscreen detection: the client area of
+// windows with a frame, else the window (ManagedShell's
+// FullScreenHelper.GetEffectiveWindowRect, Apache-2.0).
+static RECT effective_rect(HWND hwnd) {
+	LONG style = GetWindowLongW(hwnd, GWL_STYLE);
+	RECT r = {0};
+	if ((style & (WS_CAPTION | WS_THICKFRAME)) == (WS_CAPTION | WS_THICKFRAME) ||
+			(style & (WS_POPUP | WS_THICKFRAME)) == (WS_POPUP | WS_THICKFRAME) ||
+			(style & (WS_POPUP | WS_BORDER)) == (WS_POPUP | WS_BORDER)) {
+		GetClientRect(hwnd, &r);
+		MapWindowPoints(hwnd, NULL, (POINT *)&r, 2);
+	} else {
+		GetWindowRect(hwnd, &r);
+	}
+	return r;
+}
+
+// The output a window covers completely, or NULL if it is not fullscreen.
+static struct swine_output *fullscreen_output(HWND hwnd) {
+	if (!IsWindow(hwnd) || !IsWindowVisible(hwnd) || IsIconic(hwnd) ||
+			is_cloaked(hwnd) || GetPropW(hwnd, L"NonRudeHWND")) {
+		return NULL;
+	}
+	DWORD pid = 0;
+	GetWindowThreadProcessId(hwnd, &pid);
+	if (pid == GetCurrentProcessId()) {
+		return NULL;
+	}
+	wchar_t cls[256] = L"";
+	GetClassNameW(hwnd, cls, 256);
+	if (class_is_ignored(cls) || is_immersive_shell_window(hwnd, cls)) {
+		return NULL;
+	}
+	LONG exstyle = GetWindowLongW(hwnd, GWL_EXSTYLE);
+	if ((exstyle & WS_EX_LAYERED) &&
+			(exstyle & (WS_EX_TRANSPARENT | WS_EX_NOACTIVATE))) {
+		return NULL;   // overlays
+	}
+	RECT r = effective_rect(hwnd);
+	for (int i = 0; i < root->outputs->length; ++i) {
+		struct swine_output *o = root->outputs->items[i];
+		if (r.left == o->box.x && r.top == o->box.y &&
+				r.right == o->box.x + o->box.width &&
+				r.bottom == o->box.y + o->box.height) {
+			return o;
+		}
+	}
+	return NULL;
+}
+
+// Keeps fullscreen state in step with what windows do on their own:
+// a managed window that makes itself fullscreen (F11 in a browser) becomes
+// a fullscreen container, as sway does for an xdg fullscreen request; an
+// unmanaged one in front (a game) hides the bar on its output.
+// Returns true if anything changed.
+static bool check_fullscreen(HWND hwnd) {
+	struct swine_view *view = view_from_handle(hwnd);
+	struct swine_output *covered = fullscreen_output(hwnd);
+	if (view && view->container) {
+		if (covered && view->container->fullscreen_mode == FULLSCREEN_NONE) {
+			swine_log(SWINE_DEBUG, "'%s' went fullscreen", view->title);
+			view_request_fullscreen(view, true);
+			return true;
+		} else if (!covered && view->fullscreen_requested) {
+			swine_log(SWINE_DEBUG, "'%s' left fullscreen", view->title);
+			view_request_fullscreen(view, false);
+			return true;
+		}
+		return false;
+	}
+	if (hwnd != GetForegroundWindow()) {
+		return false;
+	}
+	bool changed = false;
+	for (int i = 0; i < root->outputs->length; ++i) {
+		struct swine_output *o = root->outputs->items[i];
+		bool covers = o == covered;
+		changed |= o->external_fullscreen != covers;
+		o->external_fullscreen = covers;
+	}
+	return changed;
+}
+
+void win32_windows_shell_hook(WPARAM code, LPARAM lparam) {
+	HWND hwnd = (HWND)lparam;
+	switch (code) {
+	case 0x8006: { // HSHELL_FLASH: FlashWindowEx, i.e. "urgent"
+		struct swine_view *view = view_from_handle(hwnd);
+		if (view) {
+			view_set_urgent(view, true);
+			transaction_commit_dirty();
+		}
+		break;
+	}
+	case 53: // HSHELL_FULLSCREENENTER
+	case 54: // HSHELL_FULLSCREENEXIT
+		check_fullscreen(hwnd);
+		transaction_commit_dirty();
+		break;
+	default:
+		break;
+	}
+}
+
 static void handle_event(DWORD event, HWND hwnd) {
 	struct swine_view *view = view_from_handle(hwnd);
 	struct win32_view *w = view ? wv(view) : NULL;
@@ -315,6 +439,14 @@ static void handle_event(DWORD event, HWND hwnd) {
 			transaction_note_activated(view);
 			seat_set_focus_container(view->container);
 		}
+		check_fullscreen(hwnd);
+		break;
+
+	case EVENT_OBJECT_LOCATIONCHANGE:
+		// Frequent (every frame of a drag): only commit on a change.
+		if (!view || !view->container || !check_fullscreen(hwnd)) {
+			return;
+		}
 		break;
 
 	case EVENT_OBJECT_NAMECHANGE:
@@ -362,6 +494,9 @@ static void CALLBACK win_event_proc(HWINEVENTHOOK hook, DWORD event, HWND hwnd,
 	if (!hwnd || object_id != OBJID_WINDOW || child_id != CHILDID_SELF) {
 		return;
 	}
+	if (event == EVENT_OBJECT_LOCATIONCHANGE && !view_from_handle(hwnd)) {
+		return;   // very frequent; only managed windows matter
+	}
 	if (queue_len == queue_cap) {
 		queue_cap = queue_cap ? queue_cap * 2 : 64;
 		queue = realloc(queue, sizeof(*queue) * (size_t)queue_cap);
@@ -388,7 +523,7 @@ bool win32_windows_init(void) {
 	add_hook(EVENT_SYSTEM_MOVESIZEEND, EVENT_SYSTEM_MOVESIZEEND);
 	add_hook(EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND);
 	add_hook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE);   // destroy, show, hide
-	add_hook(EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_NAMECHANGE);
+	add_hook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_NAMECHANGE);
 	add_hook(EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED);
 	return hook_count > 0;
 }

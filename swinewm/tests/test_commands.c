@@ -74,7 +74,7 @@ static void test_every_command_is_found(void) {
 		"client.focused", "client.focused_inactive", "client.focused_tab_title",
 		"client.placeholder", "client.unfocused", "client.urgent",
 		"default_border", "default_floating_border", "default_orientation",
-		"exec", "exec_always", "exit", "floating", "floating_maximum_size",
+		"exec", "exec_always", "exit", "explorer_taskbar", "floating", "floating_maximum_size",
 		"floating_minimum_size", "floating_modifier", "focus",
 		"focus_follows_mouse", "focus_on_window_activation", "focus_wrapping",
 		"font", "for_window", "force_display_urgency_hint", "fullscreen",
@@ -86,7 +86,7 @@ static void test_every_command_is_found(void) {
 		"smart_borders", "smart_gaps", "split", "splith", "splitt", "splitv",
 		"swaybg_command", "swaynag_command", "tiling_drag",
 		"tiling_drag_threshold", "title_align", "titlebar_border_thickness",
-		"titlebar_padding", "unbindsym", "workspace",
+		"titlebar_padding", "unbindsym", "urgent", "workspace",
 		"workspace_auto_back_and_forth", "workspace_layout", "xwayland",
 	};
 	fake_setup();

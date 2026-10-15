@@ -85,6 +85,9 @@ void win32_recover_clear(void) {
 }
 
 int platform_recover_windows(void) {
+	if (win32_shell_recover_taskbar()) {
+		swine_log(SWINE_INFO, "Restored Explorer's taskbar setting");
+	}
 	char *path = state_file(false);
 	if (!path) {
 		return 0;

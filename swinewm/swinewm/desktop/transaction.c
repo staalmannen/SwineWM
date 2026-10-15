@@ -6,11 +6,20 @@
 #include "swinewm/server.h"
 #include "swinewm/tree/arrange.h"
 #include "swinewm/tree/container.h"
+#include "swinewm/tree/root.h"
+#include "swinewm/tree/workspace.h"
 #include "swinewm/tree/view.h"
 
 static struct swine_view *last_activated = NULL;
 
+static void detect_urgent(struct swine_workspace *ws, void *data) {
+	(void)data;
+	workspace_detect_urgent(ws);
+}
+
 void transaction_commit_dirty(void) {
+	// Windows may have moved between workspaces since the last commit.
+	root_for_each_workspace(detect_urgent, NULL);
 	bar_update_reservations();
 	arrange_root();
 

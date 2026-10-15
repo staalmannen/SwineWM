@@ -105,6 +105,26 @@ struct cmd_results *cmd_ws_auto_back_and_forth(int argc, char **argv) {
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 
+// swinewm extension: "explorer_taskbar autohide|show". While swinewm runs
+// next to Explorer, auto-hide Explorer's taskbar (restored on exit).
+struct cmd_results *cmd_explorer_taskbar(int argc, char **argv) {
+	struct cmd_results *error = NULL;
+	if ((error = checkarg(argc, "explorer_taskbar", EXPECTED_EQUAL_TO, 1))) {
+		return error;
+	}
+	if (swine_strcasecmp(argv[0], "autohide") == 0) {
+		config->explorer_taskbar_autohide = true;
+	} else if (swine_strcasecmp(argv[0], "show") == 0) {
+		config->explorer_taskbar_autohide = false;
+	} else if (swine_strcasecmp(argv[0], "toggle") == 0) {
+		config->explorer_taskbar_autohide = !config->explorer_taskbar_autohide;
+	} else {
+		return cmd_results_new(CMD_INVALID,
+			"Expected 'explorer_taskbar autohide|show|toggle'");
+	}
+	return cmd_results_new(CMD_SUCCESS, NULL);
+}
+
 struct cmd_results *cmd_include(int argc, char **argv) {
 	struct cmd_results *error = NULL;
 	if ((error = checkarg(argc, "include", EXPECTED_AT_LEAST, 1))) {

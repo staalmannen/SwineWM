@@ -280,7 +280,62 @@ static void test_resize(void) {
 	fake_teardown();
 }
 
+static void test_urgency(void) {
+	fake_setup();
+	struct swine_view *a = fake_map_view("a");
+	CHECK(run("workspace 2"));
+	struct swine_view *b = fake_map_view("b");
+	struct swine_workspace *ws1 = a->container->workspace;
+	struct swine_workspace *ws2 = b->container->workspace;
+
+	// The focused view cannot become urgent.
+	view_set_urgent(b, true);
+	CHECK(!b->urgent);
+	view_set_urgent(a, true);
+	CHECK(a->urgent);
+	CHECK(ws1->urgent);
+	CHECK(!ws2->urgent);
+
+	// Moving the urgent window carries the urgency along.
+	CHECK(run("workspace 1"));   // focusing it clears urgency
+	CHECK(!a->urgent);
+	CHECK(!ws1->urgent);
+	CHECK(run("workspace 2"));
+	view_set_urgent(a, true);
+	CHECK(run("[app_id=x] nop") == false);   // criteria still unsupported
+	CHECK(run("urgent disable") && !b->urgent);
+	CHECK(run("urgent deny"));
+	view_set_urgent(a, false);
+	CHECK(!ws1->urgent);
+	CHECK(run("workspace 1"));
+	CHECK(run("urgent deny"));
+	CHECK(run("workspace 2"));
+	view_set_urgent(a, true);
+	CHECK(!a->urgent);           // denied
+	fake_teardown();
+}
+
+static void test_requested_fullscreen(void) {
+	fake_setup();
+	struct swine_view *a = fake_map_view("browser");
+	struct swine_view *b = fake_map_view("other");
+	view_request_fullscreen(a, true);
+	transaction_commit_dirty();
+	CHECK_INT(a->container->fullscreen_mode, FULLSCREEN_WORKSPACE);
+	CHECK(a->pending.visible);
+	CHECK(!b->pending.visible);
+	CHECK_INT(a->pending.box.width, 1000);
+	view_request_fullscreen(a, false);
+	transaction_commit_dirty();
+	CHECK_INT(a->container->fullscreen_mode, FULLSCREEN_NONE);
+	CHECK(b->pending.visible);
+	CHECK_INT(a->pending.box.width, 500);
+	fake_teardown();
+}
+
 void test_tree_all(void) {
+	test_urgency();
+	test_requested_fullscreen();
 	test_tiling_geometry();
 	test_split_and_layouts();
 	test_workspaces();

@@ -14,6 +14,7 @@
 
 HWND win32_shell_hwnd = NULL;
 static bool keyboard_ok = false;
+static UINT shell_hook_message = 0;
 
 // Timers on the shell window: a 1 s tick for the bar (clock, cpu, ...) and
 // a one-shot timer for the next notification expiry.
@@ -58,6 +59,7 @@ static LRESULT CALLBACK shell_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 		win32_recover_save();
 		return 0;
 	case WM_DISPLAYCHANGE:
+		win32_shell_resize_desktop();
 		win32_outputs_update();
 		transaction_commit_dirty();
 		return 0;
@@ -72,6 +74,10 @@ static LRESULT CALLBACK shell_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 		PostQuitMessage(0);
 		return 0;
 	default:
+		if (shell_hook_message && msg == shell_hook_message) {
+			win32_windows_shell_hook(wparam, lparam);
+			return 0;
+		}
 		return DefWindowProcW(hwnd, msg, wparam, lparam);
 	}
 }
@@ -88,8 +94,11 @@ static BOOL WINAPI console_handler(DWORD type) {
 
 static LONG WINAPI crash_handler(EXCEPTION_POINTERS *info) {
 	(void)info;
-	// Best effort: never leave the user with invisible applications.
+	// Best effort: never leave the user with invisible applications, a
+	// hidden taskbar, or (as the shell) no shell at all.
 	win32_windows_show_all();
+	win32_shell_restore_taskbar();
+	win32_shell_rescue();
 	return EXCEPTION_CONTINUE_SEARCH;
 }
 
@@ -134,8 +143,14 @@ bool platform_init(void) {
 		return false;
 	}
 	keyboard_ok = win32_keyboard_init();
+	// Shell hook messages: urgency (HSHELL_FLASH) and fullscreen changes.
+	shell_hook_message = RegisterWindowMessageW(L"SHELLHOOK");
+	if (!RegisterShellHookWindow(win32_shell_hwnd)) {
+		shell_hook_message = 0;
+	}
 	win32_windows_manage_existing();
 	SetTimer(win32_shell_hwnd, TIMER_TICK, 1000, NULL);
+	win32_shell_start();
 	return true;
 }
 
@@ -143,6 +158,8 @@ void platform_ui_refresh(void) {
 	if (!win32_shell_hwnd) {
 		return;
 	}
+	win32_shell_update_work_area(false);
+	win32_shell_apply_taskbar();
 	win32_wallpaper_refresh();
 	win32_bar_refresh();
 	win32_notify_refresh();
@@ -171,6 +188,7 @@ int platform_run(void) {
 }
 
 void platform_quit(void) {
+	win32_shell_exit();
 	PostQuitMessage(0);
 }
 
@@ -178,6 +196,10 @@ void platform_finish(void) {
 	if (keyboard_ok) {
 		win32_keyboard_finish();
 	}
+	if (shell_hook_message) {
+		DeregisterShellHookWindow(win32_shell_hwnd);
+	}
+	win32_shell_finish();
 	win32_windows_finish();
 	win32_windows_show_all();
 	win32_bar_finish();

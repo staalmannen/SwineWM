@@ -44,6 +44,8 @@ struct swine_workspace *workspace_prev(struct swine_workspace *current);
 bool workspace_switch(struct swine_workspace *ws);
 bool workspace_is_visible(struct swine_workspace *ws);
 bool workspace_is_empty(struct swine_workspace *ws);
+// Sets ws->urgent if any of its views is urgent.
+void workspace_detect_urgent(struct swine_workspace *ws);
 
 struct swine_container *workspace_add_tiling(struct swine_workspace *ws,
 		struct swine_container *con);
