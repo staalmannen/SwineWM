@@ -21,8 +21,8 @@ that is the most faithful option. They are MIT licensed; keep the upstream
 copyright notice on substantially ported code.
 
 Read `doc/project_summary.md` (scope, roadmap), `doc/architecture.md` (how
-swinewm works) and `doc/compatibility.md` (what is implemented) before
-larger changes, and keep `doc/compatibility.md` current when a command's
+swinewm works), `doc/compatibility.md` (what is implemented) and
+`doc/packaging.md` (installer) before larger changes, and keep `doc/compatibility.md` current when a command's
 status changes.
 
 ## Repository map
@@ -36,6 +36,15 @@ status changes.
   - `swinewm/swinewm/notify/` — the built-in Mako (store, config, modes);
     drawn by `win32/notify.c`. `notify-send`/`makoctl` are commands in
     `commands/notify.c`.
+  - `swinewm/resources/` — installed defaults (Waybar config/style, mako
+    config, wallpaper, icon). The bar's built-in fallback is generated from
+    these files at build time (`cmake/embed.cmake`); edit the files, not C
+    strings. Keep `swinewm/config.in` and these files sensible for a fresh
+    install.
+  - `swinewm/cmake/packaging.cmake` — install layout and the CPack/WiX MSI;
+    see `doc/packaging.md`. Never change `CPACK_WIX_UPGRADE_GUID`.
+- `.github/workflows/build.yml` — CI: Linux tests, MSVC build and tests,
+  MSI/zip artifacts. MSVC problems show up here first.
 - `sway/`, `waybar/`, `mako/` — upstream reference submodules. **Never edit
   files inside submodules.** Fetch them with
   `git submodule update --init --depth 1 sway waybar mako`.

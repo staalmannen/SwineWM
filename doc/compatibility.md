@@ -63,7 +63,8 @@ ignored · ❌ not implemented (error)
 | `smart_gaps`, `smart_borders`, `hide_edge_borders` | ⚪ | |
 | `border`, `default_border`, `default_floating_border`, `client.*`, `font`, `title_align`, `titlebar_*`, `show_marks` | ⚪ | Decorations not drawn yet |
 | `for_window`, `assign`, `no_focus`, criteria `[…]` | ⚪ / ❌ | Config lines ignored; runtime criteria are an error |
-| `output`, `input`, `seat` | ⚪ | Windows settings apply |
+| `output <name\|*> bg <file> <stretch\|fill\|fit\|center\|tile> [<#color>]`, `output … bg <#color> solid_color` | ✅ | swaybg's options; PNG, JPEG, BMP, GIF, TIFF (anything the Windows Imaging Component reads). `~`, `%VAR%` and paths relative to the config file |
+| other `output` options (mode, position, scale, …), `input`, `seat` | ⚪ | Windows settings apply |
 | `bar { … }`, `bar <option>` | 🟡 | Enables the built-in Waybar-compatible bar; `position`, `mode invisible\|dock\|toggle` honoured, other swaybar options ignored (see below) |
 | `xwayland`, `swaybg_command`, `swaynag_command`, `max_render_time`, `allow_tearing`, `primary_selection`, `inhibit_idle`, `shortcuts_inhibitor`, `tiling_drag*`, `mouse_warping`, `popup_during_fullscreen`, `focus_on_window_activation`, `force_display_urgency_hint`, `new_window`, `new_float`, `floating_minimum_size`, `floating_maximum_size` | ⚪ | |
 | `mark`, `unmark`, `swap`, `sticky`, `rename`, `title_format`, `opacity`, `urgent`, `create_output` | ❌ | |

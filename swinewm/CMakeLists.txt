@@ -33,7 +33,25 @@ if(WIN32)
   target_link_libraries(swine_common PUBLIC advapi32)
 endif()
 
+# Built-in defaults are generated from the files in resources/, which are
+# also installed, so the two cannot drift apart.
+set(SWINEWM_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+function(swinewm_embed input name)
+  set(output ${SWINEWM_GENERATED_DIR}/${name}.h)
+  add_custom_command(OUTPUT ${output}
+    COMMAND ${CMAKE_COMMAND} -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/${input}
+      -DOUTPUT=${output} -DNAME=${name}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed.cmake
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${input}
+      ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed.cmake
+    VERBATIM)
+  set(SWINEWM_EMBEDDED ${SWINEWM_EMBEDDED} ${output} PARENT_SCOPE)
+endfunction()
+swinewm_embed(resources/waybar/config.jsonc default_bar_config)
+swinewm_embed(resources/waybar/style.css default_bar_style)
+
 add_library(swinewm_core STATIC
+  ${SWINEWM_EMBEDDED}
   swinewm/bar/bar.c
   swinewm/bar/css.c
   swinewm/bar/format.c
@@ -48,6 +66,7 @@ add_library(swinewm_core STATIC
   swinewm/commands/mode.c
   swinewm/commands/move.c
   swinewm/commands/notify.c
+  swinewm/commands/output.c
   swinewm/commands/resize.c
   swinewm/commands/session.c
   swinewm/commands/set.c
@@ -70,13 +89,20 @@ add_library(swinewm_core STATIC
   swinewm/tree/view.c
   swinewm/tree/workspace.c
 )
+target_include_directories(swinewm_core PRIVATE ${SWINEWM_GENERATED_DIR})
 target_link_libraries(swinewm_core PUBLIC swine_common)
 if(NOT MSVC)
   target_link_libraries(swinewm_core PUBLIC m)
 endif()
 
 if(WIN32)
+  enable_language(RC)
+  set(SWINEWM_ICON ${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/swinewm.ico)
+  configure_file(swinewm/win32/swinewm.rc.in
+    ${SWINEWM_GENERATED_DIR}/swinewm.rc @ONLY)
+
   add_executable(swinewm
+    ${SWINEWM_GENERATED_DIR}/swinewm.rc
     swinewm/main.c
     swinewm/win32/exec.c
     swinewm/win32/bar.c
@@ -89,23 +115,33 @@ if(WIN32)
     swinewm/win32/recover.c
     swinewm/win32/sysinfo.c
     swinewm/win32/util.c
+    swinewm/win32/wallpaper.c
     swinewm/win32/window.c
   )
   target_compile_definitions(swinewm PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN
     WINVER=0x0A00 _WIN32_WINNT=0x0A00)
   target_link_libraries(swinewm PRIVATE swinewm_core user32 gdi32 dwmapi shell32
-    shcore advapi32)
+    shcore advapi32 ole32 windowscodecs msimg32 uuid)
 
   add_executable(swinemsg swinemsg/main.c)
   target_compile_definitions(swinemsg PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
   target_link_libraries(swinemsg PRIVATE swine_common)
 
-  # Ship the default config next to the executable; swinewm falls back to
-  # it when the user has none.
+  # Put the default config files next to the executable in the build tree
+  # too, laid out as they are installed, so a build runs like an install.
   add_custom_target(swinewm_default_config ALL
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
       ${CMAKE_CURRENT_SOURCE_DIR}/config.in $<TARGET_FILE_DIR:swinewm>/config
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      ${CMAKE_CURRENT_SOURCE_DIR}/resources/waybar $<TARGET_FILE_DIR:swinewm>/waybar
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      ${CMAKE_CURRENT_SOURCE_DIR}/resources/mako $<TARGET_FILE_DIR:swinewm>/mako
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      ${CMAKE_CURRENT_SOURCE_DIR}/resources/wallpapers/swinewm-default.png
+      $<TARGET_FILE_DIR:swinewm>/wallpapers/swinewm-default.png
     DEPENDS config.in)
+
+  include(cmake/packaging.cmake)
 endif()
 
 if(SWINEWM_BUILD_TESTS)

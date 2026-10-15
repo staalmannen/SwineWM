@@ -15,6 +15,8 @@ struct popup {
 	HWND hwnd;
 	uint32_t id;
 	double scale;
+	RECT rect;        // last position given to the window
+	bool shown;
 };
 
 static list_t *popups = NULL;
@@ -216,9 +218,13 @@ void win32_notify_refresh(void) {
 		const struct notify_style *s = &n->style;
 		struct swine_output *output = target_output(s);
 		if (!output) {
-			ShowWindow(p->hwnd, SW_HIDE);
+			if (p->shown) {
+				ShowWindow(p->hwnd, SW_HIDE);
+				p->shown = false;
+			}
 			continue;
 		}
+		bool same_notification = p->id == n->id;
 		p->id = n->id;
 		p->scale = win32_output_scale(output);
 		struct swine_box area = output_get_usable_area(output);
@@ -261,9 +267,18 @@ void win32_notify_refresh(void) {
 			break;
 		}
 		*off += h + scaled(p, s->margin.top);
-		SetWindowPos(p->hwnd, HWND_TOPMOST, x, y, w, h,
-			SWP_NOACTIVATE | SWP_SHOWWINDOW);
-		InvalidateRect(p->hwnd, NULL, FALSE);
+		// Only touch the window when something changed: this runs every
+		// second and after every command.
+		RECT rect = {x, y, x + w, y + h};
+		if (!p->shown || !EqualRect(&rect, &p->rect)) {
+			SetWindowPos(p->hwnd, HWND_TOPMOST, x, y, w, h,
+				SWP_NOACTIVATE | SWP_SHOWWINDOW);
+			p->rect = rect;
+			p->shown = true;
+		}
+		if (!same_notification) {
+			InvalidateRect(p->hwnd, NULL, FALSE);
+		}
 	}
 	list_free(visible);
 }

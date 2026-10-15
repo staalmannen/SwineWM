@@ -19,6 +19,7 @@ void fake_reset(void) {
 	memset(&fake, 0, sizeof(fake));
 }
 
+void platform_setup_environment(void) {}
 bool platform_init(void) { return true; }
 int platform_run(void) { return 0; }
 void platform_quit(void) { fake.quit = true; }
@@ -72,8 +73,15 @@ long long platform_now_ms(void) {
 	return fake.now_ms;
 }
 
+// Expands only %SWINEWM_DATA%, to where an installed swinewm.exe would be.
 char *platform_expand_path(const char *path) {
-	return swine_strdup(path);
+	const char *var = "%SWINEWM_DATA%";
+	const char *at = strstr(path, var);
+	if (!at) {
+		return swine_strdup(path);
+	}
+	return format_str("%.*sC:\\Program Files\\SwineWM%s", (int)(at - path),
+		path, at + strlen(var));
 }
 
 bool sysinfo_battery(struct sysinfo_battery *out) {

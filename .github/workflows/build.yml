@@ -1,0 +1,51 @@
+# Builds and tests SwineWM, and on Windows produces the MSI installer and a
+# portable zip as downloadable artifacts (see doc/packaging.md).
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    name: Linux (core + unit tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: >
+          cmake -S swinewm -B build -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_FLAGS="-fsanitize=address,undefined"
+      - name: Build
+        run: cmake --build build -j 4
+      - name: Test
+        run: ./build/swinewm_tests
+
+  windows:
+    name: Windows (MSVC, tests, MSI)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S swinewm -B build -A x64
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Install WiX Toolset
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add -g WixToolset.UI.wixext/5.0.2
+          wix extension add -g WixToolset.Util.wixext/5.0.2
+      - name: Package (MSI and zip)
+        working-directory: build
+        run: cpack -C Release
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwineWM-windows
+          path: |
+            build/*.msi
+            build/*.zip
+          if-no-files-found: error

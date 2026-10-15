@@ -71,6 +71,20 @@ static char *exe_dir(void) {
 	return utf16_to_utf8(path);
 }
 
+void platform_setup_environment(void) {
+	wchar_t path[MAX_PATH];
+	DWORD n = GetModuleFileNameW(NULL, path, MAX_PATH);
+	if (n == 0 || n == MAX_PATH) {
+		return;
+	}
+	wchar_t *slash = wcsrchr(path, L'\\');
+	if (slash) {
+		*slash = L'\0';
+	}
+	// Inherited by exec'd programs too, like SWAYSOCK.
+	SetEnvironmentVariableW(L"SWINEWM_DATA", path);
+}
+
 list_t *platform_config_paths(const char *name) {
 	char *native = swine_strdup(name);
 	for (char *c = native; *c; ++c) {

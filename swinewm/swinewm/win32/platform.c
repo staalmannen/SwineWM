@@ -10,6 +10,7 @@
 #include "swinewm/platform.h"
 #include "swinewm/server.h"
 #include "win32.h"
+#include <objbase.h>
 
 HWND win32_shell_hwnd = NULL;
 static bool keyboard_ok = false;
@@ -94,6 +95,8 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *info) {
 
 bool platform_init(void) {
 	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+	// COM is needed by the Windows Imaging Component (wallpapers).
+	CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 
 	int restored = platform_recover_windows();
 	if (restored) {
@@ -140,6 +143,7 @@ void platform_ui_refresh(void) {
 	if (!win32_shell_hwnd) {
 		return;
 	}
+	win32_wallpaper_refresh();
 	win32_bar_refresh();
 	win32_notify_refresh();
 	long long next = notify_next_expiry();
@@ -178,6 +182,8 @@ void platform_finish(void) {
 	win32_windows_show_all();
 	win32_bar_finish();
 	win32_notify_finish();
+	win32_wallpaper_finish();
+	CoUninitialize();
 	win32_fonts_clear();
 	win32_recover_clear();
 	if (win32_shell_hwnd) {

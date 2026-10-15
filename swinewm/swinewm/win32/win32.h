@@ -38,6 +38,10 @@ double win32_output_scale(struct swine_output *output);
 void win32_bar_refresh(void);
 void win32_bar_finish(void);
 
+// wallpaper.c
+void win32_wallpaper_refresh(void);
+void win32_wallpaper_finish(void);
+
 // notify.c
 void win32_notify_refresh(void);
 void win32_notify_finish(void);
