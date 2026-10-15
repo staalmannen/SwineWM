@@ -9,6 +9,7 @@
 #include "swinewm/tree/output.h"
 #include "swinewm/tree/root.h"
 #include "win32.h"
+#include <shellscalingapi.h>
 
 struct monitor_info {
 	HMONITOR handle;
@@ -81,6 +82,11 @@ void win32_outputs_update(void) {
 		output->primary = mi->primary;
 		output->box = box_from_rect(&mi->monitor);
 		output->usable = box_from_rect(&mi->work);
+		UINT dpi_x = 96, dpi_y = 96;
+		if (SUCCEEDED(GetDpiForMonitor(mi->handle, MDT_EFFECTIVE_DPI, &dpi_x,
+				&dpi_y))) {
+			output->scale = dpi_x / 96.0;
+		}
 		if (is_new) {
 			output_enable(output);
 		}

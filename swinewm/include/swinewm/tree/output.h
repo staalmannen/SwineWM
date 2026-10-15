@@ -19,6 +19,7 @@ struct swine_output {
 	void *handle;             // platform handle (HMONITOR on Windows)
 	struct swine_box box;     // full monitor rectangle
 	struct swine_box usable;  // box minus app bars / taskbar (work area)
+	struct side_gaps reserved; // space taken by swinewm's own bar
 	double scale;
 	bool enabled;
 	bool primary;
@@ -35,6 +36,8 @@ void output_destroy(struct swine_output *output);
 struct swine_output *output_by_name(const char *name);
 struct swine_output *output_by_handle(void *handle);
 struct swine_workspace *output_get_active_workspace(struct swine_output *output);
+// Area available to windows: the work area minus swinewm's own bar.
+struct swine_box output_get_usable_area(struct swine_output *output);
 void output_add_workspace(struct swine_output *output,
 		struct swine_workspace *ws);
 struct swine_output *output_get_in_direction(struct swine_output *output,

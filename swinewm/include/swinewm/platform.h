@@ -29,12 +29,18 @@ void platform_view_close(struct swine_view *view);
 // Starts a process from a command line. Returns false on failure.
 bool platform_spawn(const char *cmdline);
 
-// Candidate config file paths in priority order (char *, caller frees).
-list_t *platform_config_paths(void);
+// Candidate paths for a config file in priority order (char *, caller
+// frees). name is relative, with '/' separators: "config",
+// "waybar/config.jsonc", "mako/config", ...
+list_t *platform_config_paths(const char *name);
 // Expands ~ and %VAR% in a path. Caller frees.
 char *platform_expand_path(const char *path);
 // Called after the config changed so the platform can re-register hooks.
 void platform_config_changed(void);
+// The bar or notifications need repainting (called after every commit).
+void platform_ui_refresh(void);
+// Milliseconds on a monotonic clock, for notification timeouts.
+long long platform_now_ms(void);
 // Shows windows left hidden by a previous instance that did not exit
 // cleanly (swinewm --recover). Returns the number of windows restored.
 int platform_recover_windows(void);

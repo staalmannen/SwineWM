@@ -325,11 +325,11 @@ int container_squash(struct swine_container *con) {
 
 static struct swine_box workspace_output_area(struct swine_workspace *ws) {
 	if (ws && ws->output && ws->output->enabled) {
-		return ws->output->usable;
+		return output_get_usable_area(ws->output);
 	}
 	if (root->outputs->length) {
 		struct swine_output *o = root->outputs->items[0];
-		return o->usable;
+		return output_get_usable_area(o);
 	}
 	return (struct swine_box){0, 0, 1280, 720};
 }

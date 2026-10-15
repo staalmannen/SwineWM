@@ -46,6 +46,12 @@ struct swine_config {
 	struct swine_mode *current_mode;
 	list_t *cmd_queue;         // deferred exec commands (char *)
 
+	// Integrated Waybar-compatible bar, enabled by a sway "bar { }" block or
+	// by "exec waybar". Everything else comes from the Waybar config.
+	bool bar_enabled;
+	bool bar_invisible;          // "bar mode invisible"
+	int bar_position;            // 0 = unset, 1 = top, 2 = bottom
+
 	enum swine_container_layout default_orientation;  // L_NONE = auto
 	enum swine_container_layout default_layout;       // workspace_layout
 	int gaps_inner;
@@ -77,8 +83,11 @@ extern struct swine_config *config;
 
 struct swine_config *config_create(void);
 void free_config(struct swine_config *config);
-// Locates the config file using platform_config_paths(). Caller frees.
-char *find_config_path(void);
+// Returns the first existing file among platform_config_paths(name), or
+// NULL. Caller frees.
+char *find_config_file(const char *name);
+// Reads a whole file (UTF-8 path). Caller frees; NULL on error.
+char *read_file(const char *path);
 // Loads (or reloads) the main config. On failure the previous config stays.
 bool load_main_config(const char *path, bool is_active, bool validating);
 // Reads config text into the active config. Used by include and tests.

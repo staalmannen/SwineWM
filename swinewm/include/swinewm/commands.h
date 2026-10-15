@@ -48,6 +48,11 @@ list_t *execute_command(char *command, struct swine_container *con);
 struct cmd_results *config_command(char *command, char **new_block);
 // Name of the command currently being executed (for shared handlers).
 const char *cmd_current_name(void);
+// Handles "exec" of programs whose job swinewm does itself (waybar, mako,
+// makoctl, notify-send). Returns NULL if the command should really run.
+// With persistent_only, only programs that stay running (waybar, mako) are
+// handled: "exec" lines are skipped on reload, but their effect must remain.
+struct cmd_results *exec_builtin(const char *cmdline, bool persistent_only);
 struct cmd_results *config_subcommand(char **argv, int argc,
 		const struct cmd_handler *handlers, size_t handlers_size);
 struct cmd_results *checkarg(int argc, const char *name,
@@ -61,6 +66,7 @@ void free_cmd_results(struct cmd_results *results);
 void free_cmd_results_list(list_t *res_list);
 char *cmd_results_to_json(list_t *res_list);
 
+swine_cmd cmd_bar;
 swine_cmd cmd_bindsym;
 swine_cmd cmd_default_orientation;
 swine_cmd cmd_exec;
@@ -77,9 +83,11 @@ swine_cmd cmd_ignored;
 swine_cmd cmd_include;
 swine_cmd cmd_kill;
 swine_cmd cmd_layout;
+swine_cmd cmd_makoctl;
 swine_cmd cmd_mode;
 swine_cmd cmd_move;
 swine_cmd cmd_nop;
+swine_cmd cmd_notify_send;
 swine_cmd cmd_reload;
 swine_cmd cmd_resize;
 swine_cmd cmd_scratchpad;

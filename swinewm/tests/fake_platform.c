@@ -8,6 +8,7 @@
 #include "swinewm/desktop/transaction.h"
 #include "swinewm/platform.h"
 #include "swinewm/server.h"
+#include "swinewm/sysinfo.h"
 #include "swinewm/tree/output.h"
 #include "swinewm/tree/root.h"
 #include "swinewm/tree/view.h"
@@ -55,16 +56,47 @@ bool platform_spawn(const char *cmdline) {
 	return true;
 }
 
-list_t *platform_config_paths(void) {
+list_t *platform_config_paths(const char *name) {
 	list_t *paths = create_list();
 	if (fake.config_dir) {
-		list_add(paths, format_str("%s/config", fake.config_dir));
+		list_add(paths, format_str("%s/%s", fake.config_dir, name));
 	}
 	return paths;
 }
 
+void platform_ui_refresh(void) {
+	fake.ui_refreshes++;
+}
+
+long long platform_now_ms(void) {
+	return fake.now_ms;
+}
+
 char *platform_expand_path(const char *path) {
 	return swine_strdup(path);
+}
+
+bool sysinfo_battery(struct sysinfo_battery *out) {
+	if (!fake.has_battery) {
+		return false;
+	}
+	out->capacity = fake.battery_capacity;
+	out->charging = fake.battery_charging;
+	out->plugged = fake.battery_charging;
+	return true;
+}
+
+bool sysinfo_memory(struct sysinfo_memory *out) {
+	out->total_gib = 16;
+	out->used_gib = 16 * fake.memory_percentage / 100.0;
+	out->avail_gib = out->total_gib - out->used_gib;
+	out->percentage = fake.memory_percentage;
+	return true;
+}
+
+bool sysinfo_cpu(int *usage) {
+	*usage = fake.cpu_usage;
+	return true;
 }
 
 struct swine_output *fake_add_output(const char *name, int x, int y, int w, int h) {

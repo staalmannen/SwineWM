@@ -50,22 +50,28 @@ Fidelity goals, in priority order:
 
 ## Components
 
-Each Linux program gets a Windows counterpart with the same role. Names are
-working titles.
+On Linux these are separate programs talking over IPC and D-Bus. SwineWM
+deliberately does **not** follow the one-tool-per-task split: the window
+manager, the bar and the notification daemon are one program, `swinewm.exe`.
+That avoids reimplementing D-Bus, keeps a single process to start as the
+shell, lets the bar read the layout tree directly instead of over IPC, and
+means one crash handler restores everything. The *configuration* still
+follows the Linux programs, so existing files keep working:
 
-| Linux | SwineWM | Role | Status |
+| Linux | In SwineWM | Configured by | Status |
 | --- | --- | --- | --- |
-| `sway` | `swinewm` | Tiling window manager, config, key bindings, IPC server | Draft working: see [`compatibility.md`](compatibility.md) |
-| `swaymsg` | `swinemsg` | IPC command-line client | Draft working |
-| `waybar` | `swinebar` | Status bar: workspaces, window title, clock, tray, … | Planned |
-| `mako` / `makoctl` | `swinenotify` / `swinenotifyctl` | Notification daemon and control tool | Planned; design question below |
-| `swaynag` | `swinenag` | Warning/confirmation bar (e.g. exit, config errors) | Later |
-| `wmenu`/`fuzzel` | — | Launcher | Later; `explorer shell:AppsFolder` meanwhile |
+| `sway` | `swinewm.exe` window manager | sway's `config` | Draft working: see [`compatibility.md`](compatibility.md) |
+| `waybar` | built-in bar | Waybar's `config.jsonc` + `style.css` | Draft working |
+| `mako` | built-in notifications | mako's `config` | Draft working |
+| `notify-send`, `makoctl` | swinewm commands (also via `exec` and `swinemsg`) | — | Draft working |
+| `swaymsg` | `swinemsg.exe` | — | Draft working |
+| `swaynag` | — | — | Later, likely built in as well |
+| `wmenu`/`fuzzel` | — | — | Not planned for now: the default config uses [Flow Launcher](https://www.flowlauncher.com) |
 
-`swinewm` and `swinemsg` live in [`../swinewm/`](../swinewm/), which mirrors
-the layout of the sway repository. The bar and notification daemon will be
-separate programs in sibling directories (`swinebar/`, `swinenotify/`) that
-talk to `swinewm` over IPC, just as Waybar talks to Sway.
+The code still keeps the parts apart: [`../swinewm/swinewm/bar/`](../swinewm/swinewm/bar/)
+and [`../swinewm/swinewm/notify/`](../swinewm/swinewm/notify/) are separate
+modules next to the window-manager code, each with a portable core and a
+Win32 renderer.
 
 ## Non-goals
 
@@ -87,15 +93,19 @@ talk to `swinewm` over IPC, just as Waybar talks to Sway.
    workspaces, low-level keyboard hook bindings, monitor/work-area outputs,
    crash recovery of hidden windows, named-pipe IPC. Needs testing on real
    Windows machines; `sway-hwnd/` is the earlier prototype for comparison.
-3. **Daily-drivable WM** — focus-follows-mouse, mouse bindings and
-   `floating_modifier` drag/resize, tab/stack title bars and focus borders
-   drawn by swinewm, criteria (`[app_id=…]`, `for_window`, `assign`),
-   `output` configuration, IPC event subscriptions, `swinenag`.
-4. **swinebar** — Waybar config format, Sway modules over IPC (workspaces,
-   mode, window), clock, CPU/memory, battery, network, audio, tray. Uses
-   the AppBar API (`SHAppBarMessage`) so tiled windows avoid it.
-5. **swinenotify** — Mako config format and look, `swinenotifyctl`, plus a
-   way for applications to send notifications (see below).
+3. **Integrated bar and notifications** *(draft)* — Waybar's config and a
+   CSS subset of its `style.css`; modules `sway/workspaces`, `sway/mode`,
+   `sway/window`, `sway/scratchpad`, `clock`, `cpu`, `memory`, `battery`,
+   static `custom/*`. Mako's config with criteria, modes, history,
+   timeouts; `notify-send` and `makoctl` as commands.
+4. **Daily-drivable WM** — focus-follows-mouse, mouse bindings and
+   `floating_modifier` drag/resize, tab/stack title bars and focus borders,
+   criteria (`[app_id=…]`, `for_window`, `assign`), `output` configuration,
+   IPC event subscriptions, a swaynag equivalent.
+5. **Richer bar and notifications** — `custom/*` modules running scripts,
+   network, audio (pulseaudio module on Windows' audio API), tray (the
+   notification-area icons), translucent backgrounds; notification icons,
+   actions, grouping, and receiving Windows' own toast notifications.
 6. **Shell replacement** — run SwineWM instead of Explorer at login on
    editions that support it, with a tested way back to Explorer.
 
@@ -103,10 +113,15 @@ talk to `swinewm` over IPC, just as Waybar talks to Sway.
 
 - **Where notifications come from.** Mako receives notifications over
   D-Bus. On Windows, applications send toast notifications to the system.
-  Options: (a) our own `notify-send`-style CLI/pipe API, (b) mirroring
-  system toasts through the WinRT `UserNotificationListener` (needs
-  packaging and user consent), (c) both. When Explorer is not the shell,
-  whether system toasts are still displayed needs to be tested.
+  Today swinewm shows what is sent with `notify-send` (a command, also
+  reachable through `exec` and `swinemsg`). Mirroring system toasts through
+  the WinRT `UserNotificationListener` (needs packaging and user consent)
+  is the candidate for the rest. When Explorer is not the shell, whether
+  system toasts are still displayed needs to be tested.
+- **The bar and Explorer's taskbar.** The bar reserves its space inside
+  swinewm's own layout. Windows that swinewm does not manage (maximized
+  unmanaged windows, Explorer's taskbar) do not know about it; registering
+  as an AppBar (`SHAppBarMessage`) would fix that while Explorer runs.
 - **Hiding versus cloaking.** Workspaces currently hide windows
   (`SW_HIDE`), which also removes them from the taskbar and Alt+Tab. That
   matches Sway, but some applications react to being hidden. Moving them
@@ -134,10 +149,6 @@ The submodules are documentation. The ones that matter now:
   `src/modules/sway/`).
 - [`../mako/`](../mako/) — config format (`mako.5.scd`), criteria, styling
   and `makoctl`.
-
-`wlroots`, `wayland`, `wayland-protocols`, `cairo`, `pango`, `dbus`,
-`json-c`, `pcre2` and `gdk-pixbuf` were imported as build dependencies for
-the port. They are no longer needed and can be removed when convenient.
 
 Other alternative Windows shells and tiling WMs are useful to see how
 Windows-specific problems were solved, e.g. komorebi, GlazeWM and Zebar,

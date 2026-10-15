@@ -151,14 +151,14 @@ static void arrange_workspace(struct swine_workspace *ws) {
 		workspace_for_each_container(ws, hide_container, NULL);
 		return;
 	}
-	struct swine_box area = output->usable;
+	struct swine_box area = output_get_usable_area(output);
 	int inner = ws->gaps_inner;
 	area.x += ws->gaps_outer.left + inner;
 	area.y += ws->gaps_outer.top + inner;
 	area.width -= ws->gaps_outer.left + ws->gaps_outer.right + 2 * inner;
 	area.height -= ws->gaps_outer.top + ws->gaps_outer.bottom + 2 * inner;
 	if (area.width < MIN_SANE_W || area.height < MIN_SANE_H) {
-		area = output->usable;
+		area = output_get_usable_area(output);
 	}
 	ws->box = area;
 

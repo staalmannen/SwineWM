@@ -489,7 +489,7 @@ static struct cmd_results *cmd_move_to_position(int argc, char **argv) {
 		long y = strtol(argv[next], &end2, 10);
 		if (end1 != argv[0] && end2 != argv[next]) {
 			struct swine_box area = con->workspace->output ?
-				con->workspace->output->usable : (struct swine_box){0};
+				output_get_usable_area(con->workspace->output) : (struct swine_box){0};
 			con->floating_box.x = area.x + (int)x;
 			con->floating_box.y = area.y + (int)y;
 			return cmd_results_new(CMD_SUCCESS, NULL);

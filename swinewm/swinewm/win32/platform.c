@@ -2,9 +2,11 @@
 // and start-up/shut-down ordering.
 #include <stdlib.h>
 #include "log.h"
+#include "stringop.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
 #include "swinewm/desktop/transaction.h"
+#include "swinewm/notify.h"
 #include "swinewm/platform.h"
 #include "swinewm/server.h"
 #include "win32.h"
@@ -12,8 +14,15 @@
 HWND win32_shell_hwnd = NULL;
 static bool keyboard_ok = false;
 
-static void run_binding(char *command) {
-	list_t *res_list = execute_command(command, NULL);
+// Timers on the shell window: a 1 s tick for the bar (clock, cpu, ...) and
+// a one-shot timer for the next notification expiry.
+#define TIMER_TICK 1
+#define TIMER_NOTIFY 2
+
+void win32_run_command(const char *command) {
+	char *copy = swine_strdup(command);
+	list_t *res_list = execute_command(copy, NULL);
+	free(copy);
 	for (int i = 0; i < res_list->length; ++i) {
 		struct cmd_results *res = res_list->items[i];
 		if (res->status != CMD_SUCCESS) {
@@ -30,10 +39,14 @@ static LRESULT CALLBACK shell_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 	switch (msg) {
 	case WM_SWINE_BINDING: {
 		char *command = (char *)lparam;
-		run_binding(command);
+		win32_run_command(command);
 		free(command);
 		return 0;
 	}
+	case WM_TIMER:
+		notify_tick(platform_now_ms());
+		platform_ui_refresh();
+		return 0;
 	case WM_SWINE_IPC:
 		win32_ipc_handle((struct win32_ipc_request *)lparam);
 		return 0;
@@ -119,7 +132,28 @@ bool platform_init(void) {
 	}
 	keyboard_ok = win32_keyboard_init();
 	win32_windows_manage_existing();
+	SetTimer(win32_shell_hwnd, TIMER_TICK, 1000, NULL);
 	return true;
+}
+
+void platform_ui_refresh(void) {
+	if (!win32_shell_hwnd) {
+		return;
+	}
+	win32_bar_refresh();
+	win32_notify_refresh();
+	long long next = notify_next_expiry();
+	if (next) {
+		long long delay = next - platform_now_ms();
+		SetTimer(win32_shell_hwnd, TIMER_NOTIFY,
+			(UINT)(delay < 10 ? 10 : delay), NULL);
+	} else {
+		KillTimer(win32_shell_hwnd, TIMER_NOTIFY);
+	}
+}
+
+long long platform_now_ms(void) {
+	return (long long)GetTickCount64();
 }
 
 int platform_run(void) {
@@ -142,6 +176,9 @@ void platform_finish(void) {
 	}
 	win32_windows_finish();
 	win32_windows_show_all();
+	win32_bar_finish();
+	win32_notify_finish();
+	win32_fonts_clear();
 	win32_recover_clear();
 	if (win32_shell_hwnd) {
 		DestroyWindow(win32_shell_hwnd);

@@ -29,6 +29,10 @@ enum ipc_command_type {
 	IPC_GET_INPUTS = 100,
 	IPC_GET_SEATS = 101,
 
+	// swinewm extensions (the integrated Mako's "makoctl list/history")
+	SWINE_IPC_GET_NOTIFICATIONS = 1000,
+	SWINE_IPC_GET_NOTIFICATION_HISTORY = 1001,
+
 	IPC_EVENT_WORKSPACE = (int)((1u << 31) | 0),
 	IPC_EVENT_OUTPUT = (int)((1u << 31) | 1),
 	IPC_EVENT_MODE = (int)((1u << 31) | 2),

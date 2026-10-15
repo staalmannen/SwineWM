@@ -4,8 +4,10 @@
 #include "fileutil.h"
 #include "log.h"
 #include "stringop.h"
+#include "swinewm/bar/bar.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
+#include "swinewm/notify.h"
 #include "swinewm/platform.h"
 #include "swinewm/tree/root.h"
 #include "swinewm/tree/workspace.h"
@@ -91,8 +93,8 @@ struct swine_mode *config_add_mode(const char *name) {
 	return mode;
 }
 
-char *find_config_path(void) {
-	list_t *paths = platform_config_paths();
+char *find_config_file(const char *name) {
+	list_t *paths = platform_config_paths(name);
 	char *found = NULL;
 	for (int i = 0; i < paths->length && !found; ++i) {
 		FILE *f = swine_fopen(paths->items[i], "r");
@@ -105,7 +107,7 @@ char *find_config_path(void) {
 	return found;
 }
 
-static char *read_file(const char *path) {
+char *read_file(const char *path) {
 	FILE *f = swine_fopen(path, "rb");
 	if (!f) {
 		return NULL;
@@ -235,6 +237,14 @@ bool read_config_text(const char *text, const char *name) {
 		case CMD_BLOCK:
 			swine_log(SWINE_DEBUG, "Entering block '%s'", new_block);
 			list_insert(stack, 0, swine_strdup(new_block));
+			// An empty "bar { }" still asks for a bar.
+			if (strcmp(new_block, "bar") == 0 || has_prefix(new_block, "bar ")) {
+				char *bar_line = swine_strdup(new_block);
+				char *ignored = NULL;
+				free_cmd_results(config_command(bar_line, &ignored));
+				free(ignored);
+				free(bar_line);
+			}
 			break;
 		case CMD_BLOCK_END:
 			if (!block) {
@@ -315,6 +325,12 @@ bool load_main_config(const char *path, bool is_active, bool validating) {
 
 	if (!validating && root) {
 		root_for_each_workspace(apply_config_to_workspace, NULL);
+	}
+	if (!validating) {
+		// The integrated Waybar and Mako read their own config files; a
+		// sway "reload" reloads them too.
+		bar_load();
+		notify_load_config();
 	}
 	return success;
 }

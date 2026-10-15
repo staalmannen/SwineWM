@@ -1,4 +1,5 @@
 #include "log.h"
+#include "swinewm/bar/bar.h"
 #include "swinewm/desktop/transaction.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/platform.h"
@@ -10,6 +11,7 @@
 static struct swine_view *last_activated = NULL;
 
 void transaction_commit_dirty(void) {
+	bar_update_reservations();
 	arrange_root();
 
 	// Hide first, then move, then show: the user never sees a window from
@@ -71,6 +73,7 @@ void transaction_commit_dirty(void) {
 	} else if (!view) {
 		last_activated = NULL;
 	}
+	platform_ui_refresh();
 }
 
 // Called by the platform when the OS reports a focus change, so that the

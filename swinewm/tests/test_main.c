@@ -9,6 +9,8 @@ void test_common_all(void);
 void test_config_all(void);
 void test_tree_all(void);
 void test_commands_all(void);
+void test_bar_all(void);
+void test_notify_all(void);
 
 int main(void) {
 	swine_log_init(SWINE_SILENT);
@@ -16,6 +18,8 @@ int main(void) {
 	test_config_all();
 	test_tree_all();
 	test_commands_all();
+	test_bar_all();
+	test_notify_all();
 	printf("%d checks, %d failures\n", test_checks, test_failures);
 	return test_failures ? 1 : 0;
 }

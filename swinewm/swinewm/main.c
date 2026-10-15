@@ -60,7 +60,7 @@ int main(int argc, char **argv) {
 	}
 
 	if (!config_path) {
-		config_path = find_config_path();
+		config_path = find_config_file("config");
 	}
 
 	server_init();

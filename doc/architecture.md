@@ -25,6 +25,8 @@ swinewm/
     desktop/            transaction: push layout changes to the platform
     ipc-server.c        portable IPC request handling
     ipc-json.c          get_tree / get_workspaces / ... replies
+    bar/                the built-in Waybar: config, modules, CSS, formats
+    notify/             the built-in Mako: notifications, config, modes
     main.c              command-line options and start-up order
     win32/              the only code that includes <windows.h>
   swinemsg/             IPC client (swaymsg)
@@ -186,6 +188,63 @@ named pipe `\\.\pipe\swinewm-ipc.<user>`, overridable with `SWINESOCK`.
 Remote clients are rejected. The first pipe instance is created with
 `FILE_FLAG_FIRST_PIPE_INSTANCE`, which also prevents a second swinewm from
 starting. Event subscriptions are the next step; swinebar needs them.
+
+## The built-in bar (Waybar)
+
+Waybar is a separate program that gets workspace and window state from
+Sway over IPC. In swinewm the bar is part of the window manager and reads
+the tree directly; only the configuration is Waybar's.
+
+- **Enabling.** A sway `bar { }` block (any content), `bar` lines, or
+  `exec waybar` turn the bar on; `bar mode invisible` hides it. `position
+  top|bottom` from the sway block applies unless the Waybar config sets
+  `position`. Other swaybar options are accepted and ignored.
+- **Config.** `waybar/config.jsonc` (or `waybar/config`) and
+  `waybar/style.css` in the swinewm config directories, in Waybar's
+  formats. Without them, built-in defaults adapted from Waybar's own are
+  used. The JSONC reader accepts comments and trailing commas.
+- **Modules** (`swinewm/bar/bar.c`) turn state into labels using Waybar's
+  `{name}` / `{:%H:%M}` format syntax, `format-icons`, `format-alt`,
+  `states`, `max-length` and `on-click`. Unsupported modules are skipped
+  with a log message.
+- **Styling** (`swinewm/bar/css.c`) implements the CSS subset that Waybar
+  themes rely on: type/#id/.class selectors with descendant combinators,
+  `@define-color`, `alpha()`, colours, fonts, padding, margin, borders,
+  and `box-shadow: inset` underlines. Rules with pseudo-classes such as
+  `:hover` never match. Elements mirror Waybar's widget tree: `window#waybar`,
+  a `label` per module with the module id (`#clock`, `#custom-media`) and
+  state classes, and `#workspaces button.focused|visible|urgent`.
+- **Space.** The bar's height (scaled by the monitor's DPI) is reserved on
+  each output, and tiling uses the remaining area. The bar hides while the
+  output shows a fullscreen window.
+- **Rendering** (`win32/bar.c`): one topmost, non-activating tool window per
+  output, painted with GDI into a back buffer. Clicks run the item's
+  command (for example `workspace "2"`); the wheel switches workspaces.
+  Translucent colours are blended over black for now.
+
+## Built-in notifications (Mako)
+
+Mako receives notifications over D-Bus. In swinewm, `notify-send` is a
+command (so it works in bindings, over `swinemsg`, and as
+`exec notify-send ...` from scripts started by swinewm), and `makoctl
+dismiss|restore|invoke|mode|reload` likewise. `exec makoctl ...` and
+`exec mako` lines in sway configs are routed to the built-in versions.
+
+- **Config** (`swinewm/notify/notify.c`): `mako/config` in the swinewm
+  config directories, in mako's format: global options, then `[criteria]`
+  sections (`app-name`, `summary`, `body`, `urgency`, `category`, `mode`,
+  `expiring`) applied in order. Styles are resolved when a notification
+  arrives and again when modes change or the config is reloaded.
+- **Behaviour** follows mako(5): `default-timeout` (0 = never), history of
+  `max-history` dismissed or expired notifications for `makoctl restore`,
+  `max-visible`, `sort`, `invisible`, modes such as `do-not-disturb`, the
+  `format` specifiers `%a %s %b %h %t`, and button actions.
+- **Rendering** (`win32/notify.c`): one topmost, non-activating window per
+  visible notification, stacked from the configured `anchor` inside the
+  usable area of the focused (or configured) output. Expiry uses a one-shot
+  timer set for the next deadline.
+- `swinemsg -t get_notifications` / `get_notification_history` list them
+  (swinewm IPC extensions 1000 and 1001).
 
 ## Things deliberately left for later
 

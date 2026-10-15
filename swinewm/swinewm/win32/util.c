@@ -71,28 +71,35 @@ static char *exe_dir(void) {
 	return utf16_to_utf8(path);
 }
 
-list_t *platform_config_paths(void) {
+list_t *platform_config_paths(const char *name) {
+	char *native = swine_strdup(name);
+	for (char *c = native; *c; ++c) {
+		if (*c == '/') {
+			*c = '\\';
+		}
+	}
 	list_t *paths = create_list();
 	char *profile = get_env(L"USERPROFILE");
 	char *xdg = get_env(L"XDG_CONFIG_HOME");
 	char *appdata = get_env(L"APPDATA");
 	char *dir = exe_dir();
 	if (profile) {
-		list_add(paths, format_str("%s\\.swinewm\\config", profile));
+		list_add(paths, format_str("%s\\.swinewm\\%s", profile, native));
 	}
 	if (xdg) {
-		list_add(paths, format_str("%s\\swinewm\\config", xdg));
+		list_add(paths, format_str("%s\\swinewm\\%s", xdg, native));
 	}
 	if (appdata) {
-		list_add(paths, format_str("%s\\swinewm\\config", appdata));
+		list_add(paths, format_str("%s\\swinewm\\%s", appdata, native));
 	}
 	if (dir) {
-		list_add(paths, format_str("%s\\config", dir));
+		list_add(paths, format_str("%s\\%s", dir, native));
 	}
 	free(profile);
 	free(xdg);
 	free(appdata);
 	free(dir);
+	free(native);
 	return paths;
 }
 

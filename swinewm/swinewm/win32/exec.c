@@ -8,11 +8,21 @@
 // sway runs exec commands through "sh -c". Here the command line goes to
 // CreateProcess, which searches PATH and App Paths aliases (wt.exe, ...).
 // Things CreateProcess cannot start (documents, URLs, shell: folders) are
-// handed to ShellExecute. Use "cmd /c ..." for shell syntax.
+// handed to ShellExecute. %VAR% references are expanded first. Use
+// "cmd /c ..." for other shell syntax.
 bool platform_spawn(const char *cmdline) {
-	wchar_t *wide = utf8_to_utf16(cmdline);
-	if (!wide) {
+	wchar_t *raw = utf8_to_utf16(cmdline);
+	if (!raw) {
 		return false;
+	}
+	// Expand %VAR% like shortcuts and the Run dialog do, so that commands
+	// such as %LOCALAPPDATA%\FlowLauncher\Flow.Launcher.exe work.
+	DWORD n = ExpandEnvironmentStringsW(raw, NULL, 0);
+	wchar_t *wide = raw;
+	if (n > 0) {
+		wide = malloc(sizeof(wchar_t) * n);
+		ExpandEnvironmentStringsW(raw, wide, n);
+		free(raw);
 	}
 	STARTUPINFOW si = { .cb = sizeof(si) };
 	PROCESS_INFORMATION pi = {0};

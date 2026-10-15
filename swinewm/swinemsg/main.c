@@ -37,6 +37,8 @@ static const struct type_name types[] = {
 	{ "get_config", IPC_GET_CONFIG },
 	{ "send_tick", IPC_SEND_TICK },
 	{ "subscribe", IPC_SUBSCRIBE },
+	{ "get_notifications", SWINE_IPC_GET_NOTIFICATIONS },
+	{ "get_notification_history", SWINE_IPC_GET_NOTIFICATION_HISTORY },
 };
 
 static bool io_exact(HANDLE pipe, void *buf, DWORD len, bool write) {
@@ -69,6 +71,40 @@ static HANDLE connect_pipe(const char *name) {
 	}
 	free(wide);
 	return pipe;
+}
+
+static char *quote_args(char **args, int count) {
+	size_t len = 1;
+	for (int k = 0; k < count; ++k) {
+		len += strlen(args[k]) * 2 + 3;
+	}
+	char *out = malloc(len);
+	char *o = out;
+	for (int k = 0; k < count; ++k) {
+		const char *a = args[k];
+		// The first argument is left alone so that a whole command line
+		// passed as one argument ("focus left; kill") still works as in
+		// swaymsg.
+		bool quote = k > 0 && strpbrk(a, " \t;,") != NULL &&
+			a[0] != '"' && a[0] != '\'';
+		if (k > 0) {
+			*o++ = ' ';
+		}
+		if (quote) {
+			*o++ = '"';
+		}
+		for (; *a; ++a) {
+			if (quote && *a == '"') {
+				*o++ = '\\';
+			}
+			*o++ = *a;
+		}
+		if (quote) {
+			*o++ = '"';
+		}
+	}
+	*o = '\0';
+	return out;
 }
 
 int main(int argc, char **argv) {
@@ -113,7 +149,10 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	char *payload = join_args(argv + i, argc - i);
+	// The shell has already removed quotes; put them back around later
+	// arguments with spaces so that `swinemsg notify-send "Hello there"`
+	// keeps its meaning when swinewm splits the command again.
+	char *payload = quote_args(argv + i, argc - i);
 	if (!pipe_name) {
 		pipe_name = get_ipc_pipe_name();
 	}

@@ -8,10 +8,6 @@
 
 struct swine_output;
 
-struct side_gaps {
-	int top, right, bottom, left;
-};
-
 struct swine_workspace {
 	struct swine_node node;
 	char *name;

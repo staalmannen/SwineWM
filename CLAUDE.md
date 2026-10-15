@@ -9,6 +9,11 @@ Waybar (bar) and Mako (notifications). It is *not* a port: there is no
 Wayland, no wlroots, no compositor. Windows application windows (HWNDs) are
 managed through documented Win32 APIs; DWM keeps compositing them.
 
+All three live in **one program, `swinewm.exe`** (an explicit decision: no
+one-tool-per-task split, no D-Bus). Each part still reads the config format
+of the program it replaces: sway's config, Waybar's `config.jsonc` and
+`style.css`, mako's config.
+
 Sway, Waybar and Mako are the specification. Reproduce their behaviour,
 config syntax, IPC protocol and defaults as faithfully as Windows allows.
 This is not clean-room work: read the submodules freely and port code when
@@ -22,19 +27,20 @@ status changes.
 
 ## Repository map
 
-- `swinewm/` — the window manager (`swinewm/swinewm/`), `swinemsg`, shared
+- `swinewm/` — the program (`swinewm/swinewm/`), `swinemsg`, shared
   `common/`, headers in `include/`, unit tests in `tests/`. Mirrors the sway
   repository layout: `swinewm/swinewm/tree/container.c` corresponds to
   `sway/sway/tree/container.c`, and so on.
-- Future components go in sibling directories: `swinebar/` (Waybar),
-  `swinenotify/` (Mako).
+  - `swinewm/swinewm/bar/` — the built-in Waybar (config, modules, CSS
+    subset, format strings); drawn by `win32/bar.c`.
+  - `swinewm/swinewm/notify/` — the built-in Mako (store, config, modes);
+    drawn by `win32/notify.c`. `notify-send`/`makoctl` are commands in
+    `commands/notify.c`.
 - `sway-hwnd/`, `windows/` — earlier C++ prototype; the owner uses it for
   testing on Windows. Do not delete; do not build new features on it.
 - `sway/`, `waybar/`, `mako/` — upstream reference submodules. **Never edit
   files inside submodules.** Fetch them with
   `git submodule update --init --depth 1 sway waybar mako`.
-- The other submodules (`wlroots`, `wayland`, `cairo`, `pango`, …) are
-  leftovers from the port and are not used.
 - `doc/archive/` — notes from the abandoned port strategy.
 
 ## Where to look in the reference sources
@@ -44,9 +50,10 @@ status changes.
 | Command behaviour | `sway/commands/<cmd>.c`, `sway/sway.5.scd` | | |
 | Layout tree | `sway/tree/*.c`, `sway/tree/arrange.c` | | |
 | Focus | `sway/input/seat.c` | | |
-| Config parsing | `sway/config.c`, `sway/commands.c` | `src/config.cpp` | `config.c`, `mako.5.scd` |
+| Config parsing | `sway/config.c`, `sway/commands.c` | `src/config.cpp` | `config.c`, `criteria.c` |
 | IPC | `sway/ipc-server.c`, `sway/ipc-json.c`, `sway/sway-ipc.7.scd` | `src/modules/sway/` | |
-| Defaults | `config.in` | `resources/config.jsonc`, `resources/style.css` | `mako.5.scd` |
+| Defaults | `config.in` | `resources/config.jsonc`, `resources/style.css` | `doc/mako.5.scd` |
+| Modules / options | | `src/modules/*`, `man/waybar-*.5.scd` | `doc/mako.5.scd`, `doc/makoctl.1.scd` |
 
 ## Code conventions
 

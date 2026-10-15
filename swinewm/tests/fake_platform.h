@@ -18,6 +18,14 @@ struct fake_platform_state {
 	struct swine_view *last_closed;
 	char last_spawn[256];
 	const char *config_dir;
+	int ui_refreshes;
+	long long now_ms;
+	// sysinfo readings
+	bool has_battery;
+	int battery_capacity;
+	bool battery_charging;
+	int cpu_usage;
+	int memory_percentage;
 };
 
 extern struct fake_platform_state fake;

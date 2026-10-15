@@ -17,37 +17,40 @@ reproduces as faithfully as Windows allows. The earlier plan of porting
 Wayland, wlroots and Sway to Windows is archived in
 [`doc/archive/`](doc/archive/).
 
+Unlike on Linux, the window manager, bar and notifications are one
+program, `swinewm.exe`; each part still reads the config files of the
+program it replaces.
+
 | Linux | SwineWM | Status |
 | --- | --- | --- |
-| sway | `swinewm` — tiling window manager | Early draft, runs |
-| swaymsg | `swinemsg` — IPC client | Early draft, runs |
-| waybar | `swinebar` — status bar | Planned |
-| mako | `swinenotify` — notifications | Planned |
+| sway | `swinewm.exe` — tiling window manager (sway config) | Early draft, runs |
+| waybar | built into `swinewm.exe` (Waybar config + style.css) | Early draft, runs |
+| mako, notify-send, makoctl | built into `swinewm.exe` (mako config) | Early draft, runs |
+| swaymsg | `swinemsg.exe` — IPC client | Early draft, runs |
 
 ## Repository layout
 
 | Path | What |
 | --- | --- |
-| [`swinewm/`](swinewm/) | The window manager and `swinemsg`, in C11 ([README](swinewm/README.md)) |
+| [`swinewm/`](swinewm/) | `swinewm` (window manager, bar, notifications) and `swinemsg`, in C11 ([README](swinewm/README.md)) |
 | [`doc/`](doc/) | [Project summary](doc/project_summary.md), [architecture](doc/architecture.md), [Sway compatibility](doc/compatibility.md) |
 | [`sway-hwnd/`](sway-hwnd/), [`windows/`](windows/) | Earlier C++ prototype of an HWND tiling shell, kept for testing and comparison |
-| `sway/`, `waybar/`, `mako/` | Upstream sources, used as reference |
-| `wlroots/`, `wayland/`, `wayland-protocols/`, `cairo/`, `pango/`, `dbus/`, `json-c/`, `pcre2/`, `gdk-pixbuf/` | Dependencies imported for the abandoned port; no longer used |
+| `sway/`, `waybar/`, `mako/` | Upstream sources (submodules), used as reference |
 
-Clone with `git clone --recurse-submodules`, or run
-`git submodule update --init sway waybar mako` to get just the reference
-sources.
+Clone with `git clone --recurse-submodules` to get the reference sources.
 
 ## Status
 
 `swinewm` implements Sway's layout tree, focus model and most everyday
 commands (focus, move, split, layout, workspaces, floating, fullscreen,
 scratchpad, resize, gaps, modes, exec), loads Sway config files and answers
-i3/Sway IPC requests over a named pipe. Its core is unit-tested on Linux and
-Windows, and it has been smoke-tested under Wine; it has not yet been used
-on a real Windows desktop. Not yet done: title bars and borders, mouse
-bindings, criteria rules, output configuration, IPC events, the bar and the
-notification daemon. See [`doc/compatibility.md`](doc/compatibility.md).
+i3/Sway IPC requests over a named pipe. It draws a Waybar-style bar from a
+Waybar config and style sheet, and Mako-style notifications from a mako
+config. Its core is unit-tested on Linux and Windows, and it has been
+smoke-tested under Wine; it has not yet been used on a real Windows
+desktop. Not yet done: title bars and borders, mouse bindings, criteria
+rules, output configuration, IPC events, script-driven and tray bar modules,
+Windows toast notifications. See [`doc/compatibility.md`](doc/compatibility.md).
 
 To try it, see [`swinewm/README.md`](swinewm/README.md). It runs as an
 ordinary program next to Explorer and shows all windows again when it exits.

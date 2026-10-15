@@ -21,6 +21,7 @@ endif()
 add_library(swine_common STATIC
   common/fileutil.c
   common/json.c
+  common/json-parse.c
   common/list.c
   common/log.c
   common/stringop.c
@@ -33,7 +34,11 @@ if(WIN32)
 endif()
 
 add_library(swinewm_core STATIC
+  swinewm/bar/bar.c
+  swinewm/bar/css.c
+  swinewm/bar/format.c
   swinewm/commands.c
+  swinewm/commands/bar.c
   swinewm/commands/bind.c
   swinewm/commands/exec.c
   swinewm/commands/floating.c
@@ -42,6 +47,7 @@ add_library(swinewm_core STATIC
   swinewm/commands/layout.c
   swinewm/commands/mode.c
   swinewm/commands/move.c
+  swinewm/commands/notify.c
   swinewm/commands/resize.c
   swinewm/commands/session.c
   swinewm/commands/set.c
@@ -54,6 +60,7 @@ add_library(swinewm_core STATIC
   swinewm/input/seat.c
   swinewm/ipc-json.c
   swinewm/ipc-server.c
+  swinewm/notify/notify.c
   swinewm/server.c
   swinewm/tree/arrange.c
   swinewm/tree/container.c
@@ -72,17 +79,22 @@ if(WIN32)
   add_executable(swinewm
     swinewm/main.c
     swinewm/win32/exec.c
+    swinewm/win32/bar.c
+    swinewm/win32/draw.c
     swinewm/win32/ipc.c
     swinewm/win32/keyboard.c
+    swinewm/win32/notify.c
     swinewm/win32/output.c
     swinewm/win32/platform.c
     swinewm/win32/recover.c
+    swinewm/win32/sysinfo.c
     swinewm/win32/util.c
     swinewm/win32/window.c
   )
   target_compile_definitions(swinewm PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN
     WINVER=0x0A00 _WIN32_WINNT=0x0A00)
-  target_link_libraries(swinewm PRIVATE swinewm_core user32 dwmapi shell32 advapi32)
+  target_link_libraries(swinewm PRIVATE swinewm_core user32 gdi32 dwmapi shell32
+    shcore advapi32)
 
   add_executable(swinemsg swinemsg/main.c)
   target_compile_definitions(swinemsg PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
@@ -90,9 +102,10 @@ if(WIN32)
 
   # Ship the default config next to the executable; swinewm falls back to
   # it when the user has none.
-  add_custom_command(TARGET swinewm POST_BUILD
+  add_custom_target(swinewm_default_config ALL
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      ${CMAKE_CURRENT_SOURCE_DIR}/config.in $<TARGET_FILE_DIR:swinewm>/config)
+      ${CMAKE_CURRENT_SOURCE_DIR}/config.in $<TARGET_FILE_DIR:swinewm>/config
+    DEPENDS config.in)
 endif()
 
 if(SWINEWM_BUILD_TESTS)
@@ -104,6 +117,8 @@ if(SWINEWM_BUILD_TESTS)
     tests/test_common.c
     tests/test_config.c
     tests/test_tree.c
+    tests/test_bar.c
+    tests/test_notify.c
   )
   target_link_libraries(swinewm_tests PRIVATE swinewm_core)
   add_test(NAME swinewm_tests COMMAND swinewm_tests)

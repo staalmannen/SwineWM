@@ -322,6 +322,7 @@ static void handle_event(DWORD event, HWND hwnd) {
 			char *title = window_title(hwnd);
 			view_set_title(view, title);
 			free(title);
+			platform_ui_refresh();   // the bar shows the title
 		}
 		return;
 

@@ -106,6 +106,15 @@ struct swine_workspace *output_get_active_workspace(struct swine_output *output)
 	return output ? output->active_workspace : NULL;
 }
 
+struct swine_box output_get_usable_area(struct swine_output *output) {
+	struct swine_box box = output->usable;
+	box.x += output->reserved.left;
+	box.y += output->reserved.top;
+	box.width -= output->reserved.left + output->reserved.right;
+	box.height -= output->reserved.top + output->reserved.bottom;
+	return box;
+}
+
 static int sort_workspace_cmp(const void *a, const void *b) {
 	const struct swine_workspace *wa = *(void *const *)a;
 	const struct swine_workspace *wb = *(void *const *)b;

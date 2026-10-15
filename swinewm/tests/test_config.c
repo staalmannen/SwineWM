@@ -137,7 +137,12 @@ static void test_default_config(void) {
 	bool ok = load_main_config(SWINEWM_SOURCE_DIR "/config.in", false, true);
 	CHECK(ok);
 	CHECK(config->modes->length == 2);
-	CHECK(keyboard_find_binding(SWINE_MOD_LOGO, 0x0D, false) != NULL);
+	struct swine_binding *term = keyboard_find_binding(SWINE_MOD_LOGO, 0x0D, false);
+	CHECK(term && strcmp(term->command, "exec alacritty.exe") == 0);
+	struct swine_binding *menu = keyboard_find_binding(SWINE_MOD_LOGO, 'D', false);
+	CHECK(menu && strcmp(menu->command,
+		"exec %LOCALAPPDATA%\\FlowLauncher\\Flow.Launcher.exe") == 0);
+	CHECK(config->bar_enabled);
 	fake_teardown();
 }
 

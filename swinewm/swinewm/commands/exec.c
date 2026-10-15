@@ -28,6 +28,11 @@ struct cmd_results *cmd_exec_always(int argc, char **argv) {
 	} else {
 		cmd = join_args(argv, argc);
 	}
+	struct cmd_results *builtin = exec_builtin(cmd, false);
+	if (builtin) {
+		free(cmd);
+		return builtin;
+	}
 	swine_log(SWINE_INFO, "Executing %s", cmd);
 	bool ok = platform_spawn(cmd);
 	struct cmd_results *res = ok ? cmd_results_new(CMD_SUCCESS, NULL) :
@@ -42,6 +47,12 @@ struct cmd_results *cmd_exec(int argc, char **argv) {
 	}
 	if (config->reloading) {
 		char *args = join_args(argv, argc);
+		// "exec waybar" still means "show the bar" after a reload.
+		struct cmd_results *builtin = exec_builtin(args, true);
+		if (builtin) {
+			free(args);
+			return builtin;
+		}
 		swine_log(SWINE_DEBUG, "Ignoring 'exec %s' due to reload", args);
 		free(args);
 		return cmd_results_new(CMD_SUCCESS, NULL);

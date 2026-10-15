@@ -7,6 +7,7 @@
 #include "swinewm/desktop/transaction.h"
 #include "swinewm/ipc-json.h"
 #include "swinewm/ipc-server.h"
+#include "swinewm/notify.h"
 
 static char *simple_reply(bool success) {
 	return swine_strdup(success ? "{\"success\":true}" : "{\"success\":false}");
@@ -44,6 +45,10 @@ char *ipc_handle_request(uint32_t type, const char *payload, uint32_t length,
 	case IPC_GET_INPUTS:
 	case IPC_GET_SEATS:
 		return swine_strdup("[]");
+	case SWINE_IPC_GET_NOTIFICATIONS:
+		return notify_list_json(notify_active());
+	case SWINE_IPC_GET_NOTIFICATION_HISTORY:
+		return notify_list_json(notify_history());
 	case IPC_SEND_TICK:
 		return simple_reply(true);
 	case IPC_SUBSCRIBE:

@@ -16,6 +16,10 @@ struct swine_box {
 	int x, y, width, height;
 };
 
+struct side_gaps {
+	int top, right, bottom, left;
+};
+
 enum swine_node_type {
 	N_ROOT,
 	N_OUTPUT,

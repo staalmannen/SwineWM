@@ -1,8 +1,9 @@
 # swinewm
 
 A Sway-compatible tiling window manager for Windows, written from scratch in
-C11. It manages ordinary Windows application windows, reads Sway's config
-format and speaks Sway's IPC protocol. See
+C11, with a Waybar-compatible bar and Mako-compatible notifications built
+in. It manages ordinary Windows application windows, reads Sway's, Waybar's
+and mako's config formats and speaks Sway's IPC protocol. See
 [`../doc/project_summary.md`](../doc/project_summary.md) for the scope,
 [`../doc/architecture.md`](../doc/architecture.md) for how it works and
 [`../doc/compatibility.md`](../doc/compatibility.md) for what is supported.
@@ -32,8 +33,10 @@ cmake --build build/swinewm
 ## Running
 
 Copy [`config.in`](config.in) to `%USERPROFILE%\.swinewm\config` and edit it
-(or rely on the copy placed next to the executable), start a few
-applications, then run from a terminal:
+(or rely on the copy placed next to the executable). The default config
+starts [Alacritty](https://alacritty.org) and
+[Flow Launcher](https://www.flowlauncher.com); install them or change `$term`
+and `$menu`. Start a few applications, then run from a terminal:
 
 ```powershell
 .\build\swinewm\Debug\swinewm.exe -V
@@ -44,8 +47,8 @@ workspace 1. With the default config:
 
 | Keys | Action |
 | --- | --- |
-| Win+Enter | Terminal (`wt.exe`) |
-| Win+d | Applications folder (until there is a launcher) |
+| Win+Enter | Terminal ([Alacritty](https://alacritty.org)) |
+| Win+d | Launcher ([Flow Launcher](https://www.flowlauncher.com)) |
 | Win+h/j/k/l, Win+arrows | Focus (Win+l locks Windows; use the arrows or change `$mod`) |
 | Win+Shift+h/j/k/l, Win+Shift+arrows | Move window |
 | Win+1…0 | Switch workspace |
@@ -58,13 +61,31 @@ workspace 1. With the default config:
 | Win+Shift+q | Close window |
 | Win+Shift+c | Reload config |
 | Win+Shift+e | Exit (shows all windows again) |
+| Win+n / Win+Shift+n | Dismiss / restore a notification |
 
 Control it from scripts with `swinemsg`, as with `swaymsg`:
 
 ```powershell
 .\build\swinewm\Debug\swinemsg.exe workspace 3
 .\build\swinewm\Debug\swinemsg.exe -t get_tree
+.\build\swinewm\Debug\swinemsg.exe notify-send -u critical "Build done" "All tests passed"
 ```
+
+## Config files
+
+All are looked up in `%USERPROFILE%\.swinewm\`, then
+`%XDG_CONFIG_HOME%\swinewm\`, `%APPDATA%\swinewm\` and the directory of
+`swinewm.exe`. Existing files from Linux can be copied over.
+
+| File | Format | Without it |
+| --- | --- | --- |
+| `config` | sway | No bindings at all, so keep the copy next to the exe or your own |
+| `waybar\config.jsonc` (or `waybar\config`) | Waybar | Built-in default bar |
+| `waybar\style.css` | Waybar's GTK CSS (subset) | Built-in default style |
+| `mako\config` | mako | mako's defaults |
+
+The bar appears when the sway config has a `bar { }` block (the default
+config does) or `exec waybar`. `reload` re-reads all of these.
 
 ## Developing on Linux
 

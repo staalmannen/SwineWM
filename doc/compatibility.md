@@ -31,7 +31,7 @@ ignored · ❌ not implemented (error)
 | `bindcode`, `bindswitch`, `bindgesture` | ⚪ | |
 | `mode <name>`, `mode <name> { … }` | ✅ | `--pango_markup` accepted |
 | `set` | ✅ | |
-| `exec`, `exec_always` | ✅ | See architecture: CreateProcess, then ShellExecute; no implicit shell |
+| `exec`, `exec_always` | ✅ | See architecture: CreateProcess, then ShellExecute; `%VAR%` expanded; no implicit shell. `waybar`, `mako`, `makoctl`, `notify-send` run the built-in versions |
 | `exit` | ✅ | Shows all hidden windows and quits |
 | `reload` | ✅ | |
 | `kill` | ✅ | Sends `WM_CLOSE` (the application may ask to save) |
@@ -64,9 +64,38 @@ ignored · ❌ not implemented (error)
 | `border`, `default_border`, `default_floating_border`, `client.*`, `font`, `title_align`, `titlebar_*`, `show_marks` | ⚪ | Decorations not drawn yet |
 | `for_window`, `assign`, `no_focus`, criteria `[…]` | ⚪ / ❌ | Config lines ignored; runtime criteria are an error |
 | `output`, `input`, `seat` | ⚪ | Windows settings apply |
-| `bar` | ⚪ | swinebar will be a separate Waybar-like program |
+| `bar { … }`, `bar <option>` | 🟡 | Enables the built-in Waybar-compatible bar; `position`, `mode invisible\|dock\|toggle` honoured, other swaybar options ignored (see below) |
 | `xwayland`, `swaybg_command`, `swaynag_command`, `max_render_time`, `allow_tearing`, `primary_selection`, `inhibit_idle`, `shortcuts_inhibitor`, `tiling_drag*`, `mouse_warping`, `popup_during_fullscreen`, `focus_on_window_activation`, `force_display_urgency_hint`, `new_window`, `new_float`, `floating_minimum_size`, `floating_maximum_size` | ⚪ | |
 | `mark`, `unmark`, `swap`, `sticky`, `rename`, `title_format`, `opacity`, `urgent`, `create_output` | ❌ | |
+
+## Bar (Waybar config)
+
+| Feature | Status | Notes |
+| --- | --- | --- |
+| `waybar/config.jsonc` / `waybar/config`, JSONC | ✅ | First bar of an array is used |
+| `height`, `spacing`, `position` (top/bottom), `output` | ✅ | left/right positions not supported |
+| `modules-left/center/right` | ✅ | |
+| `sway/workspaces` | 🟡 | `format` with `{name} {value} {index} {icon} {output}`, `format-icons`, `all-outputs`, `disable-scroll`, `disable-click`; no persistent workspaces |
+| `sway/mode`, `sway/window`, `sway/scratchpad` | ✅ | window: `{title} {app_id}`, `max-length` |
+| `clock` | 🟡 | `format`, `format-alt` (click), strftime specs; no calendar tooltip |
+| `cpu`, `memory`, `battery` | 🟡 | Main fields, `states`, `format-icons`, battery `format-charging/plugged/full` |
+| `custom/*` | 🟡 | Static `format` and `on-click`; `exec` scripts not yet |
+| `tray`, `network`, `pulseaudio`, others | ❌ | Skipped with a log message |
+| `on-click`, `on-scroll-up/down` | ✅ | Run through `exec` |
+| Tooltips, `rotate`, markup beyond stripping | ❌ | |
+| `style.css` | 🟡 | Selectors by type/#id/.class with descendants; `@define-color`, `alpha()`; colours, fonts, padding, margin, borders, `box-shadow: inset`; no `:hover`, animations, transparency (blended over black) |
+
+## Notifications (mako config)
+
+| Feature | Status | Notes |
+| --- | --- | --- |
+| `mako/config`, global options, `[criteria]` | ✅ | Criteria: `app-name`, `summary`, `body`, `urgency`, `category`, `mode`, `expiring`. Regex (`summary~`), grouping and `hidden` criteria not yet |
+| Style options | 🟡 | `font`, colours, `width`, `height`, `margin`, `padding`, `outer-margin`, `border-size`, `format`, `text-alignment`, `anchor`, `output`; `border-radius`, icons, progress not drawn |
+| Behaviour options | ✅ | `default-timeout`, `ignore-timeout`, `max-visible`, `max-history`, `history`, `sort` (time), `invisible`, `on-button-*` |
+| `notify-send` | ✅ | As a command; `-u -t -a -c -r`, other options accepted |
+| `makoctl dismiss [-a] [-n id] [-h]`, `restore`, `invoke`, `mode [-a\|-r\|-t\|-s]`, `reload` | ✅ | `invoke` dismisses (no actions yet) |
+| `makoctl list` / `history` | 🟡 | Use `swinemsg -t get_notifications` / `get_notification_history` |
+| Notifications from Windows applications (toasts) | ❌ | See the project summary |
 
 ## Keys
 
@@ -85,6 +114,7 @@ ignored · ❌ not implemented (error)
 | `GET_WORKSPACES`, `GET_OUTPUTS`, `GET_TREE`, `GET_VERSION` | ✅ (subset of sway's fields) |
 | `GET_BINDING_MODES`, `GET_BINDING_STATE`, `GET_CONFIG` | ✅ |
 | `GET_MARKS`, `GET_BAR_CONFIG`, `GET_INPUTS`, `GET_SEATS` | Empty lists |
+| `GET_NOTIFICATIONS` (1000), `GET_NOTIFICATION_HISTORY` (1001) | ✅ swinewm extensions |
 | `SEND_TICK` | 🟡 replies success, no event |
 | `SUBSCRIBE` and events | ❌ next on the list (needed by swinebar) |
 

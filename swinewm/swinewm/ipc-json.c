@@ -113,7 +113,8 @@ char *ipc_json_get_outputs(void) {
 		json_key(&w, "current_workspace");
 		json_string(&w, ws ? ws->name : NULL);
 		write_rect(&w, "rect", &output->box);
-		write_rect(&w, "usable_rect", &output->usable);
+		struct swine_box usable = output_get_usable_area(output);
+		write_rect(&w, "usable_rect", &usable);
 		json_end_object(&w);
 	}
 	json_end_array(&w);

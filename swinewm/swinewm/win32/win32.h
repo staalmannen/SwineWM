@@ -7,8 +7,10 @@
 #include <windows.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include "swinewm/bar/css.h"
 
 struct swine_view;
+struct swine_output;
 
 // Messages posted to the shell's own (hidden) window. Everything that
 // touches the tree runs on the main thread; hooks and the IPC threads only
@@ -19,6 +21,26 @@ struct swine_view;
 #define WM_SWINE_SAVE_HIDDEN (WM_APP + 4)
 
 extern HWND win32_shell_hwnd;
+
+// platform.c
+// Runs a swinewm command line (bindings, bar clicks) and commits.
+void win32_run_command(const char *command);
+
+// draw.c: GDI helpers shared by the bar and notification popups
+// Picks the first installed family from a CSS/Pango family list.
+HFONT win32_font(const char *families, int px, bool bold, bool italic);
+void win32_fonts_clear(void);
+COLORREF win32_blend(struct swine_color color, COLORREF under);
+void win32_fill(HDC dc, const RECT *rect, COLORREF color);
+double win32_output_scale(struct swine_output *output);
+
+// bar.c
+void win32_bar_refresh(void);
+void win32_bar_finish(void);
+
+// notify.c
+void win32_notify_refresh(void);
+void win32_notify_finish(void);
 
 // util.c
 wchar_t *utf8_to_utf16(const char *str);

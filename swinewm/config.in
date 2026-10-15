@@ -21,10 +21,12 @@ set $left h
 set $down j
 set $up k
 set $right l
-# Your preferred terminal emulator
-set $term wt.exe
-# Your preferred application launcher (a swinewm launcher is planned)
-set $menu explorer.exe shell:AppsFolder
+# Your preferred terminal emulator (https://alacritty.org)
+set $term alacritty.exe
+# Your preferred application launcher (https://www.flowlauncher.com).
+# Starting it again while it runs in the background opens its search box.
+# %VAR% references are expanded in exec commands.
+set $menu %LOCALAPPDATA%\FlowLauncher\Flow.Launcher.exe
 
 ### Output configuration
 #
@@ -172,7 +174,21 @@ bindsym $mod+r mode "resize"
 # Volume, media and Print Screen keys are left to Windows, which already
 # handles them. Bind them here only if you want to override that.
 #
+# Notifications:
+#
+# swinewm shows notifications itself, configured like mako in mako\config
+# next to this file. Send them with "notify-send" (as a binding, over
+# swinemsg, or from exec); control them with "makoctl".
+    bindsym $mod+n makoctl dismiss
+    bindsym $mod+Shift+n makoctl restore
+#
 # Status Bar:
 #
-# swinewm will not draw sway's built-in bar. A Waybar-like bar (swinebar) is
-# planned as a separate program; until then the Windows taskbar stays.
+# swinewm draws a Waybar-compatible bar itself. Its modules and look come
+# from waybar\config.jsonc and waybar\style.css next to this file, in
+# Waybar's own formats; without them a built-in default is used. In an
+# existing sway config, "exec waybar" or "bar { swaybar_command waybar }"
+# work as well.
+bar {
+    position top
+}
