@@ -291,7 +291,7 @@ bool bar_get_rect(struct swine_output *output, struct swine_box *out) {
 		return false;
 	}
 	struct swine_workspace *ws = output_get_active_workspace(output);
-	if (ws && ws->fullscreen) {
+	if ((ws && ws->fullscreen) || output->external_fullscreen) {
 		return false;
 	}
 	ensure_loaded();

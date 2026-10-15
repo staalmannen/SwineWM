@@ -113,6 +113,7 @@ if(WIN32)
     swinewm/win32/output.c
     swinewm/win32/platform.c
     swinewm/win32/recover.c
+    swinewm/win32/shell.c
     swinewm/win32/sysinfo.c
     swinewm/win32/util.c
     swinewm/win32/wallpaper.c

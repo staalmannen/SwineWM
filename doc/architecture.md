@@ -264,6 +264,50 @@ dismiss|restore|invoke|mode|reload` likewise. `exec makoctl ...` and
 - `swinemsg -t get_notifications` / `get_notification_history` list them
   (swinewm IPC extensions 1000 and 1001).
 
+## Urgency and fullscreen requests
+
+- **Urgency.** Windows has no urgency hint, but an application that wants
+  attention flashes its taskbar button (`FlashWindowEx`), which reaches
+  shell-hook windows as `HSHELL_FLASH`. swinewm registers its window with
+  `RegisterShellHookWindow` and turns that into sway's view urgency: the
+  workspace gets the `urgent` class in the bar until the window is
+  focused. sway's `urgent enable|disable|allow|deny` command works too.
+- **Fullscreen.** An application that makes itself fullscreen (F11 in a
+  browser) is detected from location changes and `HSHELL_FULLSCREENENTER`/
+  `EXIT`: its "effective" rectangle (client area if it has a frame) equals
+  a monitor. A managed window then becomes a sway fullscreen container, as
+  an xdg-toplevel fullscreen request does in sway, and returns to the
+  layout when it leaves fullscreen. An unmanaged fullscreen window in
+  front (a game) only hides the bar on its monitor.
+
+## Running as the Windows shell
+
+`win32/shell.c`. swinewm acts as the shell when no shell window exists at
+start-up (or with `--shell`), typically after `swinewm --set-shell` made it
+the user's logon shell. Then it:
+
+- logs to `%LOCALAPPDATA%\swinewm\swinewm.log` instead of a console;
+- creates a bottom-most desktop window and registers it with
+  `SetShellWindow` (some programs look for the shell through
+  `GetShellWindow`);
+- sets the `ShellDesktopSwitchEvent` event so Windows completes the logon;
+- starts the user's startup programs (Run/RunOnce keys and Startup folders,
+  honouring entries disabled in Task Manager), once per logon session;
+- owns the work area: each monitor's work area is set to the monitor minus
+  the bar, so maximized windows outside the tiling respect the bar, and
+  reset on exit;
+- makes `exit` log off, as sway's does;
+- after a crash, starts Explorer (with a short delay, so that Explorer finds
+  no shell window and becomes the shell) so the user is never stranded.
+
+Next to Explorer, `explorer_taskbar autohide` switches Explorer's taskbar to
+auto-hide and keeps it hidden, restoring the original setting on exit,
+after a crash and with `--recover`.
+
+The approach follows Cairo Desktop's ManagedShell library; see
+[`research/windows-shell.md`](research/windows-shell.md) for the details
+and what remains (tray icons, AppBar registration).
+
 ## Things deliberately left for later
 
 - Title bars for tabbed/stacked containers and focus borders: Windows draws

@@ -15,6 +15,9 @@ struct swine_view {
 	char *class_name;          // window class
 	unsigned long pid;
 	bool natural_floating;     // dialogs, fixed-size windows, ...
+	bool urgent;               // the application asked for attention
+	bool urgency_denied;       // "urgent deny"
+	bool fullscreen_requested; // the application made itself fullscreen
 	struct swine_box natural;  // geometry when first seen
 
 	// What the arrange pass wants...
@@ -40,5 +43,11 @@ void view_destroy(struct swine_view *view);
 struct swine_view *view_from_handle(void *handle);
 void view_set_title(struct swine_view *view, const char *title);
 bool view_is_visible(struct swine_view *view);
+// Like sway: urgency set by the application (on Windows: flashing its
+// taskbar button). Ignored for the focused view; cleared when focused.
+void view_set_urgent(struct swine_view *view, bool enable);
+// The application entered or left fullscreen by itself (e.g. F11 in a
+// browser), like an xdg-toplevel fullscreen request in sway.
+void view_request_fullscreen(struct swine_view *view, bool enable);
 
 #endif

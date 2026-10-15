@@ -5,6 +5,7 @@
 #include "swinewm/input/seat.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/root.h"
+#include "swinewm/tree/view.h"
 #include "swinewm/tree/workspace.h"
 
 struct cmd_results *cmd_floating(int argc, char **argv) {
@@ -101,5 +102,26 @@ struct cmd_results *cmd_scratchpad(int argc, char **argv) {
 		return cmd_results_new(CMD_INVALID, "Scratchpad is empty");
 	}
 	scratchpad_toggle_auto();
+	return cmd_results_new(CMD_SUCCESS, NULL);
+}
+
+// urgent enable|disable|allow|deny (sway/commands/urgent.c)
+struct cmd_results *cmd_urgent(int argc, char **argv) {
+	struct cmd_results *error = NULL;
+	if ((error = checkarg(argc, "urgent", EXPECTED_EQUAL_TO, 1))) {
+		return error;
+	}
+	struct swine_container *container = config->handler_context.container;
+	if (!container || !container->view) {
+		return cmd_results_new(CMD_INVALID, "Only views can be urgent");
+	}
+	struct swine_view *view = container->view;
+	if (swine_strcasecmp(argv[0], "allow") == 0) {
+		view->urgency_denied = false;
+	} else if (swine_strcasecmp(argv[0], "deny") == 0) {
+		view->urgency_denied = true;
+	} else {
+		view_set_urgent(view, parse_boolean(argv[0], view->urgent));
+	}
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }

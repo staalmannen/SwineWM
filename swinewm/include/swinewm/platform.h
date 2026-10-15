@@ -11,9 +11,16 @@ struct swine_view;
 // implementation lives in swinewm/win32/; tests link a fake implementation.
 // The core never includes <windows.h>.
 
-// Called first thing in main(). On Windows it sets %SWINEWM_DATA% to the
-// directory of swinewm.exe so configs can refer to installed files.
+// Called before anything else is set up. On Windows it sets %SWINEWM_DATA%
+// to the directory of swinewm.exe and decides whether swinewm is the shell.
 void platform_setup_environment(void);
+// -1: detect (no other shell running), 0: never act as the shell, 1: always.
+void platform_set_shell_mode(int mode);
+// True when swinewm replaces Explorer as the Windows shell.
+bool platform_is_shell(void);
+// Makes swinewm (or Explorer again) the login shell of the current user.
+// Returns a process exit status.
+int platform_set_login_shell(bool enable);
 bool platform_init(void);
 // Runs the event loop until platform_quit() is called. Returns exit status.
 int platform_run(void);

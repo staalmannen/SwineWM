@@ -67,7 +67,10 @@ ignored · ❌ not implemented (error)
 | other `output` options (mode, position, scale, …), `input`, `seat` | ⚪ | Windows settings apply |
 | `bar { … }`, `bar <option>` | 🟡 | Enables the built-in Waybar-compatible bar; `position`, `mode invisible\|dock\|toggle` honoured, other swaybar options ignored (see below) |
 | `xwayland`, `swaybg_command`, `swaynag_command`, `max_render_time`, `allow_tearing`, `primary_selection`, `inhibit_idle`, `shortcuts_inhibitor`, `tiling_drag*`, `mouse_warping`, `popup_during_fullscreen`, `focus_on_window_activation`, `force_display_urgency_hint`, `new_window`, `new_float`, `floating_minimum_size`, `floating_maximum_size` | ⚪ | |
-| `mark`, `unmark`, `swap`, `sticky`, `rename`, `title_format`, `opacity`, `urgent`, `create_output` | ❌ | |
+| `urgent enable\|disable\|allow\|deny` | ✅ | Windows' own "urgency" is a flashing taskbar button (`FlashWindowEx`); it marks the view and its workspace urgent until focused |
+| Application-requested fullscreen | ✅ | A window that makes itself fullscreen (F11) becomes a sway fullscreen container and returns when it leaves fullscreen |
+| `mark`, `unmark`, `swap`, `sticky`, `rename`, `title_format`, `opacity`, `create_output` | ❌ | |
+| `explorer_taskbar autohide\|show\|toggle` | ✅ | swinewm extension: while running next to Explorer, keep Explorer's taskbar auto-hidden (restored on exit) |
 
 ## Bar (Waybar config)
 
@@ -97,6 +100,14 @@ ignored · ❌ not implemented (error)
 | `makoctl dismiss [-a] [-n id] [-h]`, `restore`, `invoke`, `mode [-a\|-r\|-t\|-s]`, `reload` | ✅ | `invoke` dismisses (no actions yet) |
 | `makoctl list` / `history` | 🟡 | Use `swinemsg -t get_notifications` / `get_notification_history` |
 | Notifications from Windows applications (toasts) | ❌ | See the project summary |
+
+## Session
+
+| sway | swinewm |
+| --- | --- |
+| Started by a display manager or a TTY | `swinewm --set-shell` makes it the Windows logon shell for the current user (`--unset-shell` undoes it), or it runs next to Explorer |
+| `exit` ends the Wayland session | As the shell, `exit` logs off; next to Explorer it just quits |
+| `exec` in the config for autostart | Works the same; as the shell, the Windows startup programs (Run keys, Startup folder) are started too, as Explorer would |
 
 ## Keys
 

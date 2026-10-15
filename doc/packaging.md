@@ -117,9 +117,13 @@ PATH entry in [`swinewm/cmake/wix-patch.xml`](../swinewm/cmake/wix-patch.xml).
 - **Per-machine install.** The MSI installs for all users into Program
   Files and therefore asks for administrator rights.
 - **Starting at login.** The installer does not make SwineWM start
-  automatically or replace Explorer. For now, start it from the Start menu,
-  or put a shortcut in `shell:startup`. Running it as the real Windows shell
-  is a later milestone (see the project summary).
+  automatically or replace Explorer. Users choose:
+  - next to Explorer: a shortcut to `swinewm.exe` in `shell:startup`
+    (optionally with `explorer_taskbar autohide` in the config);
+  - instead of Explorer: `swinewm --set-shell` (per user, no admin rights;
+    `swinewm --unset-shell` undoes it). If SwineWM is the shell and crashes,
+    it starts Explorer so the session stays usable; Ctrl+Alt+Del → Task
+    Manager → Run `explorer.exe` always works too.
 
 ## Assets
 

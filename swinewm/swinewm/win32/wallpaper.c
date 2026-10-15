@@ -40,7 +40,8 @@ static bool is_desktop_window(HWND hwnd) {
 	if (!GetClassNameW(hwnd, cls, 32)) {
 		return false;
 	}
-	return wcscmp(cls, L"Progman") == 0 || wcscmp(cls, L"WorkerW") == 0;
+	return wcscmp(cls, L"Progman") == 0 || wcscmp(cls, L"WorkerW") == 0 ||
+		wcscmp(cls, L"swinewm-desktop") == 0;
 }
 
 static bool is_wallpaper_window(HWND hwnd) {

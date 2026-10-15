@@ -23,6 +23,9 @@ struct swine_output {
 	double scale;
 	bool enabled;
 	bool primary;
+	// A window swinewm does not manage (a game, a presentation) covers the
+	// whole monitor and is in front: the bar gets out of its way.
+	bool external_fullscreen;
 	list_t *workspaces;       // struct swine_workspace *
 	struct swine_workspace *active_workspace;
 };

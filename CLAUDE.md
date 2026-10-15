@@ -49,6 +49,10 @@ status changes.
   files inside submodules.** Fetch them with
   `git submodule update --init --depth 1 sway waybar mako`.
 - `doc/archive/` — notes from the abandoned port strategy.
+- `doc/research/windows-shell.md` — how Cairo Desktop / ManagedShell solve
+  shell problems (being the shell, AppBars, tray, task tracking,
+  fullscreen), what SwineWM took from it and what remains (the tray).
+  Start there before working on shell integration.
 
 ## Where to look in the reference sources
 

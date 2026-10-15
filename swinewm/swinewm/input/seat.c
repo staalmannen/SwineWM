@@ -4,6 +4,7 @@
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/output.h"
 #include "swinewm/tree/root.h"
+#include "swinewm/tree/view.h"
 #include "swinewm/tree/workspace.h"
 
 struct swine_seat *seat = NULL;
@@ -72,6 +73,10 @@ void seat_set_focus(struct swine_node *node) {
 		ws->output->active_workspace = ws;
 	}
 	seat_set_raw_focus(node);
+	if (node->type == N_CONTAINER && node->container->view &&
+			node->container->view->urgent) {
+		view_set_urgent(node->container->view, false);
+	}
 	if (old_ws && old_ws != ws) {
 		workspace_consider_destroy(old_ws);
 	}

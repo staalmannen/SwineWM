@@ -20,6 +20,9 @@ void fake_reset(void) {
 }
 
 void platform_setup_environment(void) {}
+void platform_set_shell_mode(int mode) { (void)mode; }
+bool platform_is_shell(void) { return false; }
+int platform_set_login_shell(bool enable) { (void)enable; return 0; }
 bool platform_init(void) { return true; }
 int platform_run(void) { return 0; }
 void platform_quit(void) { fake.quit = true; }
