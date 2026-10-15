@@ -135,25 +135,25 @@ void win32_shell_resize_desktop(void) {
 
 // HKxx\...\Explorer\StartupApproved\*: the first byte of a value is odd
 // when the user disabled that entry in Task Manager.
-static bool startup_disabled(HKEY root, const wchar_t *approved_key,
+static bool startup_disabled(HKEY hive, const wchar_t *approved_key,
 		const wchar_t *name) {
 	if (!approved_key) {
 		return false;
 	}
 	BYTE data[16];
 	DWORD size = sizeof(data);
-	if (RegGetValueW(root, approved_key, name, RRF_RT_REG_BINARY, NULL, data,
+	if (RegGetValueW(hive, approved_key, name, RRF_RT_REG_BINARY, NULL, data,
 			&size) != ERROR_SUCCESS || size == 0) {
 		return false;
 	}
 	return (data[0] % 2) != 0;
 }
 
-static void run_registry_key(HKEY root, const wchar_t *path,
+static void run_registry_key(HKEY hive, const wchar_t *path,
 		const wchar_t *approved_key, bool run_once) {
 	HKEY key;
 	REGSAM access = KEY_READ | (run_once ? KEY_SET_VALUE : 0);
-	if (RegOpenKeyExW(root, path, 0, access, &key) != ERROR_SUCCESS) {
+	if (RegOpenKeyExW(hive, path, 0, access, &key) != ERROR_SUCCESS) {
 		return;
 	}
 	for (DWORD i = 0;; ++i) {
@@ -171,7 +171,7 @@ static void run_registry_key(HKEY root, const wchar_t *path,
 			continue;
 		}
 		value[value_size / sizeof(wchar_t)] = L'\0';
-		if (startup_disabled(root, approved_key, name)) {
+		if (startup_disabled(hive, approved_key, name)) {
 			continue;
 		}
 		char *cmd = utf16_to_utf8(value);
