@@ -1,0 +1,96 @@
+#ifndef _SWINE_COMMANDS_H
+#define _SWINE_COMMANDS_H
+
+#include <stdbool.h>
+#include <stddef.h>
+#include "list.h"
+
+struct swine_container;
+
+enum cmd_status {
+	CMD_SUCCESS,
+	CMD_FAILURE,     // valid command that could not run
+	CMD_INVALID,     // unknown command or bad arguments
+	CMD_DEFER,       // queue until the config has been read
+	CMD_BLOCK,       // start of a { block }
+	CMD_BLOCK_END,
+};
+
+struct cmd_results {
+	enum cmd_status status;
+	char *error;
+};
+
+enum expected_args {
+	EXPECTED_AT_LEAST,
+	EXPECTED_AT_MOST,
+	EXPECTED_EQUAL_TO,
+};
+
+typedef struct cmd_results *swine_cmd(int argc, char **argv);
+
+enum cmd_handler_flags {
+	CMD_CONFIG_ONLY = 1 << 0,   // only valid while reading the config
+	CMD_RUNTIME_ONLY = 1 << 1,  // only valid at runtime (not in the config)
+};
+
+struct cmd_handler {
+	const char *command;
+	swine_cmd *handle;
+	unsigned flags;
+};
+
+// Parses and runs a command line (commands separated by ';' or ',').
+// Returns a list of struct cmd_results *, one per command.
+list_t *execute_command(char *command, struct swine_container *con);
+// Runs a single config line (no ';' splitting, variables replaced). When the
+// line opens a block, *new_block receives the block prefix.
+struct cmd_results *config_command(char *command, char **new_block);
+// Name of the command currently being executed (for shared handlers).
+const char *cmd_current_name(void);
+struct cmd_results *config_subcommand(char **argv, int argc,
+		const struct cmd_handler *handlers, size_t handlers_size);
+struct cmd_results *checkarg(int argc, const char *name,
+		enum expected_args type, int val);
+const struct cmd_handler *find_handler(const char *line,
+		const struct cmd_handler *handlers, size_t handlers_size);
+
+struct cmd_results *cmd_results_new(enum cmd_status status,
+		const char *error, ...);
+void free_cmd_results(struct cmd_results *results);
+void free_cmd_results_list(list_t *res_list);
+char *cmd_results_to_json(list_t *res_list);
+
+swine_cmd cmd_bindsym;
+swine_cmd cmd_default_orientation;
+swine_cmd cmd_exec;
+swine_cmd cmd_exec_always;
+swine_cmd cmd_exit;
+swine_cmd cmd_floating;
+swine_cmd cmd_floating_modifier;
+swine_cmd cmd_focus;
+swine_cmd cmd_focus_follows_mouse;
+swine_cmd cmd_focus_wrapping;
+swine_cmd cmd_fullscreen;
+swine_cmd cmd_gaps;
+swine_cmd cmd_ignored;
+swine_cmd cmd_include;
+swine_cmd cmd_kill;
+swine_cmd cmd_layout;
+swine_cmd cmd_mode;
+swine_cmd cmd_move;
+swine_cmd cmd_nop;
+swine_cmd cmd_reload;
+swine_cmd cmd_resize;
+swine_cmd cmd_scratchpad;
+swine_cmd cmd_set;
+swine_cmd cmd_split;
+swine_cmd cmd_splith;
+swine_cmd cmd_splitt;
+swine_cmd cmd_splitv;
+swine_cmd cmd_unbindsym;
+swine_cmd cmd_workspace;
+swine_cmd cmd_workspace_layout;
+swine_cmd cmd_ws_auto_back_and_forth;
+
+#endif
