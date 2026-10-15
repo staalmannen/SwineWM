@@ -30,8 +30,12 @@ set $menu %LOCALAPPDATA%\FlowLauncher\Flow.Launcher.exe
 
 ### Output configuration
 #
-# Not implemented yet. Windows display settings decide resolution and
-# position; swinewm uses each monitor's work area.
+# Default wallpaper. %SWINEWM_DATA% is the directory of swinewm.exe;
+# relative paths are relative to this config file.
+output * bg %SWINEWM_DATA%\wallpapers\swinewm-default.png fill
+#
+# Only the background options are implemented. Windows display settings
+# decide resolution, position and scale, so lines like this are ignored:
 #
 #   output DISPLAY1 resolution 1920x1080 position 1920,0
 #

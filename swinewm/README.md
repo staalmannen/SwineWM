@@ -13,6 +13,14 @@ and the Windows build runs, but it has not yet been used on real hardware.
 Expect rough edges and keep a way out: `Win+Shift+e` (exit), Ctrl+C in its
 console window, or `swinewm --recover` if windows were left hidden.
 
+## Installing
+
+Every push to GitHub builds an MSI installer and a portable zip (Actions
+tab → a `build` run → Artifacts). The installer puts everything in
+`C:\Program Files\SwineWM`, adds a Start menu entry and puts `swinemsg` on
+the PATH. See [`../doc/packaging.md`](../doc/packaging.md), which also
+explains building the MSI yourself.
+
 ## Building on Windows
 
 With Visual Studio 2022 (Developer PowerShell):
@@ -83,6 +91,10 @@ All are looked up in `%USERPROFILE%\.swinewm\`, then
 | `waybar\config.jsonc` (or `waybar\config`) | Waybar | Built-in default bar |
 | `waybar\style.css` | Waybar's GTK CSS (subset) | Built-in default style |
 | `mako\config` | mako | mako's defaults |
+
+The default config also sets the wallpaper with sway's
+`output * bg <file> fill`; `%SWINEWM_DATA%` refers to the directory of
+`swinewm.exe`.
 
 The bar appears when the sway config has a `bar { }` block (the default
 config does) or `exec waybar`. `reload` re-reads all of these.

@@ -29,6 +29,9 @@ swinewm/
     notify/             the built-in Mako: notifications, config, modes
     main.c              command-line options and start-up order
     win32/              the only code that includes <windows.h>
+  resources/            installed defaults: Waybar and mako configs,
+                        wallpaper, icon (also compiled in as fallbacks)
+  cmake/                packaging (CPack/WiX MSI) and build helpers
   swinemsg/             IPC client (swaymsg)
   tests/                unit tests with a fake platform
 ```
@@ -221,6 +224,21 @@ the tree directly; only the configuration is Waybar's.
   output, painted with GDI into a back buffer. Clicks run the item's
   command (for example `workspace "2"`); the wheel switches workspaces.
   Translucent colours are blended over black for now.
+
+## Wallpapers (swaybg)
+
+sway starts `swaybg` for `output … bg …`; swinewm draws the wallpaper itself
+(`win32/wallpaper.c`). Each output with a background gets a non-activating
+window covering the monitor at the bottom of the stacking order. Images are
+decoded and scaled with the Windows Imaging Component (Fant
+interpolation) and composed once per size; the swaybg modes `stretch`,
+`fill`, `fit`, `center`, `tile` and `solid_color` are supported, with the
+fallback colour around the image.
+
+While Explorer runs, its desktop windows (`Progman`, `WorkerW`) are at the
+very bottom. The wallpaper window is kept directly above them instead of
+moving Explorer's windows, so exiting swinewm leaves the normal desktop as
+it was.
 
 ## Built-in notifications (Mako)
 

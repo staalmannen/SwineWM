@@ -44,6 +44,7 @@ struct swine_config *config_create(void) {
 	c->symbols = create_list();
 	c->modes = create_list();
 	c->cmd_queue = create_list();
+	c->output_configs = create_list();
 	c->current_mode = mode_create("default");
 	list_add(c->modes, c->current_mode);
 	c->default_orientation = L_NONE;
@@ -69,6 +70,15 @@ void free_config(struct swine_config *c) {
 	}
 	list_free(c->modes);
 	list_free_items_and_destroy(c->cmd_queue);
+	for (int i = 0; i < c->output_configs->length; ++i) {
+		struct output_config *oc = c->output_configs->items[i];
+		free(oc->name);
+		free(oc->background);
+		free(oc->background_mode);
+		free(oc->background_fallback);
+		free(oc);
+	}
+	list_free(c->output_configs);
 	free(c->current_config_path);
 	free(c->current_config);
 	free(c);
@@ -350,6 +360,48 @@ void config_run_deferred(void) {
 		free_cmd_results_list(res_list);
 		free(line);
 	}
+}
+
+static bool path_is_absolute(const char *p) {
+	return p[0] == '/' || p[0] == '\\' ||
+		(((p[0] >= 'a' && p[0] <= 'z') || (p[0] >= 'A' && p[0] <= 'Z')) &&
+		p[1] == ':');
+}
+
+char *config_resolve_path(const char *path) {
+	char *expanded = platform_expand_path(path);
+	const char *base = config->current_file ? config->current_file :
+		config->current_config_path;
+	if (path_is_absolute(expanded) || !base) {
+		return expanded;
+	}
+	const char *slash = strrchr(base, '/');
+	const char *backslash = strrchr(base, '\\');
+	if (backslash > slash) {
+		slash = backslash;
+	}
+	if (!slash) {
+		return expanded;
+	}
+	char *resolved = format_str("%.*s%c%s", (int)(slash - base), base, *slash,
+		expanded);
+	free(expanded);
+	return resolved;
+}
+
+struct output_config *config_find_output_config(const char *name) {
+	for (int i = 0; i < config->output_configs->length; ++i) {
+		struct output_config *oc = config->output_configs->items[i];
+		if (swine_strcasecmp(oc->name, name) == 0) {
+			return oc;
+		}
+	}
+	return NULL;
+}
+
+struct output_config *output_config_for_name(const char *output_name) {
+	struct output_config *oc = config_find_output_config(output_name);
+	return oc ? oc : config_find_output_config("*");
 }
 
 char *do_var_replacement(char *str) {

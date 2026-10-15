@@ -68,7 +68,7 @@ static const struct cmd_handler handlers[] = {
 	{ "no_focus", cmd_ignored, 0 },
 	{ "nop", cmd_nop, 0 },
 	{ "notify-send", cmd_notify_send, CMD_RUNTIME_ONLY },
-	{ "output", cmd_ignored, 0 },
+	{ "output", cmd_output, 0 },
 	{ "popup_during_fullscreen", cmd_ignored, 0 },
 	{ "primary_selection", cmd_ignored, 0 },
 	{ "reload", cmd_reload, CMD_RUNTIME_ONLY },

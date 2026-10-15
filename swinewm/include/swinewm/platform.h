@@ -11,6 +11,9 @@ struct swine_view;
 // implementation lives in swinewm/win32/; tests link a fake implementation.
 // The core never includes <windows.h>.
 
+// Called first thing in main(). On Windows it sets %SWINEWM_DATA% to the
+// directory of swinewm.exe so configs can refer to installed files.
+void platform_setup_environment(void);
 bool platform_init(void);
 // Runs the event loop until platform_quit() is called. Returns exit status.
 int platform_run(void);

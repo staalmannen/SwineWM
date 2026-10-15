@@ -28,6 +28,14 @@ struct swine_mode {
 	list_t *keysym_bindings;   // struct swine_binding *
 };
 
+// "output <name> bg <file> <mode> [<fallback color>]" (swaybg options).
+struct output_config {
+	char *name;               // output name or "*"
+	char *background;         // image path (resolved), or a #color
+	char *background_mode;    // stretch|fill|fit|center|tile|solid_color
+	char *background_fallback; // #color shown around/instead of the image
+};
+
 struct swine_variable {
 	char *name;
 	char *value;
@@ -45,6 +53,7 @@ struct swine_config {
 	list_t *modes;             // struct swine_mode *
 	struct swine_mode *current_mode;
 	list_t *cmd_queue;         // deferred exec commands (char *)
+	list_t *output_configs;    // struct output_config *
 
 	// Integrated Waybar-compatible bar, enabled by a sway "bar { }" block or
 	// by "exec waybar". Everything else comes from the Waybar config.
@@ -97,6 +106,12 @@ bool load_include_config(const char *path);
 void config_run_deferred(void);
 
 char *do_var_replacement(char *str);   // may realloc; returns the new pointer
+// Expands ~ and %VAR%; a relative path is taken relative to the directory
+// of the config file being read. Caller frees.
+char *config_resolve_path(const char *path);
+struct output_config *config_find_output_config(const char *name);
+// The config for an output: its own, else the "*" one, else NULL.
+struct output_config *output_config_for_name(const char *output_name);
 void free_swine_binding(struct swine_binding *binding);
 struct swine_mode *config_find_mode(const char *name);
 struct swine_mode *config_add_mode(const char *name);

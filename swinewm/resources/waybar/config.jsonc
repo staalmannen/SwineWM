@@ -1,0 +1,63 @@
+// -*- mode: jsonc -*-
+// Default bar configuration for SwineWM, in Waybar's format.
+//
+// Adapted from Waybar's resources/config.jsonc (MIT, Copyright (c) 2018
+// Alexis Rouillard). Copy this file to %USERPROFILE%\.swinewm\waybar\
+// to change it; an existing Waybar config from Linux works too. Modules
+// that SwineWM does not support yet are skipped (see doc/compatibility.md).
+{
+    // "position": "bottom", // Bar position (top|bottom)
+    "height": 30, // Bar height
+    "spacing": 4, // Gaps between modules (4px)
+    // Choose the order of the modules
+    "modules-left": [
+        "sway/workspaces",
+        "sway/mode",
+        "sway/scratchpad"
+    ],
+    "modules-center": [
+        "sway/window"
+    ],
+    "modules-right": [
+        "cpu",
+        "memory",
+        "battery",
+        "clock"
+    ],
+    // Modules configuration
+    "sway/workspaces": {
+        // "disable-scroll": true,
+        // "all-outputs": true,
+        "format": "{name}"
+    },
+    "sway/mode": {
+        "format": "<span style=\"italic\">{}</span>"
+    },
+    "sway/scratchpad": {
+        "format": "scratch {count}",
+        "show-empty": false
+    },
+    "sway/window": {
+        "max-length": 80
+    },
+    "clock": {
+        // Click to toggle between the time and the date
+        "format": "{:%H:%M}",
+        "format-alt": "{:%Y-%m-%d}"
+    },
+    "cpu": {
+        "format": "CPU {usage}%"
+    },
+    "memory": {
+        "format": "RAM {}%"
+    },
+    "battery": {
+        "states": {
+            "warning": 30,
+            "critical": 15
+        },
+        "format": "BAT {capacity}%",
+        "format-charging": "BAT {capacity}% +",
+        "format-plugged": "BAT {capacity}% ="
+    }
+}

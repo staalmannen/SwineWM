@@ -21,6 +21,7 @@ static const char usage[] =
 	"\n";
 
 int main(int argc, char **argv) {
+	platform_setup_environment();
 	char *config_path = NULL;
 	bool validate = false;
 	bool recover = false;

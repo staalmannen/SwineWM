@@ -4,6 +4,7 @@
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
 #include "swinewm/input/seat.h"
+#include "swinewm/notify.h"
 #include "swinewm/input/keyboard.h"
 #include "swinewm/tree/workspace.h"
 #include "test.h"
@@ -128,7 +129,7 @@ static void test_settings(void) {
 	CHECK_INT(config->focus_wrapping, WRAP_NO);
 	CHECK(config->auto_back_and_forth);
 	CHECK_INT(config->floating_mod, SWINE_MOD_LOGO);
-	CHECK(config->ignored_count >= 3);
+	CHECK(config->ignored_count >= 2);   // font, input
 	fake_teardown();
 }
 
@@ -146,7 +147,73 @@ static void test_default_config(void) {
 	fake_teardown();
 }
 
+static void test_output_bg(void) {
+	fake_setup();
+	config->active = false;
+	config->reading = true;
+	CHECK(read_config_text(
+		"output * bg %SWINEWM_DATA%\\wallpapers\\pig.png fill\n"
+		"output DISPLAY2 resolution 1920x1080 position 1920,0\n"
+		"output DISPLAY2 background pictures/a.jpg fit #112233\n"
+		"output DISPLAY3 bg #445566 solid_color\n"
+		"output HDMI-A-1 {\n  mode 1920x1080@60Hz\n  bg c:/w.png center\n}\n",
+		"C:/Users/me/.swinewm/config"));
+	CHECK(!read_config_text("output * bg file.png sideways\n", "x"));
+	CHECK(!read_config_text("output * bg\n", "x"));
+	CHECK(!read_config_text("output * bg red solid_color\n", "x"));
+	config->reading = false;
+	config->active = true;
+
+	struct output_config *all = output_config_for_name("DISPLAY1");
+	CHECK(all && strcmp(all->name, "*") == 0);
+	if (all) {
+		CHECK_STR(all->background,
+			"C:\\Program Files\\SwineWM\\wallpapers\\pig.png");
+		CHECK_STR(all->background_mode, "fill");
+		CHECK(all->background_fallback == NULL);
+	}
+	struct output_config *d2 = output_config_for_name("display2");
+	CHECK(d2 && d2 != all);
+	if (d2) {
+		// relative to the directory of the config file
+		CHECK_STR(d2->background, "C:/Users/me/.swinewm/pictures/a.jpg");
+		CHECK_STR(d2->background_mode, "fit");
+		CHECK_STR(d2->background_fallback, "#112233");
+	}
+	struct output_config *d3 = output_config_for_name("DISPLAY3");
+	CHECK(d3 && strcmp(d3->background_mode, "solid_color") == 0 &&
+		strcmp(d3->background, "#445566") == 0);
+	struct output_config *hdmi = output_config_for_name("HDMI-A-1");
+	CHECK(hdmi && strcmp(hdmi->background, "c:/w.png") == 0);
+
+	// At runtime, e.g. from swinemsg
+	CHECK(run("output DISPLAY3 bg #000000 solid_color"));
+	CHECK_STR(output_config_for_name("DISPLAY3")->background, "#000000");
+	fake_teardown();
+}
+
+static void test_shipped_defaults(void) {
+	// The files installed next to swinewm.exe must load without errors.
+	fake_setup();
+	char *text = read_file(SWINEWM_SOURCE_DIR "/resources/mako/config");
+	CHECK(text != NULL);
+	if (text) {
+		CHECK(notify_parse_config(text, "mako/config"));
+		CHECK(run("notify-send hello"));
+		CHECK(run("notify-send -u critical alarm"));
+		list_t *active = notify_active();
+		struct swine_notification *critical = active->items[0];
+		struct swine_notification *normal = active->items[1];
+		CHECK_INT(normal->style.default_timeout, 10000);
+		CHECK_INT(critical->style.default_timeout, 0);
+		free(text);
+	}
+	fake_teardown();
+}
+
 void test_config_all(void) {
+	test_output_bg();
+	test_shipped_defaults();
 	test_variables_and_bindings();
 	test_modes_and_blocks();
 	test_errors_and_defer();

@@ -87,6 +87,7 @@ swine_cmd cmd_makoctl;
 swine_cmd cmd_mode;
 swine_cmd cmd_move;
 swine_cmd cmd_nop;
+swine_cmd cmd_output;
 swine_cmd cmd_notify_send;
 swine_cmd cmd_reload;
 swine_cmd cmd_resize;

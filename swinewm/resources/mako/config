@@ -1,0 +1,34 @@
+# Default notification configuration for SwineWM, in mako's format.
+#
+# Copy this file to %USERPROFILE%\.swinewm\mako\config to change it; an
+# existing mako config from Linux works too. Every line below shows mako's
+# default; remove the "#" to change a value. See mako(5) and
+# doc/compatibility.md for what SwineWM supports.
+
+#font=monospace 10
+#background-color=#285577FF
+#text-color=#FFFFFFFF
+#border-color=#4C7899FF
+#border-size=2
+#width=300
+#height=100
+#margin=10
+#padding=5
+#anchor=top-right
+#format=<b>%s</b>\n%b
+#default-timeout=0
+#max-visible=5
+#max-history=5
+
+# Unlike mako, SwineWM's default is to let normal notifications go away
+# after ten seconds, since Windows applications rarely set a timeout.
+default-timeout=10000
+
+# Keep critical notifications until they are dismissed.
+[urgency=critical]
+border-color=#FF0000FF
+default-timeout=0
+
+# "makoctl mode -a do-not-disturb" hides everything until it is removed.
+[mode=do-not-disturb]
+invisible=1

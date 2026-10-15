@@ -33,7 +33,7 @@ program it replaces.
 | Path | What |
 | --- | --- |
 | [`swinewm/`](swinewm/) | `swinewm` (window manager, bar, notifications) and `swinemsg`, in C11 ([README](swinewm/README.md)) |
-| [`doc/`](doc/) | [Project summary](doc/project_summary.md), [architecture](doc/architecture.md), [Sway compatibility](doc/compatibility.md) |
+| [`doc/`](doc/) | [Project summary](doc/project_summary.md), [architecture](doc/architecture.md), [Sway compatibility](doc/compatibility.md), [packaging](doc/packaging.md) |
 | `sway/`, `waybar/`, `mako/` | Upstream sources (submodules), used as reference |
 
 Clone with `git clone --recurse-submodules` to get the reference sources.
@@ -53,6 +53,8 @@ Windows toast notifications. See [`doc/compatibility.md`](doc/compatibility.md).
 
 To try it, see [`swinewm/README.md`](swinewm/README.md). It runs as an
 ordinary program next to Explorer and shows all windows again when it exits.
+Every push builds an MSI installer on GitHub Actions; see
+[`doc/packaging.md`](doc/packaging.md).
 
 ## License
 

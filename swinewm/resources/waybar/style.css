@@ -1,0 +1,86 @@
+/*
+ * Default bar style for SwineWM, in Waybar's (GTK) CSS.
+ *
+ * Adapted from Waybar's resources/style.css (MIT, Copyright (c) 2018 Alexis
+ * Rouillard). Copy this file to %USERPROFILE%\.swinewm\waybar\ to change it;
+ * Waybar themes from Linux work as far as SwineWM's CSS subset allows (see
+ * doc/compatibility.md).
+ */
+
+* {
+    font-family: "Segoe UI", sans-serif;
+    font-size: 13px;
+}
+
+window#waybar {
+    background-color: rgba(43, 48, 59, 0.5);
+    border-bottom: 3px solid rgba(100, 114, 125, 0.5);
+    color: #ffffff;
+}
+
+#workspaces button {
+    padding: 0 5px;
+    background-color: transparent;
+    color: #ffffff;
+}
+
+#workspaces button.focused {
+    background-color: #64727D;
+    box-shadow: inset 0 -3px #ffffff;
+}
+
+#workspaces button.urgent {
+    background-color: #eb4d4b;
+}
+
+#mode {
+    background-color: #64727D;
+    box-shadow: inset 0 -3px #ffffff;
+}
+
+#clock,
+#battery,
+#cpu,
+#memory,
+#mode,
+#scratchpad {
+    padding: 0 10px;
+    color: #ffffff;
+}
+
+#window,
+#workspaces {
+    margin: 0 4px;
+}
+
+#clock {
+    background-color: #64727D;
+}
+
+#battery {
+    background-color: #ffffff;
+    color: #000000;
+}
+
+#battery.charging, #battery.plugged {
+    color: #ffffff;
+    background-color: #26A65B;
+}
+
+#battery.critical:not(.charging) {
+    background-color: #f53c3c;
+    color: #ffffff;
+}
+
+#cpu {
+    background-color: #2ecc71;
+    color: #000000;
+}
+
+#memory {
+    background-color: #9b59b6;
+}
+
+#scratchpad {
+    background: rgba(0, 0, 0, 0.2);
+}

@@ -2,10 +2,9 @@
 //
 // Waybar reads ~/.config/waybar/config.jsonc and style.css; swinewm looks
 // for waybar/config.jsonc (or waybar/config) and waybar/style.css in its
-// config directories and falls back to the defaults below, which are
-// adapted from Waybar's resources/config.jsonc and resources/style.css
-// (MIT, Copyright (c) 2018 Alexis Rouillard) with text instead of Font
-// Awesome icons, since Windows does not ship that font.
+// config directories and falls back to built-in copies of
+// resources/waybar/, which are adapted from Waybar's defaults with text
+// instead of Font Awesome icons, since Windows does not ship that font.
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,48 +23,10 @@
 #include "swinewm/tree/view.h"
 #include "swinewm/tree/workspace.h"
 
-static const char default_config[] =
-	"{\n"
-	"  \"height\": 30,\n"
-	"  \"spacing\": 4,\n"
-	"  \"modules-left\": [\"sway/workspaces\", \"sway/mode\", \"sway/scratchpad\"],\n"
-	"  \"modules-center\": [\"sway/window\"],\n"
-	"  \"modules-right\": [\"cpu\", \"memory\", \"battery\", \"clock\"],\n"
-	"  \"sway/mode\": { \"format\": \"<span style=\\\"italic\\\">{}</span>\" },\n"
-	"  \"sway/scratchpad\": { \"format\": \"scratch {count}\", \"show-empty\": false },\n"
-	"  \"clock\": { \"format\": \"{:%H:%M}\", \"format-alt\": \"{:%Y-%m-%d}\" },\n"
-	"  \"cpu\": { \"format\": \"CPU {usage}%\" },\n"
-	"  \"memory\": { \"format\": \"RAM {}%\" },\n"
-	"  \"battery\": {\n"
-	"    \"states\": { \"warning\": 30, \"critical\": 15 },\n"
-	"    \"format\": \"BAT {capacity}%\",\n"
-	"    \"format-charging\": \"BAT {capacity}% +\",\n"
-	"    \"format-plugged\": \"BAT {capacity}% =\"\n"
-	"  }\n"
-	"}\n";
-
-static const char default_style[] =
-	"* { font-family: \"Segoe UI\", sans-serif; font-size: 13px; }\n"
-	"window#waybar { background-color: rgba(43, 48, 59, 0.5);"
-	" border-bottom: 3px solid rgba(100, 114, 125, 0.5); color: #ffffff; }\n"
-	"#workspaces button { padding: 0 5px; background-color: transparent;"
-	" color: #ffffff; }\n"
-	"#workspaces button.focused { background-color: #64727D;"
-	" box-shadow: inset 0 -3px #ffffff; }\n"
-	"#workspaces button.urgent { background-color: #eb4d4b; }\n"
-	"#mode { background-color: #64727D; box-shadow: inset 0 -3px #ffffff; }\n"
-	"#clock, #battery, #cpu, #memory, #mode, #scratchpad"
-	" { padding: 0 10px; color: #ffffff; }\n"
-	"#window, #workspaces { margin: 0 4px; }\n"
-	"#clock { background-color: #64727D; }\n"
-	"#battery { background-color: #ffffff; color: #000000; }\n"
-	"#battery.charging, #battery.plugged { color: #ffffff;"
-	" background-color: #26A65B; }\n"
-	"#battery.critical:not(.charging) { background-color: #f53c3c;"
-	" color: #ffffff; }\n"
-	"#cpu { background-color: #2ecc71; color: #000000; }\n"
-	"#memory { background-color: #9b59b6; }\n"
-	"#scratchpad { background: rgba(0, 0, 0, 0.2); }\n";
+// Generated from resources/waybar/config.jsonc and style.css, which are
+// also installed next to swinewm.exe.
+#include "default_bar_config.h"
+#include "default_bar_style.h"
 
 enum module_kind {
 	MOD_WORKSPACES,
@@ -200,14 +161,14 @@ void bar_load_from_strings(const char *config_text, const char *style_text) {
 		}
 	}
 	if (!bar.root) {
-		bar.root = json_parse(default_config, NULL);
+		bar.root = json_parse(default_bar_config, NULL);
 	}
 	// The config may hold several bars; the first one is used for now.
 	bar.bar = bar.root;
 	if (bar.root && bar.root->type == JSON_ARRAY) {
 		bar.bar = bar.root->items->length ? bar.root->items->items[0] : NULL;
 	}
-	bar.css = css_parse(style_text ? style_text : default_style);
+	bar.css = css_parse(style_text ? style_text : default_bar_style);
 
 	bar.height = (int)json_get_number(bar.bar, "height", 0);
 	if (bar.height <= 0) {
