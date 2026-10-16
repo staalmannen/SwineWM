@@ -175,8 +175,13 @@ bindsym $mod+r mode "resize"
 #
 # Utilities:
 #
-# Volume, media and Print Screen keys are left to Windows, which already
-# handles them. Bind them here only if you want to override that.
+# Volume and media keys are left to Windows, which already handles them.
+#
+# Screenshots: grim is built into swinewm (there is no grim for Windows).
+# Print saves the whole desktop to your Pictures folder; "grim -o <output>"
+# captures one monitor, "grim -g \"x,y wxh\"" an area, "grim <file>" names
+# the file.
+    bindsym Print exec grim && notify-send "Screenshot saved" "In your Pictures folder"
 #
 # Notifications:
 #

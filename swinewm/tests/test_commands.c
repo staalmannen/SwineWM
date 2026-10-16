@@ -7,6 +7,7 @@
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
 #include "swinewm/ipc-server.h"
+#include "swinewm/notify.h"
 #include "test.h"
 
 static void test_chains_and_errors(void) {
@@ -78,7 +79,7 @@ static void test_every_command_is_found(void) {
 		"floating_minimum_size", "floating_modifier", "focus",
 		"focus_follows_mouse", "focus_on_window_activation", "focus_wrapping",
 		"font", "for_window", "force_display_urgency_hint", "fullscreen",
-		"gaps", "hide_edge_borders", "include", "inhibit_idle", "input",
+		"gaps", "grim", "hide_edge_borders", "include", "inhibit_idle", "input",
 		"kill", "layout", "makoctl", "max_render_time", "mode", "mouse_warping", "move",
 		"new_float", "new_window", "no_focus", "nop", "notify-send", "output",
 		"popup_during_fullscreen", "primary_selection", "reload", "resize",
@@ -105,8 +106,46 @@ static void test_every_command_is_found(void) {
 	fake_teardown();
 }
 
+// grim is built in: there is no grim on Windows.
+static void test_grim(void) {
+	fake_setup();
+	CHECK(run("grim"));
+	CHECK_INT(fake.screenshot_calls, 1);
+	CHECK_INT(fake.last_screenshot.width, 1000);
+	CHECK_INT(fake.last_screenshot.height, 800);
+	const char *path = fake.last_screenshot_path;
+	CHECK(strncmp(path, "C:\\Users\\pig\\Pictures\\", 22) == 0);
+	size_t len = strlen(path);
+	CHECK(len > 9 && strcmp(path + len - 9, "_grim.png") == 0);
+
+	CHECK(run("grim -g \"10,20 300x200\" C:/shot.png"));
+	CHECK_INT(fake.last_screenshot.x, 10);
+	CHECK_INT(fake.last_screenshot.y, 20);
+	CHECK_INT(fake.last_screenshot.width, 300);
+	CHECK_STR(fake.last_screenshot_path, "C:/shot.png");
+	CHECK(!run("grim -g nonsense"));
+	CHECK(!run("grim -o NOSUCH"));
+	CHECK(!run("grim -t gif"));
+	CHECK(!run("grim -"));
+	CHECK_INT(fake.screenshot_calls, 2);
+
+	// exec, and sh-style chains of built-ins, as in sway configs
+	CHECK(run("exec grim && notify-send Screenshot \"Saved\""));
+	CHECK_INT(fake.screenshot_calls, 3);
+	CHECK_INT(fake.spawn_calls, 0);
+	CHECK_INT(notify_active()->length, 1);
+	CHECK(!run("exec grim -t gif && notify-send never"));
+	CHECK_INT(notify_active()->length, 1);
+	// A chain with a real program is started as a whole.
+	CHECK(run("exec grim && notepad.exe"));
+	CHECK_INT(fake.spawn_calls, 1);
+	CHECK_INT(fake.screenshot_calls, 3);
+	fake_teardown();
+}
+
 void test_commands_all(void) {
 	test_every_command_is_found();
 	test_chains_and_errors();
 	test_ipc();
+	test_grim();
 }

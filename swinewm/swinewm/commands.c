@@ -53,6 +53,7 @@ static const struct cmd_handler handlers[] = {
 	{ "force_display_urgency_hint", cmd_ignored, 0 },
 	{ "fullscreen", cmd_fullscreen, CMD_RUNTIME_ONLY },
 	{ "gaps", cmd_gaps, 0 },
+	{ "grim", cmd_grim, CMD_RUNTIME_ONLY },
 	{ "hide_edge_borders", cmd_ignored, 0 },
 	{ "include", cmd_include, CMD_CONFIG_ONLY },
 	{ "inhibit_idle", cmd_ignored, 0 },

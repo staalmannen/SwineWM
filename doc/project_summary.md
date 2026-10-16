@@ -101,9 +101,8 @@ Win32 renderer.
 4. **Daily-drivable WM** — focus-follows-mouse, mouse bindings and
    `floating_modifier` drag/resize, tab/stack title bars and focus borders,
    criteria (`[app_id=…]`, `for_window`, `assign`), `output` configuration,
-   IPC event subscriptions, a swaynag equivalent, a screenshot binding
-   (sway users bind `grim`/`slurp`; as the shell, Windows' Print Screen
-   handling may be gone).
+   IPC event subscriptions, a swaynag equivalent, `slurp` (area selection
+   for the built-in `grim`).
 5. **Richer bar and notifications** — `custom/*` modules running scripts,
    network, audio (pulseaudio module on Windows' audio API), tray
    tooltips and hover, translucent backgrounds; notification icons,

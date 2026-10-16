@@ -31,7 +31,7 @@ ignored · ❌ not implemented (error)
 | `bindcode`, `bindswitch`, `bindgesture` | ⚪ | |
 | `mode <name>`, `mode <name> { … }` | ✅ | `--pango_markup` accepted |
 | `set` | ✅ | |
-| `exec`, `exec_always` | ✅ | See architecture: CreateProcess, then ShellExecute; `%VAR%` expanded; no implicit shell. `waybar`, `mako`, `makoctl`, `notify-send` run the built-in versions |
+| `exec`, `exec_always` | ✅ | See architecture: CreateProcess, then ShellExecute; `%VAR%` expanded; no implicit shell. `waybar`, `mako`, `makoctl`, `notify-send`, `grim` run the built-in versions; `a && b` chains of those run like `sh` would |
 | `exit` | ✅ | Shows all hidden windows and quits |
 | `reload` | ✅ | |
 | `kill` | ✅ | Sends `WM_CLOSE` (the application may ask to save) |
@@ -101,6 +101,18 @@ ignored · ❌ not implemented (error)
 | `makoctl dismiss [-a] [-n id] [-h]`, `restore`, `invoke`, `mode [-a\|-r\|-t\|-s]`, `reload` | ✅ | `invoke` dismisses (no actions yet) |
 | `makoctl list` / `history` | 🟡 | Use `swinemsg -t get_notifications` / `get_notification_history` |
 | Notifications from Windows applications (toasts) | ❌ | See the project summary |
+
+## Screenshots (grim)
+
+There is no grim on Windows, so it is built in: `grim` is a command, and
+`exec grim …` in a sway config runs it. The default config binds Print.
+
+| Feature | Status | Notes |
+| --- | --- | --- |
+| `grim [file]` | ✅ | Whole desktop; default file `<date>_grim.png` in `%GRIM_DEFAULT_DIR%` or the Pictures folder |
+| `-o <output>`, `-g "x,y wxh"`, `-t png\|jpeg` | ✅ | Desktop coordinates in physical pixels |
+| `-c`, `-q`, `-l`, `-s` | ⚪ | Accepted; the cursor is never captured |
+| `grim -` (stdout), `-T`, `slurp` | ❌ | No pipes yet; no interactive area selection |
 
 ## Session
 
