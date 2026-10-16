@@ -38,8 +38,10 @@ if(SWINEWM_GIT)
     message(STATUS "No version tag found in git; using the fallback version")
   endif()
 
-  # Configure again after commits, checkouts and new tags, so the version
-  # does not go stale in an existing build directory.
+  # Configure again after commits and checkouts (and tags that git packed),
+  # so the version does not go stale in an existing build directory. Only
+  # files: MSBuild rejects directories as dependencies. Tagging the current
+  # commit without a new commit needs "cmake ." to show the new version.
   execute_process(
     COMMAND "${SWINEWM_GIT}" rev-parse --absolute-git-dir
     WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}"
@@ -48,7 +50,7 @@ if(SWINEWM_GIT)
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_QUIET)
   if(_result EQUAL 0)
-    foreach(_file logs/HEAD refs/tags packed-refs)
+    foreach(_file logs/HEAD packed-refs)
       if(EXISTS "${_git_dir}/${_file}")
         set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
           "${_git_dir}/${_file}")
