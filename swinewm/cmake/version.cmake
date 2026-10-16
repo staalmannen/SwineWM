@@ -1,5 +1,5 @@
-# The version comes from the git tag. On a tagged commit ("0.1.0" or
-# "v0.1.0") it is that tag; later commits are "0.1.0-5-g1234abc" (five
+# The version comes from the git tag. On a tagged commit ("0.1.0",
+# "v0.1.0", or "0.1" meaning 0.1.0) it is that tag; later commits are "0.1.0-5-g1234abc" (five
 # commits after 0.1.0), with "-dirty" for uncommitted changes. Without git
 # (a source archive) SWINEWM_FALLBACK_VERSION below is used.
 #
@@ -17,22 +17,26 @@ find_program(SWINEWM_GIT git)
 if(SWINEWM_GIT)
   execute_process(
     COMMAND "${SWINEWM_GIT}" describe --tags --long --dirty
-      --match "[0-9]*.[0-9]*.[0-9]*" --match "v[0-9]*.[0-9]*.[0-9]*"
+      --match "[0-9]*.[0-9]*" --match "v[0-9]*.[0-9]*"
     WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}"
     OUTPUT_VARIABLE _describe
     RESULT_VARIABLE _result
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_QUIET)
   if(_result EQUAL 0 AND _describe MATCHES
-      "^v?([0-9]+)\\.([0-9]+)\\.([0-9]+)-([0-9]+)-g([0-9a-f]+)(-dirty)?$")
-    set(_xyz "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}.${CMAKE_MATCH_3}")
-    set(_commits "${CMAKE_MATCH_4}")
+      "^v?([0-9]+)\\.([0-9]+)(\\.([0-9]+))?-([0-9]+)-g([0-9a-f]+)(-dirty)?$")
+    set(_patch "${CMAKE_MATCH_4}")
+    if(_patch STREQUAL "")
+      set(_patch 0)
+    endif()
+    set(_xyz "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}.${_patch}")
+    set(_commits "${CMAKE_MATCH_5}")
     set(SWINEWM_VERSION_NUMERIC "${_xyz}.${_commits}")
-    if(_commits EQUAL 0 AND NOT CMAKE_MATCH_6)
+    if(_commits EQUAL 0 AND NOT CMAKE_MATCH_7)
       set(SWINEWM_VERSION "${_xyz}")
     else()
       set(SWINEWM_VERSION
-        "${_xyz}-${_commits}-g${CMAKE_MATCH_5}${CMAKE_MATCH_6}")
+        "${_xyz}-${_commits}-g${CMAKE_MATCH_6}${CMAKE_MATCH_7}")
     endif()
   else()
     message(STATUS "No version tag found in git; using the fallback version")

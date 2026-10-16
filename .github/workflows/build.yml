@@ -80,6 +80,11 @@ jobs:
               found { print }
             ' CHANGELOG.md
           }
+          # A tag "0.1" means version 0.1.0.
+          case "$version" in
+            *.*.*) ;;
+            *.*) version="$version.0" ;;
+          esac
           section "$version" > notes.md
           if [ ! -s notes.md ]; then
             section "Unreleased" > notes.md
@@ -88,7 +93,13 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release create "$GITHUB_REF_NAME" dist/*.msi dist/*.zip
-          --title "SwineWM $GITHUB_REF_NAME" --notes-file notes.md
-          --verify-tag
+        run: |
+          # A release made by hand on GitHub (which also creates the tag)
+          # keeps its title and notes; the files are attached to it.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/*.msi dist/*.zip --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/*.msi dist/*.zip \
+              --title "SwineWM $GITHUB_REF_NAME" --notes-file notes.md \
+              --verify-tag
+          fi

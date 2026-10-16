@@ -6,6 +6,15 @@ All notable changes to SwineWM. The format follows
 change). A release is made by pushing a tag (`0.1.0`); CI then publishes
 the MSI and zip with the matching section below as release notes.
 
+## [Unreleased]
+
+### Fixed
+
+- A two-part version tag (`0.1`) was not recognised, so its build was
+  versioned after the previous tag; it now means `0.1.0`.
+- The release job failed when the release had already been created on
+  GitHub; it now attaches the MSI and zip to it.
+
 ## [0.1.0]
 
 Towards 0.1.0, the first preview (see the roadmap in
@@ -59,5 +68,6 @@ built-in Waybar (config.jsonc, CSS subset, common modules) and Mako
 (config, criteria, modes, `notify-send`, `makoctl`), wallpapers,
 running as the Windows shell (`--set-shell`), and an MSI installer.
 
-[0.1.0]: https://github.com/staalmannen/SwineWM/compare/0.1
+[Unreleased]: https://github.com/staalmannen/SwineWM/compare/0.1...HEAD
+[0.1.0]: https://github.com/staalmannen/SwineWM/compare/0.0.1...0.1
 [0.0.1]: https://github.com/staalmannen/SwineWM/releases/tag/0.0.1
