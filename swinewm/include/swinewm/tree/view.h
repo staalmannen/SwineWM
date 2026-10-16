@@ -16,9 +16,11 @@ struct swine_view {
 	unsigned long pid;
 	bool natural_floating;     // dialogs, fixed-size windows, ...
 	bool urgent;               // the application asked for attention
+	long long urgent_since;    // platform_now_ms() when it became urgent
 	bool urgency_denied;       // "urgent deny"
 	bool fullscreen_requested; // the application made itself fullscreen
 	struct swine_box natural;  // geometry when first seen
+	list_t *executed_criteria; // for_window criteria already run (pointers)
 
 	// What the arrange pass wants...
 	struct {
@@ -41,7 +43,10 @@ void view_map(struct swine_view *view);
 void view_unmap(struct swine_view *view);
 void view_destroy(struct swine_view *view);
 struct swine_view *view_from_handle(void *handle);
-void view_set_title(struct swine_view *view, const char *title);
+// Returns true if for_window rules ran (the tree may have changed).
+bool view_set_title(struct swine_view *view, const char *title);
+// Runs the for_window rules that match and have not run for this view.
+void view_execute_criteria(struct swine_view *view);
 bool view_is_visible(struct swine_view *view);
 // Like sway: urgency set by the application (on Windows: flashing its
 // taskbar button). Ignored for the focused view; cleared when focused.

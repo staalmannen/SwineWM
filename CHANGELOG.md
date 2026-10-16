@@ -10,6 +10,11 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- Criteria: `[app_id=… class=… title=… …] <commands>`, `for_window`,
+  `assign` and `no_focus`, as in sway, with a built-in regular-expression
+  engine. On Windows `app_id` is the executable's file name (matched
+  ignoring case) and `class` the window class; see the token table in
+  `doc/compatibility.md`.
 - `doc/linux-users.md`: Windows for Linux users (where things are,
   shells, package managers, getting unstuck when swinewm is the shell).
 

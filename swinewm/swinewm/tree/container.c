@@ -14,6 +14,7 @@ struct swine_container *container_create(struct swine_view *view) {
 	con->view = view;
 	con->layout = L_NONE;
 	con->prev_split_layout = L_NONE;
+	con->marks = create_list();
 	if (view) {
 		view->container = con;
 	} else {
@@ -38,6 +39,7 @@ void container_destroy(struct swine_container *con) {
 		con->view->container = NULL;
 	}
 	list_free(con->children);
+	list_free_items_and_destroy(con->marks);
 	free(con);
 }
 

@@ -54,6 +54,7 @@ struct swine_config {
 	struct swine_mode *current_mode;
 	list_t *cmd_queue;         // deferred exec commands (char *)
 	list_t *output_configs;    // struct output_config *
+	list_t *criteria;          // struct criteria *: for_window, assign, no_focus
 
 	// Integrated Waybar-compatible bar, enabled by a sway "bar { }" block or
 	// by "exec waybar". Everything else comes from the Waybar config.

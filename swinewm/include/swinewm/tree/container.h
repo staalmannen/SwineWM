@@ -39,6 +39,7 @@ struct swine_container {
 	struct swine_box box;             // arranged geometry
 	struct swine_box floating_box;    // geometry while floating
 	bool scratchpad;
+	list_t *marks;                    // char *, as sway's con->marks
 };
 
 struct swine_container *container_create(struct swine_view *view);

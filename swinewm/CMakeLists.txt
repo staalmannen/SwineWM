@@ -25,6 +25,7 @@ add_library(swine_common STATIC
   common/json-parse.c
   common/list.c
   common/log.c
+  common/regex.c
   common/stringop.c
 )
 target_include_directories(swine_common PUBLIC include)
@@ -60,16 +61,19 @@ add_library(swinewm_core STATIC
   swinewm/bar/format.c
   swinewm/bar/tray.c
   swinewm/commands.c
+  swinewm/commands/assign.c
   swinewm/commands/bar.c
   swinewm/commands/bind.c
   swinewm/commands/exec.c
   swinewm/commands/floating.c
   swinewm/commands/focus.c
+  swinewm/commands/for_window.c
   swinewm/commands/gaps.c
   swinewm/commands/grim.c
   swinewm/commands/layout.c
   swinewm/commands/mode.c
   swinewm/commands/move.c
+  swinewm/commands/no_focus.c
   swinewm/commands/notify.c
   swinewm/commands/output.c
   swinewm/commands/resize.c
@@ -79,6 +83,7 @@ add_library(swinewm_core STATIC
   swinewm/commands/split.c
   swinewm/commands/workspace.c
   swinewm/config.c
+  swinewm/criteria.c
   swinewm/desktop/transaction.c
   swinewm/input/keyboard.c
   swinewm/input/seat.c
@@ -161,6 +166,7 @@ if(SWINEWM_BUILD_TESTS)
     tests/test_commands.c
     tests/test_common.c
     tests/test_config.c
+    tests/test_criteria.c
     tests/test_tree.c
     tests/test_bar.c
     tests/test_notify.c

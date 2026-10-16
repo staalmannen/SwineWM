@@ -114,6 +114,7 @@ char **split_args(const char *start, int *argc) {
 	bool in_token = false;
 	bool in_string = false;
 	bool in_char = false;
+	bool in_brackets = false;   // criteria: "[app_id=x title=y]" is one token
 	bool escaped = false;
 	const char *end = start;
 	if (start) {
@@ -126,10 +127,16 @@ char **split_args(const char *start, int *argc) {
 				in_string = !in_string;
 			} else if (*end == '\'' && !in_string && !escaped) {
 				in_char = !in_char;
+			} else if (*end == '[' && !in_string && !in_char && !in_brackets &&
+					!escaped) {
+				in_brackets = true;
+			} else if (*end == ']' && !in_string && !in_char && in_brackets &&
+					!escaped) {
+				in_brackets = false;
 			} else if (*end == '\\') {
 				escaped = !escaped;
-			} else if (*end == '\0' || (!in_string && !in_char && !escaped
-					&& strchr(" \t", *end))) {
+			} else if (*end == '\0' || (!in_string && !in_char && !in_brackets
+					&& !escaped && strchr(" \t", *end))) {
 				if (end != start) {
 					char *token = swine_strndup(start, (size_t)(end - start));
 					argv[(*argc)++] = token;

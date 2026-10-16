@@ -1,8 +1,11 @@
 #include <stdlib.h>
 #include "log.h"
 #include "stringop.h"
+#include "swinewm/commands.h"
+#include "swinewm/criteria.h"
 #include "swinewm/desktop/transaction.h"
 #include "swinewm/input/seat.h"
+#include "swinewm/platform.h"
 #include "swinewm/server.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/output.h"
@@ -13,6 +16,7 @@
 struct swine_view *view_create(void *handle) {
 	struct swine_view *view = calloc(1, sizeof(*view));
 	view->handle = handle;
+	view->executed_criteria = create_list();
 	list_add(server.views, view);
 	return view;
 }
@@ -27,9 +31,50 @@ struct swine_view *view_from_handle(void *handle) {
 	return NULL;
 }
 
-void view_set_title(struct swine_view *view, const char *title) {
+bool view_set_title(struct swine_view *view, const char *title) {
 	free(view->title);
 	view->title = swine_strdup(title);
+	// As in sway, for_window rules are checked again when the title
+	// changes (each rule runs once per view).
+	if (!view->container) {
+		return false;
+	}
+	int executed = view->executed_criteria->length;
+	view_execute_criteria(view);
+	return view->executed_criteria->length != executed;
+}
+
+static bool view_has_executed_criteria(struct swine_view *view,
+		struct criteria *criteria) {
+	return list_find(view->executed_criteria, criteria) != -1;
+}
+
+void view_execute_criteria(struct swine_view *view) {
+	list_t *criterias = criteria_for_view(view, CT_COMMAND);
+	for (int i = 0; i < criterias->length; i++) {
+		struct criteria *criteria = criterias->items[i];
+		swine_log(SWINE_DEBUG, "Checking criteria %s", criteria->raw);
+		if (view_has_executed_criteria(view, criteria)) {
+			swine_log(SWINE_DEBUG, "Criteria already executed");
+			continue;
+		}
+		swine_log(SWINE_DEBUG, "for_window '%s' matches view %p, cmd: '%s'",
+			criteria->raw, (void *)view, criteria->cmdlist);
+		list_add(view->executed_criteria, criteria);
+		list_t *res_list = execute_command(criteria->cmdlist, view->container);
+		for (int j = 0; j < res_list->length; ++j) {
+			struct cmd_results *res = res_list->items[j];
+			if (res->status != CMD_SUCCESS) {
+				swine_log(SWINE_ERROR, "for_window '%s' failed: %s",
+					criteria->raw, res->error ? res->error : "");
+			}
+		}
+		free_cmd_results_list(res_list);
+		if (!view->container) {
+			break;   // the commands unmapped it
+		}
+	}
+	list_free(criterias);
 }
 
 static struct swine_workspace *view_target_workspace(void) {
@@ -62,12 +107,78 @@ static bool box_on_an_output(const struct swine_box *box) {
 	return false;
 }
 
+// sway's select_workspace: an "assign" rule, else the focused workspace.
+static struct swine_workspace *select_workspace(struct swine_view *view) {
+	list_t *criterias = criteria_for_view(view,
+		CT_ASSIGN_WORKSPACE | CT_ASSIGN_WORKSPACE_NUMBER | CT_ASSIGN_OUTPUT);
+	struct swine_workspace *ws = NULL;
+	for (int i = 0; i < criterias->length; ++i) {
+		struct criteria *criteria = criterias->items[i];
+		if (criteria->type == CT_ASSIGN_OUTPUT) {
+			struct swine_output *output = output_by_name(criteria->target);
+			if (output) {
+				ws = output_get_active_workspace(output);
+				break;
+			}
+		} else {
+			ws = criteria->type == CT_ASSIGN_WORKSPACE_NUMBER ?
+				workspace_by_number(criteria->target) :
+				workspace_by_name(criteria->target);
+			if (!ws) {
+				if (swine_strcasecmp(criteria->target, "back_and_forth") == 0) {
+					if (seat->prev_workspace_name) {
+						ws = workspace_create(NULL,
+							seat->prev_workspace_name);
+					}
+				} else {
+					ws = workspace_create(NULL, criteria->target);
+				}
+			}
+			break;
+		}
+	}
+	list_free(criterias);
+	return ws ? ws : view_target_workspace();
+}
+
+// sway's should_focus: new views take focus, unless they open elsewhere
+// or a no_focus rule matches.
+static bool should_focus(struct swine_view *view) {
+	struct swine_container *prev_con = seat_get_focused_container();
+	struct swine_workspace *prev_ws = seat_get_focused_workspace();
+	struct swine_workspace *map_ws = view->container->workspace;
+
+	if (view->container->fullscreen_mode == FULLSCREEN_GLOBAL) {
+		return true;
+	}
+	// View opened "under" a fullscreen view should not be given focus.
+	if (!map_ws || map_ws->fullscreen) {
+		return false;
+	}
+	// Views can only take focus if they are mapped into the active workspace
+	if (prev_ws != map_ws) {
+		return false;
+	}
+	// If the view is the only one in the focused workspace, it'll get focus
+	// regardless of any no_focus criteria.
+	if (!view->container->parent && !prev_con) {
+		int num_children = map_ws->tiling->length + map_ws->floating->length;
+		if (num_children == 1) {
+			return true;
+		}
+	}
+	list_t *criterias = criteria_for_view(view, CT_NO_FOCUS);
+	int len = criterias->length;
+	list_free(criterias);
+	return len == 0;
+}
+
 void view_map(struct swine_view *view) {
 	if (view->container) {
 		return;
 	}
-	struct swine_workspace *ws = view_target_workspace();
 	struct swine_container *con = container_create(view);
+	struct swine_workspace *ws = select_workspace(view);
 
 	if (view->natural_floating) {
 		workspace_add_floating(ws, con);
@@ -98,7 +209,10 @@ void view_map(struct swine_view *view) {
 	swine_log(SWINE_DEBUG, "Mapped view '%s' (%s) on workspace %s",
 		view->title ? view->title : "", view->app_id ? view->app_id : "?",
 		ws->name);
-	seat_set_focus_container(con);
+	view_execute_criteria(view);
+	if (view->container && should_focus(view)) {
+		seat_set_focus_container(view->container);
+	}
 }
 
 void view_unmap(struct swine_view *view) {
@@ -106,6 +220,7 @@ void view_unmap(struct swine_view *view) {
 	if (!con) {
 		return;
 	}
+	view->executed_criteria->length = 0;
 	struct swine_container *parent = con->parent;
 	struct swine_workspace *ws = con->workspace;
 	container_destroy(con);
@@ -128,6 +243,7 @@ void view_destroy(struct swine_view *view) {
 	free(view->title);
 	free(view->app_id);
 	free(view->class_name);
+	list_free(view->executed_criteria);
 	free(view);
 }
 
@@ -142,6 +258,9 @@ void view_set_urgent(struct swine_view *view, bool enable) {
 		}
 	}
 	view->urgent = enable;
+	if (enable) {
+		view->urgent_since = platform_now_ms();
+	}
 	if (view->container && view->container->workspace) {
 		workspace_detect_urgent(view->container->workspace);
 	}

@@ -333,7 +333,7 @@ static void test_urgency(void) {
 	CHECK(!ws1->urgent);
 	CHECK(run("workspace 2"));
 	view_set_urgent(a, true);
-	CHECK(run("[app_id=x] nop") == false);   // criteria still unsupported
+	CHECK(!run("[app_id=nothing_matches] nop"));   // no matching node
 	CHECK(run("urgent disable") && !b->urgent);
 	CHECK(run("urgent deny"));
 	view_set_urgent(a, false);

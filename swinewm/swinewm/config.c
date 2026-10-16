@@ -7,6 +7,7 @@
 #include "swinewm/bar/bar.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
+#include "swinewm/criteria.h"
 #include "swinewm/notify.h"
 #include "swinewm/platform.h"
 #include "swinewm/tree/root.h"
@@ -45,6 +46,7 @@ struct swine_config *config_create(void) {
 	c->modes = create_list();
 	c->cmd_queue = create_list();
 	c->output_configs = create_list();
+	c->criteria = create_list();
 	c->current_mode = mode_create("default");
 	list_add(c->modes, c->current_mode);
 	c->default_orientation = L_NONE;
@@ -79,6 +81,10 @@ void free_config(struct swine_config *c) {
 		free(oc);
 	}
 	list_free(c->output_configs);
+	for (int i = 0; i < c->criteria->length; ++i) {
+		criteria_destroy(c->criteria->items[i]);
+	}
+	list_free(c->criteria);
 	free(c->current_config_path);
 	free(c->current_config);
 	free(c);

@@ -63,7 +63,8 @@ ignored · ❌ not implemented (error)
 | `focus_follows_mouse`, `floating_modifier` | 🟡 | Parsed and stored; mouse handling not implemented yet |
 | `smart_gaps`, `smart_borders`, `hide_edge_borders` | ⚪ | |
 | `border`, `default_border`, `default_floating_border`, `client.*`, `font`, `title_align`, `titlebar_*`, `show_marks` | ⚪ | Decorations not drawn yet |
-| `for_window`, `assign`, `no_focus`, criteria `[…]` | ⚪ / ❌ | Config lines ignored; runtime criteria are an error |
+| `for_window`, `assign` (`workspace`, `number`, `output`, `→`), `no_focus` | ✅ | As in sway: rules run when a window appears and again when its title changes (once per rule and window); `assign` picks the workspace, `no_focus` keeps the focus where it was |
+| Criteria `[…] <commands>` | ✅ | All tokens; what they match on Windows is listed under "Criteria" below. Regular expressions use a built-in PCRE-like engine (no look-around or back-references) |
 | `output <name\|*> bg <file> <stretch\|fill\|fit\|center\|tile> [<#color>]`, `output … bg <#color> solid_color` | ✅ | swaybg's options; PNG, JPEG, BMP, GIF, TIFF (anything the Windows Imaging Component reads). `~`, `%VAR%` and paths relative to the config file |
 | other `output` options (mode, position, scale, …), `input`, `seat` | ⚪ | Windows settings apply |
 | `bar { … }`, `bar <option>` | 🟡 | Enables the built-in Waybar-compatible bar; `position`, `mode invisible\|dock\|toggle` honoured, other swaybar options ignored (see below) |
@@ -72,6 +73,29 @@ ignored · ❌ not implemented (error)
 | Application-requested fullscreen | ✅ | A window that makes itself fullscreen (F11) becomes a sway fullscreen container and returns when it leaves fullscreen |
 | `mark`, `unmark`, `swap`, `sticky`, `rename`, `title_format`, `opacity`, `create_output` | ❌ | |
 | `explorer_taskbar autohide\|show\|toggle` | ✅ | swinewm extension: while running next to Explorer, keep Explorer's taskbar auto-hidden (restored on exit) |
+
+## Criteria
+
+sway's tokens and what they match here. Values are regular expressions
+(searched anywhere in the value, as with PCRE; anchor with `^…$`), or
+`__focused__` for the focused window's value.
+
+| Token | Matches | Example |
+| --- | --- | --- |
+| `app_id` | The executable's file name, **ignoring case** (Windows file names do) | `[app_id="^firefox"]` matches `firefox.exe` |
+| `instance` | The executable's name without `.exe`, ignoring case | `[instance="^Discord$"]` |
+| `class` | The window class (case-sensitive) | `[class="MozillaWindowClass"]` |
+| `title` | The window title (case-sensitive; `(?i)` for ignoring case) | `[title="(?i)picture-in-picture"]` |
+| `shell` | Always `native` | |
+| `window_type` | `normal` (tiled by default) or `dialog` (dialogs, fixed-size windows); other types never match | |
+| `id` | The window handle (HWND) as a decimal number | |
+| `pid`, `con_id`, `con_mark`, `workspace`, `floating`, `tiling`, `urgent=first\|latest…`, `all` | As in sway | |
+| `window_role`, `sandbox_engine`, `sandbox_app_id`, `sandbox_instance_id`, `tag` | Never match (Windows has none of these) | |
+
+Regular expressions: literals, `.`, `[…]` classes (with ranges, `\d \w \s`
+and `[:alpha:]`-style names), `^ $ \b`, `* + ? {n,m}` (and lazy `*?`),
+groups, `|`, `(?i)`. Not supported: look-around, back-references,
+Unicode properties (`\p{…}`).
 
 ## Bar (Waybar config)
 

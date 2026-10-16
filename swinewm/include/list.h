@@ -22,6 +22,9 @@ int list_seq_find(const list_t *list,
 		int compare(const void *item, const void *cmp_to), const void *cmp_to);
 void list_swap(list_t *list, int src, int dest);
 void list_move_to_end(list_t *list, void *item);
+// Sorts the items, keeping the order of equal ones. compare receives
+// pointers to the items (as qsort's would).
+void list_stable_sort(list_t *list, int compare(const void *a, const void *b));
 // Calls free() on every item, then frees the list.
 void list_free_items_and_destroy(list_t *list);
 
