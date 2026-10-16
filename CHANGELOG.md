@@ -8,6 +8,11 @@ the MSI and zip with the matching section below as release notes.
 
 ## [Unreleased]
 
+### Added
+
+- `doc/linux-users.md`: Windows for Linux users (where things are,
+  shells, package managers, getting unstuck when swinewm is the shell).
+
 ### Fixed
 
 - A two-part version tag (`0.1`) was not recognised, so its build was
