@@ -35,6 +35,10 @@ the MSI and zip with the matching section below as release notes.
 
 ### Fixed
 
+- As the shell, swinewm now answers programs that ask where the taskbar
+  is (`SHAppBarMessage(ABM_GETTASKBARPOS)`, which went unanswered without
+  Explorer); dialogs that place themselves next to the taskbar, such as
+  "Open with", should no longer end up off screen.
 - A two-part version tag (`0.1`) was not recognised, so its build was
   versioned after the previous tag; it now means `0.1.0`.
 - The release job failed when the release had already been created on
