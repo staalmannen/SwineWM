@@ -86,33 +86,95 @@ Win32 renderer.
 
 ## Roadmap
 
-1. **Window-manager core** *(done as a draft)* — Sway's tree model, seat
-   focus stack, arrange, the common commands, config parser with `set`,
-   blocks, `mode`, `include` and deferred `exec`, unit tests.
-2. **Win32 platform layer** *(draft)* — window discovery, hide-based
-   workspaces, low-level keyboard hook bindings, monitor/work-area outputs,
-   crash recovery of hidden windows, named-pipe IPC. Needs testing on real
-   Windows machines.
-3. **Integrated bar and notifications** *(draft)* — Waybar's config and a
-   CSS subset of its `style.css`; modules `sway/workspaces`, `sway/mode`,
-   `sway/window`, `sway/scratchpad`, `clock`, `cpu`, `memory`, `battery`,
-   static `custom/*`. Mako's config with criteria, modes, history,
-   timeouts; `notify-send` and `makoctl` as commands.
-4. **Daily-drivable WM** — focus-follows-mouse, mouse bindings and
-   `floating_modifier` drag/resize, tab/stack title bars and focus borders,
-   criteria (`[app_id=…]`, `for_window`, `assign`), `output` configuration,
-   IPC event subscriptions, a swaynag equivalent, `slurp` (area selection
-   for the built-in `grim`).
-5. **Richer bar and notifications** — `custom/*` modules running scripts,
-   network, audio (pulseaudio module on Windows' audio API), tray
-   tooltips and hover, translucent backgrounds; notification icons,
-   actions, grouping, and receiving Windows' own toast notifications.
-6. **Shell replacement** *(draft)* — `swinewm --set-shell` runs SwineWM
-   instead of Explorer at logon: shell window, logon "ready" event,
-   startup programs, work area, `exit` logs off, Explorer as a rescue after
-   a crash, and the tray (notification area icons, including Windows'
-   volume/network/power icons). Next: AppBar support.
-   See [`research/windows-shell.md`](research/windows-shell.md).
+Where things stand: the core, the Win32 layer, the bar, notifications,
+the tray, grim and shell mode work as drafts and have been used on a real
+Windows 11 machine as the shell. The milestones below lead to a 1.0 that
+can be maintained as a long-term release; each 0.x is a usable release
+with an (unsigned) MSI on GitHub Releases. Details per command are in
+[`compatibility.md`](compatibility.md).
+
+### 0.1 — first preview
+
+Make what exists dependable before adding more.
+
+- Release engineering: version from the git tag (every CI build is
+  "0.0.1" today), a release workflow that attaches the MSI and zip to a
+  GitHub Release, a `CHANGELOG.md`.
+- Shell-mode fixes from real use: wallpaper, dialogs placed off-screen,
+  Win+S/W/E, the "restart" update path.
+- A `swinewm.log` that is useful by default (warnings and lifecycle
+  events), and `-d` for the shell via an environment variable or config.
+
+### 0.2 — sway configs that real people have
+
+What an existing sway config needs to load and behave.
+
+- Criteria: `[app_id=… class=… title=… con_mark=… floating tiling]`,
+  `for_window`, `assign`, `no_focus`; app_id/class/title mapped to the
+  executable, window class and title.
+- `mark`/`unmark`, `swap`, `sticky`, `rename workspace`, `focus prev|next`,
+  `resize set`, `resize grow|shrink` in all directions.
+- Outputs: `output <name> position|resolution|scale|transform` (through
+  `ChangeDisplaySettingsEx`, where Windows allows), `workspace … output …`,
+  `move workspace to output`, `focus output`, monitor hot-plug.
+- `include` with glob patterns; a swaynag equivalent for config errors.
+
+### 0.3 — mouse and decorations
+
+- `focus_follows_mouse`, `mouse_warping`, `floating_modifier` drag and
+  resize, mouse `bindsym`/`bindcode` (button and wheel).
+- Title bars for tabbed/stacked containers (clickable tabs), focus
+  borders and `client.*` colours, `default_border`, `title_format`,
+  `hide_edge_borders`, `smart_borders`, as small layered windows.
+
+### 0.4 — IPC parity
+
+- `SUBSCRIBE` with workspace, window, mode, output, binding, shutdown and
+  tick events, matching sway-ipc(7), so i3/sway IPC libraries and scripts
+  (autotiling, workspace renamers) work against the pipe.
+- `get_marks`, `get_binding_state`, `get_seats` and the remaining replies.
+
+### 0.5 — Waybar beyond the basics
+
+- `custom/*` running scripts (`exec`, `interval`, `return-type json`,
+  `signal` via `pkill -RTMIN+n` equivalents), which most Waybar setups use.
+- `network`, `pulseaudio` (Core Audio), `disk`, `temperature`,
+  `idle_inhibitor`, `keyboard-state`, `sway/language` (keyboard layout),
+  `power-profiles-daemon` → Windows power mode.
+- Tooltips, `:hover`, real transparency (layered windows), multiple bars,
+  `left`/`right` positions, `rotate`.
+- Tray: tooltips, hover messages, scrolling, AppBar answers as the shell.
+
+### 0.6 — Mako, grim and the rest of the desktop
+
+- Mako: icons, actions (`makoctl invoke`/`menu`), `border-radius`,
+  progress bars, grouping, `makoctl list|history` output.
+- Notifications from Windows applications: mirror toasts
+  (`UserNotificationListener`), or at least show balloon/toast fallbacks
+  as the shell.
+- grim: `slurp` (drag an area), clipboard output (the `wl-copy` habit),
+  `grim -` once `exec` supports pipes.
+- Store apps as the shell: `IApplicationActivationManager` for
+  `shell:AppsFolder` launches.
+
+### 1.0 — long-term release
+
+Feature work stops; reliability and documentation.
+
+- Tested matrix: Windows 10 22H2 and Windows 11 (current and previous
+  feature update), single and multiple monitors, mixed DPI, as the shell
+  and next to Explorer, sleep/resume, fast user switching, elevated
+  windows (documented behaviour), RDP.
+- Compatibility promise: config and IPC behaviour of 1.0 stay supported
+  through 1.x; `compatibility.md` is the contract.
+- Man pages / reference docs (`swinewm(5)`, `swinemsg(1)`, built-in
+  Waybar/Mako/grim differences), a migration guide from a Linux sway
+  setup.
+- Signed MSI (Authenticode; free signing for open-source projects is
+  offered by e.g. SignPath, or Azure Trusted Signing), and packages for
+  winget, Scoop and Chocolatey.
+- 1.x patch releases for bugs and Windows updates only; new features go
+  to 2.0.
 
 ## Open design questions
 
