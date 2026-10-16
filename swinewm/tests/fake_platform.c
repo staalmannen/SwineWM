@@ -26,6 +26,7 @@ int platform_set_login_shell(bool enable) { (void)enable; return 0; }
 bool platform_init(void) { return true; }
 int platform_run(void) { return 0; }
 void platform_quit(void) { fake.quit = true; }
+void platform_restart(void) { fake.restart = true; }
 void platform_finish(void) {}
 void platform_config_changed(void) {}
 int platform_recover_windows(void) { return 0; }

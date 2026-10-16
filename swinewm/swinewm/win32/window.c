@@ -560,10 +560,13 @@ void platform_view_set_geometry(struct swine_view *view,
 	struct win32_view *w = wv(view);
 	if (IsZoomed(hwnd) || IsIconic(hwnd)) {
 		// Leave the maximized/minimized state first, or the window keeps
-		// treating our size as its "restored" size.
+		// treating our size as its "restored" size. That happens later
+		// (asynchronously), so the borders measured now would be those of
+		// the maximized window: keep the previous ones.
 		ShowWindowAsync(hwnd, SW_SHOWNOACTIVATE);
+	} else {
+		update_insets(view);
 	}
-	update_insets(view);
 	RECT in = w->have_insets ? w->insets : (RECT){0, 0, 0, 0};
 	// Windows 10+ windows have invisible resize borders outside the visible
 	// frame; grow the rectangle so the visible frame matches the layout.

@@ -68,7 +68,8 @@ void win32_shell_detect(void) {
 	// reads: log to a file and close it. Started from a terminal (the
 	// console has other processes), keep logging there.
 	DWORD pids[2];
-	if (GetConsoleProcessList(pids, 2) == 1) {
+	// (0 processes: started without any console, e.g. by "restart".)
+	if (GetConsoleProcessList(pids, 2) <= 1) {
 		char *path = local_state_path("swinewm.log");
 		if (path) {
 			wchar_t *wpath = utf8_to_utf16(path);
@@ -87,11 +88,20 @@ void win32_shell_detect(void) {
 static LRESULT CALLBACK desktop_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 		LPARAM lparam) {
 	switch (msg) {
-	case WM_ERASEBKGND: {
+	case WM_ERASEBKGND:
+		return 1;
+	case WM_PAINT: {
+		// Black, then the wallpapers ("output * bg"): drawing them here
+		// instead of in windows of their own keeps them below everything.
+		PAINTSTRUCT ps;
+		HDC dc = BeginPaint(hwnd, &ps);
 		RECT r;
 		GetClientRect(hwnd, &r);
-		win32_fill((HDC)wparam, &r, RGB(0, 0, 0));
-		return 1;
+		win32_fill(dc, &r, RGB(0, 0, 0));
+		win32_wallpaper_paint(dc, GetSystemMetrics(SM_XVIRTUALSCREEN),
+			GetSystemMetrics(SM_YVIRTUALSCREEN));
+		EndPaint(hwnd, &ps);
+		return 0;
 	}
 	case WM_MOUSEACTIVATE:
 		return MA_NOACTIVATE;

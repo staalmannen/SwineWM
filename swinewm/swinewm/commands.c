@@ -75,6 +75,7 @@ static const struct cmd_handler handlers[] = {
 	{ "primary_selection", cmd_ignored, 0 },
 	{ "reload", cmd_reload, CMD_RUNTIME_ONLY },
 	{ "resize", cmd_resize, CMD_RUNTIME_ONLY },
+	{ "restart", cmd_restart, CMD_RUNTIME_ONLY },
 	{ "scratchpad", cmd_scratchpad, CMD_RUNTIME_ONLY },
 	{ "seat", cmd_ignored, 0 },
 	{ "set", cmd_set, 0 },

@@ -21,8 +21,13 @@
 #include "swinewm/tree/root.h"
 #include "win32.h"
 
+// One per output with a background. Next to Explorer each has a window
+// just above Explorer's desktop; as the shell (hwnd NULL) swinewm's own
+// desktop window paints the bitmaps (win32_wallpaper_paint), so nothing
+// depends on the Z order.
 struct wallpaper_window {
 	HWND hwnd;
+	int x, y;               // output position, for painting the desktop
 	char *output_name;
 	// What the current bitmap was made from
 	char *path;
@@ -323,7 +328,9 @@ static LRESULT CALLBACK wallpaper_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 }
 
 static void destroy_window(struct wallpaper_window *ww) {
-	DestroyWindow(ww->hwnd);
+	if (ww->hwnd) {
+		DestroyWindow(ww->hwnd);
+	}
 	if (ww->bitmap) {
 		DeleteObject(ww->bitmap);
 	}
@@ -361,6 +368,9 @@ static struct wallpaper_window *create_window(const char *output_name) {
 	}
 	struct wallpaper_window *ww = calloc(1, sizeof(*ww));
 	ww->output_name = swine_strdup(output_name);
+	if (win32_shell_desktop_window()) {
+		return ww;   // painted by the desktop window
+	}
 	ww->hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
 		L"swinewm-wallpaper", L"swinewm wallpaper", WS_POPUP, 0, 0, 0, 0,
 		NULL, NULL, instance, NULL);
@@ -368,10 +378,27 @@ static struct wallpaper_window *create_window(const char *output_name) {
 	return ww;
 }
 
+void win32_wallpaper_paint(HDC dc, int origin_x, int origin_y) {
+	for (int i = 0; windows && i < windows->length; ++i) {
+		struct wallpaper_window *ww = windows->items[i];
+		if (ww->hwnd || !ww->bitmap) {
+			continue;
+		}
+		HDC mem = CreateCompatibleDC(dc);
+		HBITMAP old = SelectObject(mem, ww->bitmap);
+		BitBlt(dc, ww->x - origin_x, ww->y - origin_y, ww->width, ww->height,
+			mem, 0, 0, SRCCOPY);
+		SelectObject(mem, old);
+		DeleteDC(mem);
+	}
+}
+
 void win32_wallpaper_refresh(void) {
 	if (!windows) {
 		windows = create_list();
 	}
+	HWND desktop = win32_shell_desktop_window();
+	bool repaint_desktop = false;
 	// Drop windows for outputs that are gone or have no background.
 	for (int i = windows->length - 1; i >= 0; --i) {
 		struct wallpaper_window *ww = windows->items[i];
@@ -379,6 +406,7 @@ void win32_wallpaper_refresh(void) {
 		if (!output_by_name(ww->output_name) || !oc || !oc->background) {
 			destroy_window(ww);
 			list_del(windows, i);
+			repaint_desktop = true;
 		}
 	}
 	for (int i = 0; i < root->outputs->length; ++i) {
@@ -411,11 +439,22 @@ void win32_wallpaper_refresh(void) {
 			ww->fallback = swine_strdup(oc->background_fallback);
 			ww->width = box->width;
 			ww->height = box->height;
-			place_at_bottom(ww, box);
-			InvalidateRect(ww->hwnd, NULL, FALSE);
-		} else if (!placed_correctly(ww->hwnd)) {
+			if (ww->hwnd) {
+				place_at_bottom(ww, box);
+				InvalidateRect(ww->hwnd, NULL, FALSE);
+			}
+			repaint_desktop = true;
+		} else if (ww->hwnd && !placed_correctly(ww->hwnd)) {
 			place_at_bottom(ww, box);
 		}
+		if (ww->x != box->x || ww->y != box->y) {
+			ww->x = box->x;
+			ww->y = box->y;
+			repaint_desktop = true;
+		}
+	}
+	if (desktop && repaint_desktop) {
+		InvalidateRect(desktop, NULL, FALSE);
 	}
 }
 

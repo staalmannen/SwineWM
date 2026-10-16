@@ -71,7 +71,24 @@ static char *exe_dir(void) {
 	return utf16_to_utf8(path);
 }
 
+// After "restart", wait until the previous instance has exited: it still
+// owns the IPC pipe and its hooks until then.
+static void wait_for_previous_instance(void) {
+	wchar_t buf[16];
+	DWORD n = GetEnvironmentVariableW(L"SWINEWM_RESTART_PID", buf, 16);
+	if (n == 0 || n >= 16) {
+		return;
+	}
+	SetEnvironmentVariableW(L"SWINEWM_RESTART_PID", NULL);
+	HANDLE old = OpenProcess(SYNCHRONIZE, FALSE, (DWORD)wcstoul(buf, NULL, 10));
+	if (old) {
+		WaitForSingleObject(old, 10000);
+		CloseHandle(old);
+	}
+}
+
 void platform_setup_environment(void) {
+	wait_for_previous_instance();
 	// The log is UTF-8 (window titles); the console defaults to the OEM
 	// code page, which shows "Vänner" as "V├ñnner".
 	SetConsoleOutputCP(CP_UTF8);

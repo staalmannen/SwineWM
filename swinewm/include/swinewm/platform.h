@@ -25,6 +25,10 @@ bool platform_init(void);
 // Runs the event loop until platform_quit() is called. Returns exit status.
 int platform_run(void);
 void platform_quit(void);
+// Like platform_quit, but once everything is cleaned up the same
+// executable is started again with the same arguments (i3's "restart").
+// As the shell, this does not log off.
+void platform_restart(void);
 // Restores every window the WM changed (unhides hidden workspaces) so that
 // exiting or crashing never strands applications.
 void platform_finish(void);

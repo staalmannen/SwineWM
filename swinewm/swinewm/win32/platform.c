@@ -1,6 +1,7 @@
 // Win32 platform entry points: the shell's hidden window, the message loop,
 // and start-up/shut-down ordering.
 #include <stdlib.h>
+#include <wchar.h>
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/commands.h"
@@ -198,6 +199,43 @@ void platform_quit(void) {
 	PostQuitMessage(0);
 }
 
+static bool restart_requested = false;
+
+void platform_restart(void) {
+	swine_log(SWINE_INFO, "Restarting");
+	restart_requested = true;
+	PostQuitMessage(0);
+}
+
+// Starts this executable again, by its original path: after the running
+// swinewm.exe was renamed and a new one copied in, that is the new one.
+// Runs last in platform_finish, when our shell window, desktop and tray are
+// gone, so the new instance finds things as at logon.
+static void respawn(void) {
+	wchar_t *cmdline = _wcsdup(GetCommandLineW());
+	// The new instance waits for this one to be gone (IPC pipe, hooks).
+	wchar_t pid[16];
+	swprintf(pid, 16, L"%lu", GetCurrentProcessId());
+	SetEnvironmentVariableW(L"SWINEWM_RESTART_PID", pid);
+	STARTUPINFOW si = { .cb = sizeof(si) };
+	PROCESS_INFORMATION pi = {0};
+	// As the shell there is no terminal to share: no console window.
+	DWORD flags = win32_shell_mode ? DETACHED_PROCESS : 0;
+	if (cmdline && CreateProcessW(NULL, cmdline, NULL, NULL, FALSE, flags,
+			NULL, NULL, &si, &pi)) {
+		CloseHandle(pi.hThread);
+		CloseHandle(pi.hProcess);
+	} else {
+		char *msg = win32_error_string(GetLastError());
+		swine_log(SWINE_ERROR, "Unable to restart: %s", msg);
+		free(msg);
+		if (win32_shell_mode) {
+			win32_shell_rescue();   // never leave the user without a shell
+		}
+	}
+	free(cmdline);
+}
+
 void platform_finish(void) {
 	if (keyboard_ok) {
 		win32_keyboard_finish();
@@ -218,6 +256,9 @@ void platform_finish(void) {
 	if (win32_shell_hwnd) {
 		DestroyWindow(win32_shell_hwnd);
 		win32_shell_hwnd = NULL;
+	}
+	if (restart_requested) {
+		respawn();
 	}
 }
 
