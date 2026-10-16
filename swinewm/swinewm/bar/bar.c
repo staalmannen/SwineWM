@@ -14,8 +14,10 @@
 #include "stringop.h"
 #include "swinewm/bar/bar.h"
 #include "swinewm/bar/format.h"
+#include "swinewm/bar/tray.h"
 #include "swinewm/config.h"
 #include "swinewm/input/seat.h"
+#include "swinewm/platform.h"
 #include "swinewm/sysinfo.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/output.h"
@@ -37,6 +39,7 @@ enum module_kind {
 	MOD_CPU,
 	MOD_MEMORY,
 	MOD_BATTERY,
+	MOD_TRAY,
 	MOD_CUSTOM,
 };
 
@@ -88,7 +91,7 @@ static bool module_kind_from_name(const char *name, enum module_kind *kind) {
 		{"sway/workspaces", MOD_WORKSPACES}, {"sway/mode", MOD_MODE},
 		{"sway/window", MOD_WINDOW}, {"sway/scratchpad", MOD_SCRATCHPAD},
 		{"clock", MOD_CLOCK}, {"cpu", MOD_CPU}, {"memory", MOD_MEMORY},
-		{"battery", MOD_BATTERY},
+		{"battery", MOD_BATTERY}, {"tray", MOD_TRAY},
 	};
 	if (has_prefix(name, "custom/")) {
 		*kind = MOD_CUSTOM;
@@ -213,6 +216,20 @@ static void ensure_loaded(void) {
 	if (!bar.loaded) {
 		bar_load();
 	}
+}
+
+bool bar_has_tray(void) {
+	if (!bar_enabled()) {
+		return false;
+	}
+	ensure_loaded();
+	for (int i = 0; i < bar.modules->length; ++i) {
+		struct bar_module *m = bar.modules->items[i];
+		if (m->kind == MOD_TRAY) {
+			return true;
+		}
+	}
+	return false;
 }
 
 bool bar_enabled(void) {
@@ -548,6 +565,133 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 	list_add(ctx->model->modules, view);
 }
 
+// Waybar keys "icons" and "orders" by the item's id ("spotify"); here
+// that is the program: "Discord.exe" matches "Discord.exe" and "discord".
+static bool tray_key_matches(const char *key, const char *app_id) {
+	if (!app_id) {
+		return false;
+	}
+	if (swine_strcasecmp(key, app_id) == 0) {
+		return true;
+	}
+	size_t len = strlen(app_id);
+	return len > 4 && swine_strcasecmp(app_id + len - 4, ".exe") == 0 &&
+		strlen(key) == len - 4 && swine_strncasecmp(key, app_id, len - 4) == 0;
+}
+
+static struct json_value *tray_lookup(struct json_value *map,
+		const char *app_id) {
+	if (!map || map->type != JSON_OBJECT) {
+		return NULL;
+	}
+	for (int i = 0; i < map->keys->length; ++i) {
+		if (tray_key_matches(map->keys->items[i], app_id)) {
+			return map->items->items[i];
+		}
+	}
+	return NULL;
+}
+
+// "ignore-list": hide items whose id or title contains any of the strings.
+static bool tray_ignored(struct json_value *list, struct tray_item *item) {
+	if (!list || list->type != JSON_ARRAY) {
+		return false;
+	}
+	for (int i = 0; i < list->items->length; ++i) {
+		struct json_value *v = list->items->items[i];
+		if (v->type == JSON_STRING && *v->string &&
+				((item->app_id && strstr(item->app_id, v->string)) ||
+				(item->title && strstr(item->title, v->string)))) {
+			return true;
+		}
+	}
+	return false;
+}
+
+struct tray_entry {
+	struct tray_item *item;
+	double order;
+	int seq;
+	const char *icon_path;
+};
+
+static int tray_entry_compare(const void *a, const void *b) {
+	const struct tray_entry *x = a, *y = b;
+	if (x->order != y->order) {
+		return x->order < y->order ? -1 : 1;
+	}
+	return x->seq - y->seq;
+}
+
+static void build_tray(struct build_ctx *ctx, struct bar_module *m,
+		int index) {
+	list_t *items = tray_get_items();
+	if (items->length == 0) {
+		return;   // Waybar hides an empty tray
+	}
+	bool show_passive = json_get_bool(m->cfg, "show-passive-items", false);
+	bool reverse = json_get_bool(m->cfg, "reverse-direction", false);
+	int icon_size = (int)json_get_number(m->cfg, "icon-size", 16);
+	if (icon_size <= 0) {
+		icon_size = 16;
+	}
+	struct json_value *icons = json_object_get(m->cfg, "icons");
+	struct json_value *orders = json_object_get(m->cfg, "orders");
+	struct json_value *ignore = json_object_get(m->cfg, "ignore-list");
+
+	struct tray_entry *entries = calloc((size_t)items->length, sizeof(*entries));
+	int count = 0;
+	for (int i = 0; i < items->length; ++i) {
+		struct tray_item *item = items->items[i];
+		if ((item->passive && !show_passive) || tray_ignored(ignore, item)) {
+			continue;
+		}
+		struct json_value *icon = tray_lookup(icons, item->app_id);
+		if (icon && icon->type == JSON_BOOL && !icon->boolean) {
+			continue;   // "spotify": false
+		}
+		struct json_value *order = tray_lookup(orders, item->app_id);
+		struct tray_entry *e = &entries[count++];
+		e->item = item;
+		e->order = order && order->type == JSON_NUMBER ? order->number : 0;
+		// New items go to the right, or to the left with reverse-direction.
+		e->seq = reverse ? -i : i;
+		e->icon_path = icon && icon->type == JSON_STRING ? icon->string : NULL;
+	}
+	if (count == 0) {
+		free(entries);
+		return;
+	}
+	qsort(entries, (size_t)count, sizeof(*entries), tray_entry_compare);
+
+	struct bar_module_view *view = new_view(m, index);
+	view->is_box = true;
+	view->item_spacing = (int)json_get_number(m->cfg, "spacing", 0);
+	const char *box_classes[2] = {m->css_class, NULL};
+	struct css_element box_el = {"box", "tray",
+		m->css_class ? box_classes : NULL, &ctx->window_el};
+	css_compute(bar.css, &box_el, &ctx->model->window, &view->style);
+	for (int i = 0; i < count; ++i) {
+		struct tray_item *t = entries[i].item;
+		const char *classes[2] = {
+			t->needs_attention ? "needs-attention" :
+				t->passive ? "passive" : "active",
+			NULL,
+		};
+		struct bar_item *item = calloc(1, sizeof(*item));
+		item->text = swine_strdup("");
+		item->tray_id = t->id;
+		item->icon_size = icon_size;
+		item->icon_path = entries[i].icon_path ?
+			platform_expand_path(entries[i].icon_path) : NULL;
+		struct css_element el = {"widget", NULL, classes, &box_el};
+		css_compute(bar.css, &el, &view->style, &item->style);
+		list_add(view->items, item);
+	}
+	free(entries);
+	list_add(ctx->model->modules, view);
+}
+
 static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		int index) {
 	switch (m->kind) {
@@ -658,6 +802,9 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			"{capacity}%"), args, 3, &ctx->tm), classes);
 		return;
 	}
+	case MOD_TRAY:
+		build_tray(ctx, m, index);
+		return;
 	case MOD_CUSTOM: {
 		if (json_object_get(m->cfg, "exec")) {
 			// Running scripts and reading their output is not implemented.
@@ -703,6 +850,7 @@ void bar_model_free(struct bar_model *model) {
 			free(item->on_click);
 			free(item->on_scroll_up);
 			free(item->on_scroll_down);
+			free(item->icon_path);
 			free(item);
 		}
 		list_free(view->items);

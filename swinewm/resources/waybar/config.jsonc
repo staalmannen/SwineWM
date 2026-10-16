@@ -22,7 +22,8 @@
         "cpu",
         "memory",
         "battery",
-        "clock"
+        "clock",
+        "tray"
     ],
     // Modules configuration
     "sway/workspaces": {
@@ -44,6 +45,12 @@
         // Click to toggle between the time and the date
         "format": "{:%H:%M}",
         "format-alt": "{:%Y-%m-%d}"
+    },
+    "tray": {
+        // "icon-size": 21,
+        "spacing": 10
+        // "icons": { "Spotify.exe": false },
+        // "show-passive-items": true
     },
     "cpu": {
         "format": "CPU {usage}%"

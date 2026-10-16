@@ -43,6 +43,7 @@ window#waybar {
 #cpu,
 #memory,
 #mode,
+#tray,
 #scratchpad {
     padding: 0 10px;
     color: #ffffff;
@@ -83,4 +84,12 @@ window#waybar {
 
 #scratchpad {
     background: rgba(0, 0, 0, 0.2);
+}
+
+#tray {
+    background-color: #2980b9;
+}
+
+#tray > .needs-attention {
+    background-color: #eb4d4b;
 }

@@ -55,6 +55,7 @@ add_library(swinewm_core STATIC
   swinewm/bar/bar.c
   swinewm/bar/css.c
   swinewm/bar/format.c
+  swinewm/bar/tray.c
   swinewm/commands.c
   swinewm/commands/bar.c
   swinewm/commands/bind.c
@@ -115,6 +116,7 @@ if(WIN32)
     swinewm/win32/recover.c
     swinewm/win32/shell.c
     swinewm/win32/sysinfo.c
+    swinewm/win32/tray.c
     swinewm/win32/util.c
     swinewm/win32/wallpaper.c
     swinewm/win32/window.c

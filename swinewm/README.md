@@ -31,6 +31,13 @@ cmake --build build/swinewm --config Debug
 ctest --test-dir build/swinewm -C Debug
 ```
 
+Or open the repository folder in Visual Studio ("Open a local folder"); it
+picks up `swinewm/CMakeLists.txt` by itself. The executables then end up in
+`swinewm\out\build\x64-Debug\` (in Solution Explorer, switch to "CMake
+Targets View", right-click `swinewm` → "Open Folder in File Explorer").
+Debugging from Visual Studio is easiest: set a breakpoint and press F5 with
+`swinewm.exe` selected as the startup item.
+
 With MSYS2/MinGW-w64:
 
 ```sh
@@ -57,9 +64,9 @@ To use it instead of Explorer, run `swinewm --set-shell` once and log off
 and on again (`swinewm --unset-shell` brings Explorer back). As the shell it
 starts your Windows startup programs, logs to
 `%LOCALAPPDATA%\swinewm\swinewm.log`, and `exit` (Win+Shift+e) logs you off.
-Tray icons are not shown yet, so programs that live only in the tray cannot
-be reached in that mode. Running next to Explorer, `explorer_taskbar
-autohide` in the config hides Explorer's taskbar while swinewm runs.
+Tray icons appear in the bar's `tray` module (on by default), in either
+mode. Running next to Explorer, `explorer_taskbar autohide` in the config
+hides Explorer's taskbar while swinewm runs.
 
 With the default config:
 

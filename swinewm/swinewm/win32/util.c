@@ -72,6 +72,9 @@ static char *exe_dir(void) {
 }
 
 void platform_setup_environment(void) {
+	// The log is UTF-8 (window titles); the console defaults to the OEM
+	// code page, which shows "Vänner" as "V├ñnner".
+	SetConsoleOutputCP(CP_UTF8);
 	wchar_t path[MAX_PATH];
 	DWORD n = GetModuleFileNameW(NULL, path, MAX_PATH);
 	if (n == 0 || n == MAX_PATH) {

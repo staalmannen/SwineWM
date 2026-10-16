@@ -326,8 +326,21 @@ void win32_shell_update_work_area(bool reset) {
 // restored on exit, after a crash, or by "swinewm --recover".
 static LPARAM saved_taskbar_state = -1;
 
+// With the tray module, FindWindow("Shell_TrayWnd") finds swinewm's own.
+HWND win32_find_explorer_tray(void) {
+	HWND hwnd = NULL;
+	while ((hwnd = FindWindowExW(NULL, hwnd, L"Shell_TrayWnd", NULL))) {
+		DWORD pid = 0;
+		GetWindowThreadProcessId(hwnd, &pid);
+		if (pid != GetCurrentProcessId()) {
+			return hwnd;
+		}
+	}
+	return NULL;
+}
+
 static void set_taskbar_windows_visible(bool visible) {
-	HWND tray = FindWindowW(L"Shell_TrayWnd", NULL);
+	HWND tray = win32_find_explorer_tray();
 	if (tray && (IsWindowVisible(tray) != FALSE) != visible) {
 		ShowWindowAsync(tray, visible ? SW_SHOWNA : SW_HIDE);
 	}
@@ -342,7 +355,7 @@ static void set_taskbar_windows_visible(bool visible) {
 
 static void set_taskbar_state(LPARAM state) {
 	APPBARDATA abd = { .cbSize = sizeof(abd) };
-	abd.hWnd = FindWindowW(L"Shell_TrayWnd", NULL);
+	abd.hWnd = win32_find_explorer_tray();
 	abd.lParam = state;
 	if (abd.hWnd) {
 		SHAppBarMessage(ABM_SETSTATE, &abd);
@@ -370,7 +383,7 @@ void win32_shell_apply_taskbar(void) {
 		}
 		return;
 	}
-	HWND tray = FindWindowW(L"Shell_TrayWnd", NULL);
+	HWND tray = win32_find_explorer_tray();
 	if (!tray) {
 		return;
 	}

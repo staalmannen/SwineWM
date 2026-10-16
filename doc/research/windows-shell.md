@@ -42,34 +42,50 @@ Status column: ✅ implemented in SwineWM, 🔜 planned, ❌ not planned.
 | Window events | `RegisterShellHookWindow` + the `SHELLHOOK` message: `HSHELL_WINDOWCREATED/DESTROYED/ACTIVATED`, `RUDEAPPACTIVATED` (0x8004), `FLASH` (0x8006), `REDRAW`, `WINDOWREPLACING/REPLACED`, `MONITORCHANGED` (16), `FULLSCREENENTER/EXIT` (53/54); plus a WinEvent hook for cloak/uncloak (`TasksService.cs`) | ✅ shell hook for `FLASH` (→ sway urgency) and fullscreen; WinEvents for the rest |
 | Fullscreen apps | A window is fullscreen when its "effective" rectangle (client area for framed windows, else window rect) equals a monitor's; excluded: own process, invisible/minimized, cloaked, immersive shell windows, the `NonRudeHWND` property, layered windows that are transparent or no-activate. Bars hide while such a window is in front on their monitor (`FullScreenHelper.cs`) | ✅ managed windows → sway fullscreen; unmanaged ones (games) hide the bar on that output |
 
-## The tray (notification area) — not yet implemented
+## The tray (notification area) — implemented
 
-How it works, for when SwineWM gets a Waybar `tray` module
-(`TrayService.cs`, `NotificationArea.cs`, `NotifyIcon.cs`,
-`ExplorerTrayService.cs`):
+How it works (`TrayService.cs`, `NotificationArea.cs`, `NotifyIcon.cs`,
+`ShellServiceObject.cs`); SwineWM's version is `win32/tray.c`, described
+in [`../architecture.md`](../architecture.md):
 
 1. Programs call `Shell_NotifyIcon`, which sends `WM_COPYDATA` (`dwData` 1,
-   a `SHELLTRAYDATA` holding a `NOTIFYICONDATA` with 32-bit handles) to the
-   window found by `FindWindow("Shell_TrayWnd")`.
+   a `SHELLTRAYDATA`: magic `0x34753423`, the `NIM_*` message and a
+   `NOTIFYICONDATA` with 32-bit handles) to the window found by
+   `FindWindow("Shell_TrayWnd")`. ✅
 2. The shell creates its own `Shell_TrayWnd` (with a `TrayNotifyWnd` child)
    and broadcasts the registered `TaskbarCreated` message so running
    programs re-add their icons. With Explorer running, ManagedShell raises
-   its `Shell_TrayWnd` to `HWND_TOPMOST` so `FindWindow` finds it first
-   (Explorer's tray then stops receiving icons), and can also read the
-   icons Explorer already has from its toolbar (`ExplorerTrayService`,
-   `ReadProcessMemory`).
-3. Messages `NIM_ADD/MODIFY/DELETE/SETFOCUS/SETVERSION` maintain the icon
-   list (keyed by `hWnd`+`uID` or `guidItem`); `hIcon` is a shared handle,
-   copied with `CopyIcon`. Balloon notifications (`NIF_INFO`) would map
-   naturally onto the built-in Mako.
-4. Clicks are forwarded to the owner with `PostMessage(uCallbackMessage)`,
-   using the version-4 encoding (`NOTIFYICON_VERSION_4`: coordinates in
-   `wParam`, event and id in `lParam`, `NIN_SELECT`, `WM_CONTEXTMENU`) after
-   `AllowSetForegroundWindow`.
-5. The same `Shell_TrayWnd` receives AppBar messages (`WM_COPYDATA`,
-   `dwData` 0) from other programs when Explorer is gone, and must answer
-   `ABM_GETTASKBARPOS`, `ABM_QUERYPOS/SETPOS`, `ABM_GETSTATE` and
-   `ABM_GETAUTOHIDEBAR` (`AppBarManager.appBarMessageDelegate`).
+   its `Shell_TrayWnd` to `HWND_TOPMOST` on a 100 ms timer so `FindWindow`
+   finds it first. ✅ (SwineWM uses a separate thread for the window.)
+   ManagedShell can also read the icons Explorer already has from its
+   toolbar (`ExplorerTrayService`, `ReadProcessMemory`). ❌ not needed:
+   `TaskbarCreated` brings almost all of them back.
+3. `NIM_ADD/MODIFY/DELETE/SETFOCUS/SETVERSION` maintain the icon list
+   (keyed by `hWnd`+`uID` or `guidItem`); `hIcon` is a shared handle,
+   copied with `CopyIcon`; `NIS_HIDDEN` hides an icon. Balloon
+   notifications (`NIF_INFO`) go to the built-in Mako. ✅
+4. Clicks are forwarded to the owner with `SendNotifyMessage(uCallbackMessage)`
+   (down/up/double click, then `NIN_SELECT` or `WM_CONTEXTMENU`; version 4
+   puts the position in `wParam` and the id in `HIWORD(lParam)`) after
+   `AllowSetForegroundWindow`. Hover (`NIN_POPUPOPEN`, `WM_MOUSEMOVE`) is
+   not sent yet. ✅ / 🟡
+5. `dwData` 3 (`Shell_NotifyIconGetRect`) is answered with the icon's
+   rectangle. ✅
+6. Messages not handled (AppBar messages, `dwData` 0, and anything from
+   `WM_USER` up) are forwarded to Explorer's taskbar. ✅ As the shell
+   there is no Explorer to forward to, so AppBar messages
+   (`ABM_GETTASKBARPOS`, `ABM_QUERYPOS/SETPOS`, `ABM_GETSTATE`,
+   `ABM_GETAUTOHIDEBAR`; `AppBarManager.appBarMessageDelegate`) get 0. ❌
+7. As the shell, the volume/network/power icons come from the SysTray shell
+   service object (`CLSID 35CEC8A3-2BE6-11D2-8773-92E220524153`,
+   `IOleCommandTarget::Exec(CGID_ShellServiceObject, OLECMDID_NEW)`). ✅
+   ManagedShell hides the volume icon there on Windows 10+, where clicking
+   it needs Explorer's flyout, and treats some Windows 11 action-centre
+   icons specially (`Win11ActionCenterIcons`); SwineWM does neither yet.
+
+Wine's `Shell_NotifyIcon` sends a different, Wine-specific message, so the
+tray cannot be tested with ordinary programs under Wine; a test program
+that sends the Windows format works.
 
 ## Other ideas noted
 

@@ -88,6 +88,8 @@ int platform_recover_windows(void) {
 	if (win32_shell_recover_taskbar()) {
 		swine_log(SWINE_INFO, "Restored Explorer's taskbar setting");
 	}
+	// Tray icons that were shown by a crashed swinewm go back to Explorer.
+	win32_tray_recover();
 	char *path = state_file(false);
 	if (!path) {
 		return 0;

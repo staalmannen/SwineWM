@@ -1,2 +1,6 @@
 /build/
 /swinewm/build/
+/out/
+/swinewm/out/
+/.vs/
+/swinewm/.vs/

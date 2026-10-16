@@ -2,6 +2,7 @@
 #define _SWINE_BAR_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <time.h>
 #include "list.h"
 #include "swinewm/bar/css.h"
@@ -20,13 +21,17 @@ enum bar_section {
 	BAR_SECTION_RIGHT,
 };
 
-// One label: a whole module, or one workspace button.
+// One label: a whole module, or one workspace button. Or one tray icon:
+// then tray_id is set, text is empty and the platform draws the icon.
 struct bar_item {
 	char *text;              // markup already stripped
 	char *on_click;          // swinewm command for a left click, or NULL
 	char *on_scroll_up;
 	char *on_scroll_down;
 	struct swine_style style;
+	uint64_t tray_id;        // struct tray_item id, or 0
+	int icon_size;           // logical px, for tray icons
+	char *icon_path;         // "icons" override (an .ico file), or NULL
 };
 
 struct bar_module_view {
@@ -36,6 +41,7 @@ struct bar_module_view {
 	// true: items are buttons inside a box styled by `style` (workspaces).
 	// false: one label that carries its own style (style == item style).
 	bool is_box;
+	int item_spacing;        // px between items ("spacing" of the tray)
 	list_t *items;           // struct bar_item *
 };
 
@@ -52,6 +58,8 @@ void bar_load_from_strings(const char *config_text, const char *style_text);
 void bar_finish(void);
 
 bool bar_enabled(void);
+// Whether the bar has a "tray" module, i.e. should host the tray.
+bool bar_has_tray(void);
 // Height in logical pixels; multiply by output->scale for device pixels.
 int bar_height(void);
 bool bar_at_top(void);
