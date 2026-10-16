@@ -8,6 +8,7 @@
 #include "stringop.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
+#include "swinewm/criteria.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/root.h"
@@ -19,7 +20,7 @@
 // doc/compatibility.md.
 static const struct cmd_handler handlers[] = {
 	{ "allow_tearing", cmd_ignored, 0 },
-	{ "assign", cmd_ignored, CMD_CONFIG_ONLY },
+	{ "assign", cmd_assign, CMD_CONFIG_ONLY },
 	{ "bar", cmd_bar, 0 },
 	{ "bindcode", cmd_ignored, 0 },
 	{ "bindgesture", cmd_ignored, 0 },
@@ -49,7 +50,7 @@ static const struct cmd_handler handlers[] = {
 	{ "focus_on_window_activation", cmd_ignored, 0 },
 	{ "focus_wrapping", cmd_focus_wrapping, 0 },
 	{ "font", cmd_ignored, 0 },
-	{ "for_window", cmd_ignored, 0 },
+	{ "for_window", cmd_for_window, 0 },
 	{ "force_display_urgency_hint", cmd_ignored, 0 },
 	{ "fullscreen", cmd_fullscreen, CMD_RUNTIME_ONLY },
 	{ "gaps", cmd_gaps, 0 },
@@ -61,19 +62,21 @@ static const struct cmd_handler handlers[] = {
 	{ "kill", cmd_kill, CMD_RUNTIME_ONLY },
 	{ "layout", cmd_layout, CMD_RUNTIME_ONLY },
 	{ "makoctl", cmd_makoctl, CMD_RUNTIME_ONLY },
+	{ "mark", cmd_mark, CMD_RUNTIME_ONLY },
 	{ "max_render_time", cmd_ignored, 0 },
 	{ "mode", cmd_mode, 0 },
 	{ "mouse_warping", cmd_ignored, 0 },
 	{ "move", cmd_move, CMD_RUNTIME_ONLY },
 	{ "new_float", cmd_ignored, 0 },
 	{ "new_window", cmd_ignored, 0 },
-	{ "no_focus", cmd_ignored, 0 },
+	{ "no_focus", cmd_no_focus, 0 },
 	{ "nop", cmd_nop, 0 },
 	{ "notify-send", cmd_notify_send, CMD_RUNTIME_ONLY },
 	{ "output", cmd_output, 0 },
 	{ "popup_during_fullscreen", cmd_ignored, 0 },
 	{ "primary_selection", cmd_ignored, 0 },
 	{ "reload", cmd_reload, CMD_RUNTIME_ONLY },
+	{ "rename", cmd_rename, CMD_RUNTIME_ONLY },
 	{ "resize", cmd_resize, CMD_RUNTIME_ONLY },
 	{ "restart", cmd_restart, CMD_RUNTIME_ONLY },
 	{ "scratchpad", cmd_scratchpad, CMD_RUNTIME_ONLY },
@@ -87,6 +90,8 @@ static const struct cmd_handler handlers[] = {
 	{ "splith", cmd_splith, CMD_RUNTIME_ONLY },
 	{ "splitt", cmd_splitt, CMD_RUNTIME_ONLY },
 	{ "splitv", cmd_splitv, CMD_RUNTIME_ONLY },
+	{ "sticky", cmd_sticky, CMD_RUNTIME_ONLY },
+	{ "swap", cmd_swap, CMD_RUNTIME_ONLY },
 	{ "swaybg_command", cmd_ignored, CMD_CONFIG_ONLY },
 	{ "swaynag_command", cmd_ignored, CMD_CONFIG_ONLY },
 	{ "tiling_drag", cmd_ignored, 0 },
@@ -95,6 +100,7 @@ static const struct cmd_handler handlers[] = {
 	{ "titlebar_border_thickness", cmd_ignored, 0 },
 	{ "titlebar_padding", cmd_ignored, 0 },
 	{ "unbindsym", cmd_unbindsym, 0 },
+	{ "unmark", cmd_unmark, CMD_RUNTIME_ONLY },
 	{ "urgent", cmd_urgent, CMD_RUNTIME_ONLY },
 	{ "workspace", cmd_workspace, 0 },
 	{ "workspace_auto_back_and_forth", cmd_ws_auto_back_and_forth, 0 },
@@ -175,6 +181,7 @@ static void set_handler_context(struct swine_node *node) {
 	config->handler_context.node = node;
 	config->handler_context.container = NULL;
 	config->handler_context.workspace = NULL;
+	config->handler_context.node_overridden = false;
 	if (!node) {
 		return;
 	}
@@ -197,13 +204,29 @@ list_t *execute_command(char *_exec, struct swine_container *con) {
 	char *exec = swine_strdup(_exec);
 	char *head = exec;
 	list_t *res_list = create_list();
+	list_t *containers = NULL;
+	bool using_criteria = false;
 
 	do {
 		for (; isspace((unsigned char)*head); ++head) {}
-		if (matched_delim == ';' && *head == '[') {
-			list_add(res_list, cmd_results_new(CMD_INVALID,
-				"Criteria are not supported yet"));
-			goto cleanup;
+		// Extract criteria (valid for this command list only).
+		if (matched_delim == ';') {
+			using_criteria = false;
+			if (*head == '[') {
+				char *error = NULL;
+				struct criteria *criteria = criteria_parse(head, &error);
+				if (!criteria) {
+					list_add(res_list, cmd_results_new(CMD_INVALID, "%s", error));
+					free(error);
+					goto cleanup;
+				}
+				list_free(containers);
+				containers = criteria_get_containers(criteria);
+				head += strlen(criteria->raw);
+				criteria_destroy(criteria);
+				using_criteria = true;
+				for (; isspace((unsigned char)*head); ++head) {}
+			}
 		}
 		char *cmd = argsep(&head, ";,", &matched_delim);
 		for (; isspace((unsigned char)*cmd); ++cmd) {}
@@ -233,19 +256,53 @@ list_t *execute_command(char *_exec, struct swine_container *con) {
 		for (int i = handler->handle == cmd_set ? 2 : 1; i < argc; ++i) {
 			argv[i] = do_var_replacement(argv[i]);
 		}
-		set_handler_context(con ? &con->node :
-			seat_get_focus_inactive(&root->node));
 		current_name = handler->command;
-		struct cmd_results *res = handler->handle(argc - 1, argv + 1);
-		current_name = "";
-		list_add(res_list, res);
-		free_argv(argc, argv);
-		if (res->status == CMD_INVALID) {
-			goto cleanup;
+		if (!using_criteria) {
+			set_handler_context(con ? &con->node :
+				seat_get_focus_inactive(&root->node));
+			config->handler_context.node_overridden = con != NULL;
+			struct cmd_results *res = handler->handle(argc - 1, argv + 1);
+			list_add(res_list, res);
+			if (res->status == CMD_INVALID) {
+				current_name = "";
+				free_argv(argc, argv);
+				goto cleanup;
+			}
+		} else if (containers->length == 0) {
+			list_add(res_list,
+				cmd_results_new(CMD_FAILURE, "No matching node."));
+		} else {
+			struct cmd_results *fail_res = NULL;
+			for (int i = 0; i < containers->length; ++i) {
+				struct swine_container *container = containers->items[i];
+				set_handler_context(&container->node);
+				config->handler_context.node_overridden = true;
+				struct cmd_results *res = handler->handle(argc - 1, argv + 1);
+				if (res->status == CMD_SUCCESS) {
+					free_cmd_results(res);
+				} else {
+					// last failure will take precedence
+					if (fail_res) {
+						free_cmd_results(fail_res);
+					}
+					fail_res = res;
+					if (res->status == CMD_INVALID) {
+						list_add(res_list, fail_res);
+						current_name = "";
+						free_argv(argc, argv);
+						goto cleanup;
+					}
+				}
+			}
+			list_add(res_list,
+				fail_res ? fail_res : cmd_results_new(CMD_SUCCESS, NULL));
 		}
+		current_name = "";
+		free_argv(argc, argv);
 	} while (head);
 cleanup:
 	free(exec);
+	list_free(containers);
 	return res_list;
 }
 

@@ -5,6 +5,7 @@
 #include "list.h"
 #include "swinewm/tree/node.h"
 
+struct swine_output;
 struct swine_view;
 
 // Boundary between the portable window-manager core and the OS. The Win32
@@ -47,6 +48,9 @@ bool platform_spawn(const char *cmdline);
 // frees). name is relative, with '/' separators: "config",
 // "waybar/config.jsonc", "mako/config", ...
 list_t *platform_config_paths(const char *name);
+// Names of the entries of a directory (char *, without "." and ".."), or
+// NULL if it cannot be read. Caller frees.
+list_t *platform_list_dir(const char *dir);
 // Expands ~ and %VAR% in a path. Caller frees.
 char *platform_expand_path(const char *path);
 // The user's Pictures folder, or NULL. Caller frees.
@@ -55,6 +59,19 @@ char *platform_pictures_dir(void);
 // On failure *error may receive a message (caller frees).
 bool platform_screenshot(const struct swine_box *box, const char *path,
 		bool jpeg, char **error);
+// Display settings for one output, merged from its "output" configs.
+// Unset fields keep the current setting.
+struct output_display_config {
+	int width, height;     // unrotated mode; 0 = unset
+	float refresh_rate;    // Hz; 0 = the highest for the mode
+	int x, y;              // INT_MIN = unset
+	int transform;         // quarter turns clockwise; -1 = unset
+	bool any;              // false: nothing set, restore the defaults
+};
+// Applies display settings (on Windows temporarily, undone on exit and by
+// --recover). Returns false if they could not be applied.
+bool platform_output_configure(struct swine_output *output,
+		const struct output_display_config *cfg);
 // Called after the config changed so the platform can re-register hooks.
 void platform_config_changed(void);
 // The bar or notifications need repainting (called after every commit).

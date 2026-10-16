@@ -39,6 +39,8 @@ struct swine_container {
 	struct swine_box box;             // arranged geometry
 	struct swine_box floating_box;    // geometry while floating
 	bool scratchpad;
+	bool is_sticky;                   // shown on every workspace (floating)
+	list_t *marks;                    // char *, as sway's con->marks
 };
 
 struct swine_container *container_create(struct swine_view *view);
@@ -67,6 +69,8 @@ bool container_has_ancestor(struct swine_container *descendant,
 bool container_is_floating(struct swine_container *con);
 bool container_is_floating_or_child(struct swine_container *con);
 bool container_is_scratchpad_hidden(struct swine_container *con);
+bool container_is_sticky(struct swine_container *con);
+bool container_is_sticky_or_child(struct swine_container *con);
 struct swine_container *container_toplevel_ancestor(struct swine_container *con);
 void container_for_each_child(struct swine_container *con,
 		void (*f)(struct swine_container *con, void *data), void *data);
@@ -75,6 +79,19 @@ void container_set_floating(struct swine_container *con, bool enable);
 void container_floating_move_to_center(struct swine_container *con);
 void container_set_fullscreen(struct swine_container *con,
 		enum swine_fullscreen_mode mode);
+// Marks (sway: container_has_mark and friends). A mark is unique: it is on
+// at most one container.
+bool container_has_mark(struct swine_container *con, const char *mark);
+void container_add_mark(struct swine_container *con, const char *mark);
+void container_clear_marks(struct swine_container *con);
+struct swine_container *container_find_mark(const char *mark);
+bool container_find_and_unmark(const char *mark);
+
+// Exchanges the places (and sizes) of two containers, which may be on
+// different workspaces. Neither may be an ancestor of the other.
+void container_swap(struct swine_container *con1,
+		struct swine_container *con2);
+
 const char *container_layout_to_str(enum swine_container_layout layout);
 bool layout_is_parallel(enum swine_container_layout layout,
 		enum swine_container_layout other);

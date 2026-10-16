@@ -8,6 +8,7 @@
 // start of swinewm show them again.
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <wchar.h>
 #include "fileutil.h"
 #include "log.h"
@@ -84,7 +85,59 @@ void win32_recover_clear(void) {
 	}
 }
 
+static char *display_marker(bool create_dir) {
+	char *file = state_file(create_dir);
+	if (!file) {
+		return NULL;
+	}
+	// "...\hidden-windows.txt" -> "...\display-changed"
+	char *slash = strrchr(file, '\\');
+	char *marker = format_str("%.*s\\display-changed",
+		slash ? (int)(slash - file) : 0, file);
+	free(file);
+	return marker;
+}
+
+void win32_recover_note_display_changed(void) {
+	char *path = display_marker(true);
+	if (!path) {
+		return;
+	}
+	FILE *f = swine_fopen(path, "w");
+	if (f) {
+		fputs("swinewm changed the display settings\n", f);
+		fclose(f);
+	}
+	free(path);
+}
+
+static void recover_display_settings(void) {
+	char *path = display_marker(false);
+	if (!path) {
+		return;
+	}
+	wchar_t *wpath = utf8_to_utf16(path);
+	if (GetFileAttributesW(wpath) != INVALID_FILE_ATTRIBUTES) {
+		ChangeDisplaySettingsExW(NULL, NULL, NULL, 0, NULL);
+		swine_log(SWINE_INFO, "Restored the display settings");
+		DeleteFileW(wpath);
+	}
+	free(wpath);
+	free(path);
+}
+
+void win32_recover_display_done(void) {
+	char *path = display_marker(false);
+	if (path) {
+		wchar_t *wpath = utf8_to_utf16(path);
+		DeleteFileW(wpath);
+		free(wpath);
+		free(path);
+	}
+}
+
 int platform_recover_windows(void) {
+	recover_display_settings();
 	if (win32_shell_recover_taskbar()) {
 		swine_log(SWINE_INFO, "Restored Explorer's taskbar setting");
 	}

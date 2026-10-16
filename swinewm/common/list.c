@@ -113,3 +113,17 @@ void list_free_items_and_destroy(list_t *list) {
 	}
 	list_free(list);
 }
+
+void list_stable_sort(list_t *list,
+		int compare(const void *a, const void *b)) {
+	// Insertion sort: stable, and the lists sorted here are short.
+	for (int i = 1; i < list->length; ++i) {
+		void *item = list->items[i];
+		int j = i - 1;
+		while (j >= 0 && compare(&list->items[j], &item) > 0) {
+			list->items[j + 1] = list->items[j];
+			--j;
+		}
+		list->items[j + 1] = item;
+	}
+}

@@ -73,7 +73,7 @@ struct cmd_results *cmd_grim(int argc, char **argv) {
 					"Invalid geometry '%s' (expected \"x,y wxh\")", argv[i]);
 			}
 		} else if (strcmp(arg, "-o") == 0 && has_value) {
-			struct swine_output *output = output_by_name(argv[++i]);
+			struct swine_output *output = output_by_name_or_id(argv[++i]);
 			if (!output) {
 				return cmd_results_new(CMD_INVALID, "Unknown output '%s'",
 					argv[i]);

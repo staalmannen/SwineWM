@@ -1,6 +1,7 @@
 #ifndef _SWINE_ROOT_H
 #define _SWINE_ROOT_H
 
+#include <stdbool.h>
 #include "list.h"
 #include "swinewm/tree/node.h"
 
@@ -30,5 +31,9 @@ void root_for_each_workspace(
 		void (*f)(struct swine_workspace *ws, void *data), void *data);
 void root_for_each_container(
 		void (*f)(struct swine_container *con, void *data), void *data);
+// The first container (depth first, outputs in order, then the hidden
+// scratchpad) for which test returns true.
+struct swine_container *root_find_container(
+		bool (*test)(struct swine_container *con, void *data), void *data);
 
 #endif

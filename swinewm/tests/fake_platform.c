@@ -1,4 +1,10 @@
+#include <stdint.h>
 #include <stdio.h>
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <dirent.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include "fake_platform.h"
@@ -77,6 +83,18 @@ char *platform_pictures_dir(void) {
 	return swine_strdup("C:\\Users\\pig\\Pictures");
 }
 
+bool platform_output_configure(struct swine_output *output,
+		const struct output_display_config *cfg) {
+	// Only calls that change something are interesting to tests.
+	if (cfg->any) {
+		fake.output_configure_calls++;
+		snprintf(fake.last_configured_output,
+			sizeof(fake.last_configured_output), "%s", output->name);
+		fake.last_output_config = *cfg;
+	}
+	return true;
+}
+
 bool platform_screenshot(const struct swine_box *box, const char *path,
 		bool jpeg, char **error) {
 	(void)jpeg;
@@ -90,6 +108,41 @@ bool platform_screenshot(const struct swine_box *box, const char *path,
 
 long long platform_now_ms(void) {
 	return fake.now_ms;
+}
+
+// The real directory, for include tests (with test files on disk).
+list_t *platform_list_dir(const char *dir) {
+	list_t *names = NULL;
+#ifdef _WIN32
+	char *pattern = format_str("%s\\*", dir);
+	struct _finddata_t data;
+	intptr_t find = _findfirst(pattern, &data);
+	free(pattern);
+	if (find == -1) {
+		return NULL;
+	}
+	names = create_list();
+	do {
+		if (strcmp(data.name, ".") != 0 && strcmp(data.name, "..") != 0) {
+			list_add(names, swine_strdup(data.name));
+		}
+	} while (_findnext(find, &data) == 0);
+	_findclose(find);
+#else
+	DIR *d = opendir(dir);
+	if (!d) {
+		return NULL;
+	}
+	names = create_list();
+	struct dirent *entry;
+	while ((entry = readdir(d))) {
+		if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+			list_add(names, swine_strdup(entry->d_name));
+		}
+	}
+	closedir(d);
+#endif
+	return names;
 }
 
 // Expands only %SWINEWM_DATA%, to where an installed swinewm.exe would be.

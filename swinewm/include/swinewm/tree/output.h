@@ -16,11 +16,16 @@ struct swine_output {
 	struct swine_node node;
 	char *name;               // e.g. "DISPLAY1"
 	char *description;
+	// sway's "make model serial"; here the monitor's name as Windows shows
+	// it in the display settings (e.g. "DELL U2720Q"), or NULL.
+	char *identifier;
 	void *handle;             // platform handle (HMONITOR on Windows)
 	struct swine_box box;     // full monitor rectangle
 	struct swine_box usable;  // box minus app bars / taskbar (work area)
 	struct side_gaps reserved; // space taken by swinewm's own bar
 	double scale;
+	int transform;            // current rotation, quarter turns clockwise
+	int refresh_mhz;          // current refresh rate in mHz, 0 if unknown
 	bool enabled;
 	bool primary;
 	// A window swinewm does not manage (a game, a presentation) covers the
@@ -37,7 +42,13 @@ void output_enable(struct swine_output *output);
 // Evacuates workspaces to another output (or the fallback) and destroys it.
 void output_destroy(struct swine_output *output);
 struct swine_output *output_by_name(const char *name);
+// Matches the name or, failing that, the identifier (ignoring case).
+struct swine_output *output_by_name_or_id(const char *name_or_id);
 struct swine_output *output_by_handle(void *handle);
+// Applies the mode, position and transform from the "output" configs to
+// every output (after the config has been read, and on hot-plug).
+void output_apply_configs(void);
+void output_apply_config(struct swine_output *output);
 struct swine_workspace *output_get_active_workspace(struct swine_output *output);
 // Area available to windows: the work area minus swinewm's own bar.
 struct swine_box output_get_usable_area(struct swine_output *output);

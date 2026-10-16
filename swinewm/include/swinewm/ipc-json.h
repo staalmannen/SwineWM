@@ -8,5 +8,6 @@ char *ipc_json_get_tree(void);
 char *ipc_json_get_binding_modes(void);
 char *ipc_json_get_binding_state(void);
 char *ipc_json_get_config(void);
+char *ipc_json_get_marks(void);
 
 #endif

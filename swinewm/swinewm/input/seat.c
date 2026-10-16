@@ -77,6 +77,17 @@ void seat_set_focus(struct swine_node *node) {
 			node->container->view->urgent) {
 		view_set_urgent(node->container->view, false);
 	}
+	// Move sticky containers to the new workspace
+	if (ws && old_ws && ws != old_ws) {
+		for (int i = 0; i < old_ws->floating->length; ++i) {
+			struct swine_container *floater = old_ws->floating->items[i];
+			if (container_is_sticky(floater)) {
+				container_detach(floater);
+				workspace_add_floating(ws, floater);
+				--i;
+			}
+		}
+	}
 	if (old_ws && old_ws != ws) {
 		workspace_consider_destroy(old_ws);
 	}

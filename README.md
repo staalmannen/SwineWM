@@ -27,13 +27,14 @@ program it replaces.
 | waybar | built into `swinewm.exe` (Waybar config + style.css) | Early draft, runs |
 | mako, notify-send, makoctl | built into `swinewm.exe` (mako config) | Early draft, runs |
 | swaymsg | `swinemsg.exe` — IPC client | Early draft, runs |
+| grim | built into `swinewm.exe` (Print key) | Early draft, runs |
 
 ## Repository layout
 
 | Path | What |
 | --- | --- |
 | [`swinewm/`](swinewm/) | `swinewm` (window manager, bar, notifications) and `swinemsg`, in C11 ([README](swinewm/README.md)) |
-| [`doc/`](doc/) | [Project summary](doc/project_summary.md), [architecture](doc/architecture.md), [Sway compatibility](doc/compatibility.md), [packaging](doc/packaging.md) |
+| [`doc/`](doc/) | [Windows for Linux users](doc/linux-users.md), [project summary and roadmap](doc/project_summary.md), [architecture](doc/architecture.md), [Sway compatibility](doc/compatibility.md), [packaging](doc/packaging.md) |
 | `sway/`, `waybar/`, `mako/` | Upstream sources (submodules), used as reference |
 
 Clone with `git clone --recurse-submodules` to get the reference sources.
@@ -45,16 +46,19 @@ commands (focus, move, split, layout, workspaces, floating, fullscreen,
 scratchpad, resize, gaps, modes, exec), loads Sway config files and answers
 i3/Sway IPC requests over a named pipe. It draws a Waybar-style bar from a
 Waybar config and style sheet, and Mako-style notifications from a mako
-config. Its core is unit-tested on Linux and Windows, and it has been
-smoke-tested under Wine; it has not yet been used on a real Windows
-desktop. Not yet done: title bars and borders, mouse bindings, criteria
-rules, output configuration, IPC events, script-driven bar modules,
-Windows toast notifications. See [`doc/compatibility.md`](doc/compatibility.md).
+config, hosts the Windows tray, takes screenshots like grim, and can
+replace Explorer as the Windows shell. Version 0.1.0 is in daily use on
+Windows 11 as the shell. Not yet done: window rules (criteria), title bars
+and borders, mouse bindings, output configuration, IPC events,
+script-driven bar modules, Windows toast notifications. See
+[`doc/compatibility.md`](doc/compatibility.md) and the roadmap in
+[`doc/project_summary.md`](doc/project_summary.md).
 
-To try it, see [`swinewm/README.md`](swinewm/README.md). It runs as an
-ordinary program next to Explorer and shows all windows again when it exits.
-Every push builds an MSI installer on GitHub Actions; see
-[`doc/packaging.md`](doc/packaging.md).
+To try it, install the MSI from
+[Releases](https://github.com/staalmannen/SwineWM/releases) and see
+[`swinewm/README.md`](swinewm/README.md). It runs as an ordinary program
+next to Explorer and shows all windows again when it exits. New to Windows?
+Start with [`doc/linux-users.md`](doc/linux-users.md).
 
 ## Default config
 

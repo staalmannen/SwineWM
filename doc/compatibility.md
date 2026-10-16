@@ -17,7 +17,8 @@ ignored · ❌ not implemented (error)
 | Comments, `\` line continuation, `{` on the next line | ✅ | |
 | Blocks (`mode "x" { }`, `bar { }`, `input … { }`) | ✅ | Lines are prefixed with the block header, as in sway |
 | `set $var value`, `$var` replacement | ✅ | Longest variable name wins; `$$` escapes |
-| `include <path>` | 🟡 | Single files; `~` and `%VAR%` expanded; no glob patterns yet |
+| `include <path>` | ✅ | Relative to the including file; `~` and `%VAR%` expanded; wildcards (`*`, `?`, `[…]`) in the file name, matched in sorted order and ignoring case; each file at most once; a missing file is not an error (as in sway) |
+| Config errors (swaynag) | ✅ | Shown as a critical notification of the built-in mako ("There are errors in your config file" with the first errors); it stays until dismissed and goes away after a reload without errors. `swaynag_command` is ignored |
 | `exec` / `exec_always` deferral | ✅ | Run after the config is read; `exec` is skipped on reload |
 | `swinewm -C` (validate config) | ✅ | |
 | UTF-8 paths and BOM | ✅ | |
@@ -40,22 +41,23 @@ ignored · ❌ not implemented (error)
 | `focus left/right/up/down` | ✅ | Tree-based like sway, crosses outputs, honours `focus_wrapping` |
 | `focus parent/child`, `focus mode_toggle/floating/tiling` | ✅ | |
 | `focus output <name\|direction>` | ✅ | |
-| `focus prev/next [sibling]` | ❌ | |
+| `focus prev/next [sibling]` | ✅ | |
 | `move left/right/up/down [<n> px]` | ✅ | Port of sway's `container_move_in_direction`; floating windows move by n px |
 | `move [container\|window] [to] workspace <name\|number n\|next\|prev\|…\|back_and_forth>` | ✅ | Focus stays on the current workspace, like sway |
 | `move [container\|window] [to] output <name\|direction>` | ✅ | |
+| `move [container\|window] [to] mark <mark>` | ✅ | |
 | `move [to] scratchpad`, `scratchpad show` | ✅ | |
 | `move [absolute] position center\|<x> <y>` | 🟡 | Floating windows; coordinates relative to the output's work area |
-| `move workspace to output …` | ❌ | |
+| `move workspace [to] [output] <name\|direction\|current>` | ✅ | The workspace remembers the output for when monitors come and go |
 | `split h/v/t/none`, `splith`, `splitv`, `splitt` | ✅ | |
 | `layout splith/splitv/stacking/tabbed/default`, `layout toggle [split\|all\|…]` | ✅ | Tabbed/stacked show only the active child; no title bars yet |
 | `workspace [number] <name>`, `next`, `prev`, `next_on_output`, `prev_on_output`, `back_and_forth`, `--no-auto-back-and-forth` | ✅ | |
-| `workspace <name> output …`, `workspace <name> gaps …` | ⚪ | |
+| `workspace <name> output <outputs…>`, `workspace <name> gaps <type> <n>` | ✅ | The first connected output in the list; workspaces return to it when the monitor is plugged back in |
 | `workspace_auto_back_and_forth` | ✅ | |
 | `floating enable/disable/toggle` | ✅ | |
 | `fullscreen [enable/disable/toggle] [global]` | 🟡 | `global` behaves like per-output fullscreen |
-| `resize grow/shrink width/height [<n> [px\|ppt]]` | ✅ | |
-| `resize grow/shrink up/down/left/right`, `resize set` | ❌ | |
+| `resize grow/shrink width/height/up/down/left/right [<n> [px\|ppt]] [or <n> [px\|ppt]]` | ✅ | Port of sway's `resize.c`; floating windows are at least 75×50 and at most the output's work area |
+| `resize set [width] <w> [height] <h>` | ✅ | |
 | `gaps inner/outer/horizontal/vertical/top/right/bottom/left <n>` | ✅ | Config default |
 | `gaps <type> all\|current set\|plus\|minus\|toggle <n>` | ✅ | Runtime |
 | `default_orientation`, `workspace_layout` | ✅ | |
@@ -63,15 +65,45 @@ ignored · ❌ not implemented (error)
 | `focus_follows_mouse`, `floating_modifier` | 🟡 | Parsed and stored; mouse handling not implemented yet |
 | `smart_gaps`, `smart_borders`, `hide_edge_borders` | ⚪ | |
 | `border`, `default_border`, `default_floating_border`, `client.*`, `font`, `title_align`, `titlebar_*`, `show_marks` | ⚪ | Decorations not drawn yet |
-| `for_window`, `assign`, `no_focus`, criteria `[…]` | ⚪ / ❌ | Config lines ignored; runtime criteria are an error |
+| `for_window`, `assign` (`workspace`, `number`, `output`, `→`), `no_focus` | ✅ | As in sway: rules run when a window appears and again when its title changes (once per rule and window); `assign` picks the workspace, `no_focus` keeps the focus where it was |
+| Criteria `[…] <commands>` | ✅ | All tokens; what they match on Windows is listed under "Criteria" below. Regular expressions use a built-in PCRE-like engine (no look-around or back-references) |
 | `output <name\|*> bg <file> <stretch\|fill\|fit\|center\|tile> [<#color>]`, `output … bg <#color> solid_color` | ✅ | swaybg's options; PNG, JPEG, BMP, GIF, TIFF (anything the Windows Imaging Component reads). `~`, `%VAR%` and paths relative to the config file |
-| other `output` options (mode, position, scale, …), `input`, `seat` | ⚪ | Windows settings apply |
+| `output … mode\|resolution\|res <w>x<h>[@<r>Hz]`, `position\|pos <x>,<y>`, `transform <0\|90\|180\|270> [clockwise\|anticlockwise]` | 🟡 | Through Windows' display settings, as a temporary change: Windows does not save it, and swinewm restores the saved settings when it exits or crashes and with `--recover`. Only modes the driver lists; positions are relative to where the config puts the primary monitor (Windows keeps it at 0,0); `flipped-*` rotates without mirroring |
+| `output <identifier>` | ✅ | The monitor name shown in Windows' display settings (e.g. `"DELL U2720Q"`); also in `workspace … output` and `get_outputs` (`model`) |
+| `output … scale`, `enable`, `disable`, `dpms`, `power`, `adaptive_sync`, `subpixel`, …, `input`, `seat` | ⚪ | Windows settings apply (scaling is per monitor in Settings → Display) |
 | `bar { … }`, `bar <option>` | 🟡 | Enables the built-in Waybar-compatible bar; `position`, `mode invisible\|dock\|toggle` honoured, other swaybar options ignored (see below) |
 | `xwayland`, `swaybg_command`, `swaynag_command`, `max_render_time`, `allow_tearing`, `primary_selection`, `inhibit_idle`, `shortcuts_inhibitor`, `tiling_drag*`, `mouse_warping`, `popup_during_fullscreen`, `focus_on_window_activation`, `force_display_urgency_hint`, `new_window`, `new_float`, `floating_minimum_size`, `floating_maximum_size` | ⚪ | |
 | `urgent enable\|disable\|allow\|deny` | ✅ | Windows' own "urgency" is a flashing taskbar button (`FlashWindowEx`); it marks the view and its workspace urgent until focused |
 | Application-requested fullscreen | ✅ | A window that makes itself fullscreen (F11) becomes a sway fullscreen container and returns when it leaves fullscreen |
-| `mark`, `unmark`, `swap`, `sticky`, `rename`, `title_format`, `opacity`, `create_output` | ❌ | |
+| `mark [--add\|--replace] [--toggle] <id>`, `unmark [<id>]` | ✅ | Marks are not drawn yet (`show_marks`) |
+| `swap container with id\|con_id\|mark <arg>` | ✅ | `id` is the window handle |
+| `sticky enable\|disable\|toggle` | ✅ | Floating windows follow workspace switches |
+| `rename workspace [<old>\|number <n>] to <new>` | ✅ | |
+| `title_format`, `opacity`, `create_output` | ❌ | |
 | `explorer_taskbar autohide\|show\|toggle` | ✅ | swinewm extension: while running next to Explorer, keep Explorer's taskbar auto-hidden (restored on exit) |
+
+## Criteria
+
+sway's tokens and what they match here. Values are regular expressions
+(searched anywhere in the value, as with PCRE; anchor with `^…$`), or
+`__focused__` for the focused window's value.
+
+| Token | Matches | Example |
+| --- | --- | --- |
+| `app_id` | The executable's file name, **ignoring case** (Windows file names do) | `[app_id="^firefox"]` matches `firefox.exe` |
+| `instance` | The executable's name without `.exe`, ignoring case | `[instance="^Discord$"]` |
+| `class` | The window class (case-sensitive) | `[class="MozillaWindowClass"]` |
+| `title` | The window title (case-sensitive; `(?i)` for ignoring case) | `[title="(?i)picture-in-picture"]` |
+| `shell` | Always `native` | |
+| `window_type` | `normal` (tiled by default) or `dialog` (dialogs, fixed-size windows); other types never match | |
+| `id` | The window handle (HWND) as a decimal number | |
+| `pid`, `con_id`, `con_mark`, `workspace`, `floating`, `tiling`, `urgent=first\|latest…`, `all` | As in sway | |
+| `window_role`, `sandbox_engine`, `sandbox_app_id`, `sandbox_instance_id`, `tag` | Never match (Windows has none of these) | |
+
+Regular expressions: literals, `.`, `[…]` classes (with ranges, `\d \w \s`
+and `[:alpha:]`-style names), `^ $ \b`, `* + ? {n,m}` (and lazy `*?`),
+groups, `|`, `(?i)`. Not supported: look-around, back-references,
+Unicode properties (`\p{…}`).
 
 ## Bar (Waybar config)
 
@@ -139,11 +171,12 @@ There is no grim on Windows, so it is built in: `grim` is a command, and
 | `RUN_COMMAND` | ✅ |
 | `GET_WORKSPACES`, `GET_OUTPUTS`, `GET_TREE`, `GET_VERSION` | ✅ (subset of sway's fields) |
 | `GET_BINDING_MODES`, `GET_BINDING_STATE`, `GET_CONFIG` | ✅ |
-| `GET_MARKS`, `GET_BAR_CONFIG`, `GET_INPUTS`, `GET_SEATS` | Empty lists |
+| `GET_MARKS` | ✅ |
+| `GET_BAR_CONFIG`, `GET_INPUTS`, `GET_SEATS` | Empty lists |
 | `GET_NOTIFICATIONS` (1000), `GET_NOTIFICATION_HISTORY` (1001) | ✅ swinewm extensions |
 | `SEND_TICK` | 🟡 replies success, no event |
 | `SUBSCRIBE` and events | ❌ next on the list (needed by swinebar) |
 
 `get_tree` reports native window properties as `app_id` (the executable
 name, e.g. `notepad.exe`), `pid`, `window` (the HWND) and
-`window_properties.class`/`title`.
+`window_properties.class`/`title`, plus `marks` and `sticky`.

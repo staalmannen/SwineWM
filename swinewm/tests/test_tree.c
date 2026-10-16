@@ -309,6 +309,42 @@ static void test_resize(void) {
 	CHECK_INT(b->pending.box.width, 500);
 	CHECK(!run("resize grow height 10px"));
 	fake_teardown();
+
+	// An edge resizes only the neighbour on that side.
+	fake_setup();
+	a = fake_map_view("a");
+	b = fake_map_view("b");
+	struct swine_view *c = fake_map_view("c");
+	CHECK(run("focus left"));
+	CHECK(run("resize grow right 100px"));
+	CHECK_INT(b->pending.box.width, 433);
+	CHECK_INT(a->pending.box.width, 333);
+	CHECK_INT(c->pending.box.width, 234);
+	CHECK(run("resize shrink left 33px"));
+	CHECK_INT(a->pending.box.width, 366);
+	CHECK_INT(b->pending.box.width, 400);
+	// "or": the second amount is used where the first does not apply
+	CHECK(run("resize set width 50 ppt"));
+	CHECK_INT(b->pending.box.width, 500);
+	CHECK_INT(a->pending.box.width + c->pending.box.width, 500);
+	CHECK(!run("resize grow sideways 10px"));
+	CHECK(!run("resize set width 10 parsecs"));
+
+	// Floating windows: px, or ppt of the output; clamped to the minimum.
+	c->natural = (struct swine_box){0, 0, 400, 300};
+	CHECK(run("focus right"));
+	CHECK(run("floating enable"));
+	CHECK(run("resize grow width 10 px or 10 ppt"));
+	CHECK_INT(c->pending.box.width, 410);
+	CHECK(run("resize set 50 ppt 200"));
+	CHECK_INT(c->pending.box.width, 500);
+	CHECK_INT(c->pending.box.height, 200);
+	CHECK(run("resize shrink height 1000px"));
+	CHECK_INT(c->pending.box.height, 50);
+	CHECK(run("resize set width 600 height 400"));
+	CHECK_INT(c->pending.box.width, 600);
+	CHECK_INT(c->pending.box.height, 400);
+	fake_teardown();
 }
 
 static void test_urgency(void) {
@@ -333,7 +369,7 @@ static void test_urgency(void) {
 	CHECK(!ws1->urgent);
 	CHECK(run("workspace 2"));
 	view_set_urgent(a, true);
-	CHECK(run("[app_id=x] nop") == false);   // criteria still unsupported
+	CHECK(!run("[app_id=nothing_matches] nop"));   // no matching node
 	CHECK(run("urgent disable") && !b->urgent);
 	CHECK(run("urgent deny"));
 	view_set_urgent(a, false);

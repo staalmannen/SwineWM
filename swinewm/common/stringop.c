@@ -114,6 +114,7 @@ char **split_args(const char *start, int *argc) {
 	bool in_token = false;
 	bool in_string = false;
 	bool in_char = false;
+	bool in_brackets = false;   // criteria: "[app_id=x title=y]" is one token
 	bool escaped = false;
 	const char *end = start;
 	if (start) {
@@ -126,10 +127,16 @@ char **split_args(const char *start, int *argc) {
 				in_string = !in_string;
 			} else if (*end == '\'' && !in_string && !escaped) {
 				in_char = !in_char;
+			} else if (*end == '[' && !in_string && !in_char && !in_brackets &&
+					!escaped) {
+				in_brackets = true;
+			} else if (*end == ']' && !in_string && !in_char && in_brackets &&
+					!escaped) {
+				in_brackets = false;
 			} else if (*end == '\\') {
 				escaped = !escaped;
-			} else if (*end == '\0' || (!in_string && !in_char && !escaped
-					&& strchr(" \t", *end))) {
+			} else if (*end == '\0' || (!in_string && !in_char && !in_brackets
+					&& !escaped && strchr(" \t", *end))) {
 				if (end != start) {
 					char *token = swine_strndup(start, (size_t)(end - start));
 					argv[(*argc)++] = token;
@@ -250,4 +257,73 @@ bool parse_boolean(const char *boolean, bool current) {
 		return !current;
 	}
 	return false;
+}
+
+static bool class_matches(const char **pattern, char c) {
+	const char *p = *pattern + 1;   // after '['
+	bool negate = *p == '!' || *p == '^';
+	if (negate) {
+		++p;
+	}
+	bool matched = false;
+	int lc = tolower((unsigned char)c);
+	// A ']' right after '[' (or '[!') is a literal.
+	bool first = true;
+	for (; *p && (first || *p != ']'); ++p, first = false) {
+		if (p[1] == '-' && p[2] && p[2] != ']') {
+			int lo = tolower((unsigned char)p[0]);
+			int hi = tolower((unsigned char)p[2]);
+			if (lc >= lo && lc <= hi) {
+				matched = true;
+			}
+			p += 2;
+		} else if (tolower((unsigned char)*p) == lc) {
+			matched = true;
+		}
+	}
+	if (*p != ']') {
+		return false;   // unterminated: never matches
+	}
+	*pattern = p + 1;
+	return matched != negate;
+}
+
+bool glob_match(const char *pattern, const char *name) {
+	const char *star = NULL, *star_name = NULL;
+	while (*name) {
+		if (*pattern == '*') {
+			star = pattern++;
+			star_name = name;
+			continue;
+		}
+		const char *next = pattern;
+		bool ok;
+		if (*pattern == '?') {
+			ok = true;
+			next = pattern + 1;
+		} else if (*pattern == '[') {
+			ok = class_matches(&next, *name);
+		} else {
+			ok = *pattern && tolower((unsigned char)*pattern) ==
+				tolower((unsigned char)*name);
+			next = pattern + 1;
+		}
+		if (ok) {
+			pattern = next;
+			++name;
+		} else if (star) {
+			pattern = star + 1;
+			name = ++star_name;
+		} else {
+			return false;
+		}
+	}
+	while (*pattern == '*') {
+		++pattern;
+	}
+	return *pattern == '\0';
+}
+
+bool has_glob_chars(const char *str) {
+	return strpbrk(str, "*?[") != NULL;
 }

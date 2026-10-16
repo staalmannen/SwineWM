@@ -1,0 +1,5 @@
+set $from_main yes
+include config.d/*
+include config.d/*.conf
+include missing-file
+include "config.d/20 gaps.conf"

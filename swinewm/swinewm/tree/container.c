@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "log.h"
+#include "stringop.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/output.h"
@@ -14,6 +15,7 @@ struct swine_container *container_create(struct swine_view *view) {
 	con->view = view;
 	con->layout = L_NONE;
 	con->prev_split_layout = L_NONE;
+	con->marks = create_list();
 	if (view) {
 		view->container = con;
 	} else {
@@ -38,6 +40,7 @@ void container_destroy(struct swine_container *con) {
 		con->view->container = NULL;
 	}
 	list_free(con->children);
+	list_free_items_and_destroy(con->marks);
 	free(con);
 }
 
@@ -115,6 +118,14 @@ bool container_is_floating_or_child(struct swine_container *con) {
 
 bool container_is_scratchpad_hidden(struct swine_container *con) {
 	return con->scratchpad && !con->workspace;
+}
+
+bool container_is_sticky(struct swine_container *con) {
+	return con->is_sticky && container_is_floating(con);
+}
+
+bool container_is_sticky_or_child(struct swine_container *con) {
+	return container_is_sticky(container_toplevel_ancestor(con));
 }
 
 void container_detach(struct swine_container *child) {
@@ -416,6 +427,232 @@ void container_set_fullscreen(struct swine_container *con,
 		ws->fullscreen = con;
 	}
 	con->fullscreen_mode = mode;
+}
+
+static bool find_by_mark_iterator(struct swine_container *con, void *data) {
+	return container_has_mark(con, data);
+}
+
+struct swine_container *container_find_mark(const char *mark) {
+	return root_find_container(find_by_mark_iterator, (void *)mark);
+}
+
+bool container_find_and_unmark(const char *mark) {
+	struct swine_container *con = container_find_mark(mark);
+	if (!con) {
+		return false;
+	}
+	for (int i = 0; i < con->marks->length; ++i) {
+		char *con_mark = con->marks->items[i];
+		if (strcmp(con_mark, mark) == 0) {
+			free(con_mark);
+			list_del(con->marks, i);
+			return true;
+		}
+	}
+	return false;
+}
+
+void container_clear_marks(struct swine_container *con) {
+	for (int i = 0; i < con->marks->length; ++i) {
+		free(con->marks->items[i]);
+	}
+	con->marks->length = 0;
+}
+
+bool container_has_mark(struct swine_container *con, const char *mark) {
+	for (int i = 0; i < con->marks->length; ++i) {
+		if (strcmp(con->marks->items[i], mark) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void container_add_mark(struct swine_container *con, const char *mark) {
+	list_add(con->marks, swine_strdup(mark));
+}
+
+// Ported from sway/tree/container.c.
+static void swap_places(struct swine_container *con1,
+		struct swine_container *con2) {
+	struct swine_box box1 = con1->box, floating1 = con1->floating_box;
+	double width_fraction1 = con1->width_fraction;
+	double height_fraction1 = con1->height_fraction;
+	struct swine_container *parent1 = con1->parent;
+	struct swine_workspace *ws1 = con1->workspace;
+	bool floating1_now = container_is_floating(con1);
+
+	con1->box = con2->box;
+	con1->floating_box = con2->floating_box;
+	con1->width_fraction = con2->width_fraction;
+	con1->height_fraction = con2->height_fraction;
+	con2->box = box1;
+	con2->floating_box = floating1;
+	con2->width_fraction = width_fraction1;
+	con2->height_fraction = height_fraction1;
+
+	int index1 = container_sibling_index(con1);
+	int index2 = container_sibling_index(con2);
+	struct swine_container *parent2 = con2->parent;
+	struct swine_workspace *ws2 = con2->workspace;
+	bool floating2_now = container_is_floating(con2);
+	container_detach(con1);
+	container_detach(con2);
+	// With both detached, insert the one with the lower index first in a
+	// shared list so the other index stays valid.
+	bool same_list = parent1 == parent2 && ws1 == ws2 &&
+		floating1_now == floating2_now;
+	struct swine_container *first = con1, *second = con2;
+	struct swine_container *first_parent = parent2, *second_parent = parent1;
+	struct swine_workspace *first_ws = ws2, *second_ws = ws1;
+	bool first_floating = floating2_now, second_floating = floating1_now;
+	int first_index = index2, second_index = index1;
+	if (same_list && index1 < index2) {
+		first = con2;
+		second = con1;
+		first_parent = parent1;
+		second_parent = parent2;
+		first_ws = ws1;
+		second_ws = ws2;
+		first_floating = floating1_now;
+		second_floating = floating2_now;
+		first_index = index1;
+		second_index = index2;
+	}
+	struct swine_container *cons[2] = {first, second};
+	struct swine_container *parents[2] = {first_parent, second_parent};
+	struct swine_workspace *workspaces[2] = {first_ws, second_ws};
+	bool floating[2] = {first_floating, second_floating};
+	int indexes[2] = {first_index, second_index};
+	for (int i = 0; i < 2; ++i) {
+		if (parents[i]) {
+			container_insert_child(parents[i], cons[i], indexes[i]);
+		} else if (floating[i]) {
+			workspace_add_floating(workspaces[i], cons[i]);
+		} else {
+			workspace_insert_tiling_direct(workspaces[i], cons[i], indexes[i]);
+		}
+	}
+}
+
+static void swap_focus(struct swine_container *con1,
+		struct swine_container *con2, struct swine_container *focus) {
+	if (focus == con1 || focus == con2) {
+		struct swine_workspace *ws1 = con1->workspace;
+		struct swine_workspace *ws2 = con2->workspace;
+		enum swine_container_layout layout1 = container_parent_layout(con1);
+		enum swine_container_layout layout2 = container_parent_layout(con2);
+		if (focus == con1 && (layout2 == L_TABBED || layout2 == L_STACKED)) {
+			if (workspace_is_visible(ws2)) {
+				seat_set_focus(&con2->node);
+			}
+			seat_set_focus_container(ws1 != ws2 ? con2 : con1);
+		} else if (focus == con2 && (layout1 == L_TABBED
+					|| layout1 == L_STACKED)) {
+			if (workspace_is_visible(ws1)) {
+				seat_set_focus(&con1->node);
+			}
+			seat_set_focus_container(ws1 != ws2 ? con1 : con2);
+		} else if (ws1 != ws2) {
+			seat_set_focus_container(focus == con1 ? con2 : con1);
+		} else {
+			seat_set_focus_container(focus);
+		}
+	} else if (focus) {
+		seat_set_focus_container(focus);
+	}
+}
+
+void container_swap(struct swine_container *con1,
+		struct swine_container *con2) {
+	if (!swine_assert(con1 && con2, "Cannot swap with nothing")) {
+		return;
+	}
+	if (!swine_assert(!container_has_ancestor(con1, con2)
+				&& !container_has_ancestor(con2, con1),
+				"Cannot swap ancestor and descendant")) {
+		return;
+	}
+	swine_log(SWINE_DEBUG, "Swapping containers %zu and %zu",
+		con1->node.id, con2->node.id);
+
+	bool scratch1 = con1->scratchpad;
+	bool hidden1 = container_is_scratchpad_hidden(con1);
+	bool scratch2 = con2->scratchpad;
+	bool hidden2 = container_is_scratchpad_hidden(con2);
+	if (scratch1) {
+		if (hidden1) {
+			root_scratchpad_show(con1);
+		}
+		root_scratchpad_remove_container(con1);
+	}
+	if (scratch2) {
+		if (hidden2) {
+			root_scratchpad_show(con2);
+		}
+		root_scratchpad_remove_container(con2);
+	}
+
+	enum swine_fullscreen_mode fs1 = con1->fullscreen_mode;
+	if (fs1) {
+		container_set_fullscreen(con1, FULLSCREEN_NONE);
+	}
+	enum swine_fullscreen_mode fs2 = con2->fullscreen_mode;
+	if (fs2) {
+		container_set_fullscreen(con2, FULLSCREEN_NONE);
+	}
+
+	struct swine_container *focus = seat_get_focused_container();
+	struct swine_workspace *vis1 =
+		output_get_active_workspace(con1->workspace->output);
+	struct swine_workspace *vis2 =
+		output_get_active_workspace(con2->workspace->output);
+	if (!swine_assert(vis1 && vis2, "con1 or con2 are on an output without "
+				"a workspace. This should not happen")) {
+		return;
+	}
+
+	char *stored_prev_name = NULL;
+	if (seat->prev_workspace_name) {
+		stored_prev_name = swine_strdup(seat->prev_workspace_name);
+	}
+
+	swap_places(con1, con2);
+
+	if (!workspace_is_visible(vis1)) {
+		seat_set_focus(seat_get_focus_inactive(&vis1->node));
+	}
+	if (!workspace_is_visible(vis2)) {
+		seat_set_focus(seat_get_focus_inactive(&vis2->node));
+	}
+
+	swap_focus(con1, con2, focus);
+
+	if (stored_prev_name) {
+		free(seat->prev_workspace_name);
+		seat->prev_workspace_name = stored_prev_name;
+	}
+
+	if (scratch1) {
+		root_scratchpad_add_container(con2);
+		if (!hidden1) {
+			root_scratchpad_show(con2);
+		}
+	}
+	if (scratch2) {
+		root_scratchpad_add_container(con1);
+		if (!hidden2) {
+			root_scratchpad_show(con1);
+		}
+	}
+
+	if (fs1) {
+		container_set_fullscreen(con2, fs1);
+	}
+	if (fs2) {
+		container_set_fullscreen(con1, fs2);
+	}
 }
 
 const char *container_layout_to_str(enum swine_container_layout layout) {

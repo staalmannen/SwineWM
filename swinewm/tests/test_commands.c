@@ -80,14 +80,14 @@ static void test_every_command_is_found(void) {
 		"focus_follows_mouse", "focus_on_window_activation", "focus_wrapping",
 		"font", "for_window", "force_display_urgency_hint", "fullscreen",
 		"gaps", "grim", "hide_edge_borders", "include", "inhibit_idle", "input",
-		"kill", "layout", "makoctl", "max_render_time", "mode", "mouse_warping", "move",
+		"kill", "layout", "makoctl", "mark", "max_render_time", "mode", "mouse_warping", "move",
 		"new_float", "new_window", "no_focus", "nop", "notify-send", "output",
-		"popup_during_fullscreen", "primary_selection", "reload", "resize", "restart",
+		"popup_during_fullscreen", "primary_selection", "reload", "rename", "resize", "restart",
 		"scratchpad", "seat", "set", "shortcuts_inhibitor", "show_marks",
-		"smart_borders", "smart_gaps", "split", "splith", "splitt", "splitv",
+		"smart_borders", "smart_gaps", "split", "splith", "splitt", "splitv", "sticky", "swap",
 		"swaybg_command", "swaynag_command", "tiling_drag",
 		"tiling_drag_threshold", "title_align", "titlebar_border_thickness",
-		"titlebar_padding", "unbindsym", "urgent", "workspace",
+		"titlebar_padding", "unbindsym", "unmark", "urgent", "workspace",
 		"workspace_auto_back_and_forth", "workspace_layout", "xwayland",
 	};
 	fake_setup();

@@ -130,10 +130,9 @@ struct cmd_results *cmd_include(int argc, char **argv) {
 	if ((error = checkarg(argc, "include", EXPECTED_AT_LEAST, 1))) {
 		return error;
 	}
-	char *path = join_args(argv, argc);
-	bool ok = load_include_config(path);
-	error = ok ? cmd_results_new(CMD_SUCCESS, NULL) :
-		cmd_results_new(CMD_FAILURE, "Unable to include '%s'", path);
-	free(path);
-	return error;
+	char *files = join_args(argv, argc);
+	// We don't care if the included config(s) fails to load.
+	load_include_configs(files);
+	free(files);
+	return cmd_results_new(CMD_SUCCESS, NULL);
 }

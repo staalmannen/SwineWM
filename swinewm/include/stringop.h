@@ -35,5 +35,9 @@ char *format_str(const char *fmt, ...);
 
 // Parses yes/no/true/false/enable/disable/on/off/toggle.
 bool parse_boolean(const char *boolean, bool current);
+// Shell-style wildcard match (*, ?, [abc], [a-z], [!x]), ignoring ASCII
+// case as Windows file names do.
+bool glob_match(const char *pattern, const char *name);
+bool has_glob_chars(const char *str);
 
 #endif

@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +8,7 @@
 #include "swinewm/bar/bar.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
+#include "swinewm/criteria.h"
 #include "swinewm/notify.h"
 #include "swinewm/platform.h"
 #include "swinewm/tree/root.h"
@@ -45,6 +47,10 @@ struct swine_config *config_create(void) {
 	c->modes = create_list();
 	c->cmd_queue = create_list();
 	c->output_configs = create_list();
+	c->criteria = create_list();
+	c->workspace_configs = create_list();
+	c->config_chain = create_list();
+	c->errors = create_list();
 	c->current_mode = mode_create("default");
 	list_add(c->modes, c->current_mode);
 	c->default_orientation = L_NONE;
@@ -71,14 +77,19 @@ void free_config(struct swine_config *c) {
 	list_free(c->modes);
 	list_free_items_and_destroy(c->cmd_queue);
 	for (int i = 0; i < c->output_configs->length; ++i) {
-		struct output_config *oc = c->output_configs->items[i];
-		free(oc->name);
-		free(oc->background);
-		free(oc->background_mode);
-		free(oc->background_fallback);
-		free(oc);
+		free_output_config(c->output_configs->items[i]);
 	}
 	list_free(c->output_configs);
+	for (int i = 0; i < c->criteria->length; ++i) {
+		criteria_destroy(c->criteria->items[i]);
+	}
+	list_free(c->criteria);
+	for (int i = 0; i < c->workspace_configs->length; ++i) {
+		free_workspace_config(c->workspace_configs->items[i]);
+	}
+	list_free(c->workspace_configs);
+	list_free_items_and_destroy(c->config_chain);
+	list_free_items_and_destroy(c->errors);
 	free(c->current_config_path);
 	free(c->current_config);
 	free(c);
@@ -238,6 +249,8 @@ bool read_config_text(const char *text, const char *name) {
 		case CMD_INVALID:
 			swine_log(SWINE_ERROR, "Error on line %d '%s': %s (%s)",
 				line_number, line, res->error, name);
+			list_add(config->errors, format_str("Error on line %d (%s) '%s': %s",
+				line_number, name, line, res->error ? res->error : ""));
 			success = false;
 			break;
 		case CMD_DEFER:
@@ -260,6 +273,8 @@ bool read_config_text(const char *text, const char *name) {
 			if (!block) {
 				swine_log(SWINE_ERROR, "Unmatched '}' on line %d (%s)",
 					line_number, name);
+				list_add(config->errors, format_str(
+					"Error on line %d (%s): unmatched '}'", line_number, name));
 				success = false;
 				break;
 			}
@@ -276,6 +291,8 @@ bool read_config_text(const char *text, const char *name) {
 	if (stack->length) {
 		swine_log(SWINE_ERROR, "Unclosed block '%s' in %s",
 			(char *)stack->items[0], name);
+		list_add(config->errors, format_str("Unclosed block '%s' in %s",
+			(char *)stack->items[0], name));
 		success = false;
 	}
 	list_free_items_and_destroy(stack);
@@ -286,18 +303,131 @@ bool read_config_text(const char *text, const char *name) {
 	return success;
 }
 
-bool load_include_config(const char *path) {
-	char *expanded = platform_expand_path(path);
-	char *text = read_file(expanded);
-	if (!text) {
-		swine_log(SWINE_ERROR, "Unable to read included config %s", expanded);
-		free(expanded);
-		return false;
+// Ported from sway/config.c (load_include_config), minus realpath: paths
+// are compared ignoring case and the kind of slash.
+static bool same_path(const char *a, const char *b) {
+	for (;; ++a, ++b) {
+		char ca = *a == '\\' ? '/' : (char)tolower((unsigned char)*a);
+		char cb = *b == '\\' ? '/' : (char)tolower((unsigned char)*b);
+		if (ca != cb) {
+			return false;
+		}
+		if (!ca) {
+			return true;
+		}
 	}
-	bool ok = read_config_text(text, expanded);
+}
+
+// Removes "." and ".." segments (sway uses realpath for this), keeping the
+// separators as they are.
+static char *normalize_path(const char *path) {
+	size_t len = strlen(path);
+	char *out = malloc(len + 1);
+	size_t n = 0;
+	size_t root = 0;   // never remove "C:" or a leading separator
+	if (len >= 2 && path[1] == ':') {
+		root = 2;
+	}
+	while (root < len && (path[root] == '/' || path[root] == '\\')) {
+		++root;
+	}
+	memcpy(out, path, root);
+	n = root;
+	const char *p = path + root;
+	while (*p) {
+		const char *end = p + strcspn(p, "/\\");
+		size_t seg = (size_t)(end - p);
+		if (seg == 1 && p[0] == '.') {
+			// skip
+		} else if (seg == 2 && p[0] == '.' && p[1] == '.' && n > root) {
+			// drop the previous segment (and its separator)
+			if (out[n - 1] == '/' || out[n - 1] == '\\') {
+				--n;
+			}
+			while (n > root && out[n - 1] != '/' && out[n - 1] != '\\') {
+				--n;
+			}
+		} else if (seg > 0) {
+			memcpy(out + n, p, seg);
+			n += seg;
+			if (*end) {
+				out[n++] = *end;
+			}
+		}
+		p = *end ? end + 1 : end;
+	}
+	// "a/b/" after removing a trailing "." or ".."
+	if (n > root && (out[n - 1] == '/' || out[n - 1] == '\\')) {
+		--n;
+	}
+	out[n] = '\0';
+	return out;
+}
+
+static bool load_include_config(const char *raw_path) {
+	char *path = normalize_path(raw_path);
+	bool ok = false;
+	for (int j = 0; j < config->config_chain->length; ++j) {
+		if (same_path(path, config->config_chain->items[j])) {
+			swine_log(SWINE_DEBUG,
+				"%s already included once, won't be included again.", path);
+			goto out;
+		}
+	}
+	char *text = read_file(path);
+	if (!text) {
+		swine_log(SWINE_DEBUG, "%s not found.", path);
+		goto out;
+	}
+	swine_log(SWINE_INFO, "Including %s", path);
+	list_add(config->config_chain, swine_strdup(path));
+	ok = read_config_text(text, config->config_chain->items[
+		config->config_chain->length - 1]);
 	free(text);
-	free(expanded);
+out:
+	free(path);
 	return ok;
+}
+
+static int cmp_strings(const void *a, const void *b) {
+	return strcmp(*(char *const *)a, *(char *const *)b);
+}
+
+void load_include_configs(const char *path) {
+	char *resolved = config_resolve_path(path);
+	char *slash = strrchr(resolved, '/');
+	char *backslash = strrchr(resolved, '\\');
+	if (backslash > slash) {
+		slash = backslash;
+	}
+	const char *file = slash ? slash + 1 : resolved;
+	if (!has_glob_chars(file)) {
+		load_include_config(resolved);
+		free(resolved);
+		return;
+	}
+	// Like sway's wordexp(): the matches in sorted order. Wildcards are
+	// supported in the file name, not in directory names.
+	char *dir = slash ? swine_strndup(resolved, (size_t)(slash - resolved)) :
+		swine_strdup(".");
+	char sep = slash ? *slash : '/';
+	list_t *names = platform_list_dir(dir);
+	if (names) {
+		qsort(names->items, (size_t)names->length, sizeof(void *),
+			cmp_strings);
+		for (int i = 0; i < names->length; ++i) {
+			const char *name = names->items[i];
+			// As in a shell, "*" does not match hidden files.
+			if (glob_match(file, name) && (name[0] != '.' || file[0] == '.')) {
+				char *full = format_str("%s%c%s", dir, sep, name);
+				load_include_config(full);
+				free(full);
+			}
+		}
+		list_free_items_and_destroy(names);
+	}
+	free(dir);
+	free(resolved);
 }
 
 static void apply_config_to_workspace(struct swine_workspace *ws, void *data) {
@@ -310,6 +440,10 @@ bool load_main_config(const char *path, bool is_active, bool validating) {
 	char *text = path ? read_file(path) : NULL;
 	if (path && !text) {
 		swine_log(SWINE_ERROR, "Unable to read config file %s", path);
+		if (config) {
+			list_add(config->errors, format_str(
+				"Unable to read config file %s", path));
+		}
 		return false;
 	}
 	if (!path) {
@@ -326,6 +460,9 @@ bool load_main_config(const char *path, bool is_active, bool validating) {
 	config->current_config_path = swine_strdup(path);
 	config->current_config = text;
 	config->reading = true;
+	if (path) {
+		list_add(config->config_chain, normalize_path(path));
+	}
 
 	bool success = text ? read_config_text(text, path) : true;
 
@@ -355,6 +492,8 @@ void config_run_deferred(void) {
 			if (res->status != CMD_SUCCESS) {
 				swine_log(SWINE_ERROR, "Error on line '%s': %s", line,
 					res->error ? res->error : "");
+				list_add(config->errors, format_str("Error on line '%s': %s",
+					line, res->error ? res->error : ""));
 			}
 		}
 		free_cmd_results_list(res_list);
@@ -401,7 +540,15 @@ struct output_config *config_find_output_config(const char *name) {
 
 struct output_config *output_config_for_name(const char *output_name) {
 	struct output_config *oc = config_find_output_config(output_name);
-	return oc ? oc : config_find_output_config("*");
+	return oc && oc->background ? oc : config_find_output_config("*");
+}
+
+void free_output_config(struct output_config *oc) {
+	free(oc->name);
+	free(oc->background);
+	free(oc->background_mode);
+	free(oc->background_fallback);
+	free(oc);
 }
 
 char *do_var_replacement(char *str) {

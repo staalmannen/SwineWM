@@ -100,6 +100,10 @@ char *ipc_json_get_outputs(void) {
 		json_key(&w, "make");
 		json_string(&w, "Unknown");
 		json_key(&w, "model");
+		json_string(&w, output->identifier ? output->identifier : "Unknown");
+		json_key(&w, "serial");
+		json_string(&w, "Unknown");
+		json_key(&w, "description");
 		json_string(&w, output->description ? output->description : "Unknown");
 		json_key(&w, "active");
 		json_bool(&w, true);
@@ -110,6 +114,20 @@ char *ipc_json_get_outputs(void) {
 			seat_get_focused_workspace()->output == output);
 		json_key(&w, "scale");
 		json_double(&w, output->scale);
+		json_key(&w, "transform");
+		static const char *transforms[] = {"normal", "90", "180", "270"};
+		json_string(&w, transforms[output->transform & 3]);
+		json_key(&w, "current_mode");
+		json_begin_object(&w);
+		json_key(&w, "width");
+		json_int(&w, output->transform & 1 ?
+			output->box.height : output->box.width);
+		json_key(&w, "height");
+		json_int(&w, output->transform & 1 ?
+			output->box.width : output->box.height);
+		json_key(&w, "refresh");
+		json_int(&w, output->refresh_mhz);
+		json_end_object(&w);
 		json_key(&w, "current_workspace");
 		json_string(&w, ws ? ws->name : NULL);
 		write_rect(&w, "rect", &output->box);
@@ -164,6 +182,14 @@ static void write_container(struct json_writer *w, struct swine_container *con) 
 	json_double(w, container_parent_layout(con) == L_VERT ?
 		con->height_fraction : con->width_fraction);
 	write_rect(w, "rect", &con->box);
+	json_key(w, "marks");
+	json_begin_array(w);
+	for (int i = 0; i < con->marks->length; ++i) {
+		json_string(w, con->marks->items[i]);
+	}
+	json_end_array(w);
+	json_key(w, "sticky");
+	json_bool(w, con->is_sticky);
 	if (con->view) {
 		json_key(w, "visible");
 		json_bool(w, con->view->pending.visible);
@@ -295,5 +321,21 @@ char *ipc_json_get_config(void) {
 	json_key(&w, "config");
 	json_string(&w, config->current_config ? config->current_config : "");
 	json_end_object(&w);
+	return json_finish(&w);
+}
+
+static void collect_marks(struct swine_container *con, void *data) {
+	struct json_writer *w = data;
+	for (int i = 0; i < con->marks->length; ++i) {
+		json_string(w, con->marks->items[i]);
+	}
+}
+
+char *ipc_json_get_marks(void) {
+	struct json_writer w;
+	json_init(&w);
+	json_begin_array(&w);
+	root_for_each_container(collect_marks, &w);
+	json_end_array(&w);
 	return json_finish(&w);
 }

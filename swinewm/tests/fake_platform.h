@@ -2,6 +2,7 @@
 #define _SWINE_FAKE_PLATFORM_H
 
 #include <stdbool.h>
+#include "swinewm/platform.h"
 #include "swinewm/tree/node.h"
 #include "swinewm/tree/output.h"
 #include "swinewm/tree/view.h"
@@ -18,6 +19,9 @@ struct fake_platform_state {
 	struct swine_view *last_activated;
 	struct swine_view *last_closed;
 	char last_spawn[256];
+	int output_configure_calls;
+	char last_configured_output[32];
+	struct output_display_config last_output_config;
 	int screenshot_calls;
 	struct swine_box last_screenshot;
 	char last_screenshot_path[256];

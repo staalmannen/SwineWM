@@ -2,6 +2,7 @@
 #define _SWINE_WORKSPACE_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include "list.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/node.h"
@@ -21,6 +22,9 @@ struct swine_workspace {
 	struct side_gaps gaps_outer;
 	struct swine_box box;     // tiling area after outer gaps (set by arrange)
 	bool urgent;
+	// Outputs this workspace prefers, best first (names or identifiers);
+	// it returns to the first one that is connected.
+	list_t *output_priority;  // char *
 };
 
 struct swine_workspace *workspace_create(struct swine_output *output,
@@ -32,7 +36,22 @@ void workspace_consider_destroy(struct swine_workspace *ws);
 struct swine_workspace *workspace_by_name(const char *name);
 struct swine_workspace *workspace_by_number(const char *name);
 // Lowest unused workspace number, as a string. Caller frees.
-char *workspace_next_name(void);
+// A name for a new workspace on output: the first free workspace bound to a
+// key (as "workspace <name>") that may go there, else one assigned to the
+// output, else the lowest free number.
+char *workspace_next_name(struct swine_output *output);
+struct workspace_config *workspace_find_config(const char *ws_name);
+// The assigned output for a new workspace, else the focused one.
+struct swine_output *workspace_get_initial_output(const char *name);
+void workspace_output_raise_priority(struct swine_workspace *ws,
+		struct swine_output *old_output, struct swine_output *output);
+void workspace_output_add_priority(struct swine_workspace *ws,
+		struct swine_output *output);
+struct swine_output *workspace_output_get_highest_available(
+		struct swine_workspace *ws);
+void workspace_move_to_output(struct swine_workspace *ws,
+		struct swine_output *output);
+size_t workspace_num_sticky_containers(struct swine_workspace *ws);
 int workspace_number(const char *name); // -1 if the name is not numbered
 
 struct swine_workspace *workspace_output_next(struct swine_workspace *current);

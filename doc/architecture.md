@@ -363,6 +363,8 @@ and what remains (tray icons, AppBar registration).
   its own frames, so these will be small layered windows owned by swinewm.
   Until then a tabbed/stacked container just shows its active child.
 - Mouse: focus follows mouse, `floating_modifier` drag/resize, tiling drag.
-- Criteria, `for_window`, `assign`, marks, `swap`, `sticky`.
+- Marks, `swap`, `sticky` (criteria, `for_window` and `assign` are done:
+  `swinewm/criteria.c`, ported from sway, with `common/regex.c` instead of
+  PCRE2).
 - `output` configuration (resolution/position/scale) and workspace-to-output
   assignment.

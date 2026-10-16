@@ -2,6 +2,7 @@
 #include "json.h"
 #include "list.h"
 #include "log.h"
+#include "regex.h"
 #include "stringop.h"
 #include "swinewm/input/keyboard.h"
 #include "test.h"
@@ -72,6 +73,72 @@ static void test_strings(void) {
 	list_free_items_and_destroy(parts);
 }
 
+static bool rx(const char *pattern, const char *text) {
+	char *error = NULL;
+	struct swine_regex *re = swine_regex_compile(pattern, false, &error);
+	if (!re) {
+		free(error);
+		return false;
+	}
+	bool result = swine_regex_search(re, text);
+	swine_regex_free(re);
+	return result;
+}
+
+static bool rx_invalid(const char *pattern) {
+	char *error = NULL;
+	struct swine_regex *re = swine_regex_compile(pattern, false, &error);
+	swine_regex_free(re);
+	bool invalid = re == NULL && error != NULL;
+	free(error);
+	return invalid;
+}
+
+static void test_regex(void) {
+	// Unanchored search, as pcre2_match
+	CHECK(rx("fox", "firefox.exe"));
+	CHECK(!rx("Fox", "firefox.exe"));
+	CHECK(rx("(?i)FIREFOX", "firefox.exe"));
+	CHECK(rx("^firefox\\.exe$", "firefox.exe"));
+	CHECK(!rx("^fire$", "firefox"));
+	// Typical sway criteria
+	CHECK(rx("^(Firefox|Chromium)$", "Chromium"));
+	CHECK(!rx("^(Firefox|Chromium)$", "Chromium-browser"));
+	CHECK(rx("Picture-in-Picture", "Picture-in-Picture"));
+	CHECK(rx(".*- Mozilla Firefox$", "GitHub - Mozilla Firefox"));
+	CHECK(rx("^Steam$|^Friends", "Friends List"));
+	CHECK(rx("(?i)^pavucontrol", "Pavucontrol"));
+	CHECK(rx("^(?!x)", "a") == false);   // lookahead: unsupported, invalid
+	// Classes and escapes
+	CHECK(rx("^[A-Z][a-z]+ [0-9]{2,3}$", "Window 42"));
+	CHECK(!rx("^[A-Z][a-z]+ [0-9]{2,3}$", "Window 4"));
+	CHECK(rx("^\\d+%$", "75%"));
+	CHECK(rx("\\bWord\\b", "a Word here"));
+	CHECK(!rx("\\bWord\\b", "Wordy"));
+	CHECK(rx("^[^.]+$", "noext"));
+	CHECK(!rx("^[^.]+$", "has.ext"));
+	CHECK(rx("[[:digit:]]", "abc1"));
+	CHECK(rx("^a.c$", "a\xC3\xA4" "c"));            // "." is one code point
+	CHECK(rx("(?i)\xC3\xA4", "\xC3\x84"));     // ä matches Ä
+	CHECK(rx("a{,2}", "a{,2}"));                // not a quantifier: literal
+	// Quantifiers and backtracking
+	CHECK(rx("^a*a$", "aaaa"));
+	CHECK(rx("^(ab)+$", "ababab"));
+	CHECK(!rx("^(ab)+$", "ababa"));
+	CHECK(rx("^a.*?b$", "axxbxxb"));
+	CHECK(rx("^(a*)*$", "aaa"));                // empty iterations end
+	CHECK(rx("^(|a)b", "b"));
+	CHECK(!rx("^(a+)+$", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"));
+	// Errors
+	CHECK(rx_invalid("(abc"));
+	CHECK(rx_invalid("abc)"));
+	CHECK(rx_invalid("[abc"));
+	CHECK(rx_invalid("*a"));
+	CHECK(rx_invalid("a\\1"));
+	CHECK(rx_invalid("\\q"));
+	CHECK(rx_invalid("[z-a]"));
+}
+
 static void test_log_levels(void) {
 	enum swine_log_importance level = SWINE_ERROR;
 	CHECK(swine_log_parse_importance("debug", &level));
@@ -128,5 +195,6 @@ void test_common_all(void) {
 	test_strings();
 	test_json();
 	test_log_levels();
+	test_regex();
 	test_keys();
 }
