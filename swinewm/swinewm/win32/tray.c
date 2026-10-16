@@ -327,6 +327,101 @@ static LRESULT forward(UINT msg, WPARAM wparam, LPARAM lparam) {
 	return 0;
 }
 
+// AppBar messages: SHAppBarMessage sends WM_COPYDATA (dwData 0) with this
+// header; the APPBARDATA itself is in memory shared with the caller
+// (SHAllocShared), where answers such as ABM_GETTASKBARPOS are written.
+// Layouts as in ManagedShell's APPBARMSGDATAV3/APPBARDATAV2.
+struct appbar_data {
+	DWORD cbSize;
+	DWORD hWnd;
+	UINT uCallbackMessage;
+	UINT uEdge;
+	RECT rc;
+	INT64 lParam;
+};
+
+struct appbar_msg {
+	struct appbar_data abd;
+	DWORD dwMessage;
+	DWORD padding1;
+	INT64 hSharedMemory;
+	DWORD dwSourceProcessId;
+	DWORD padding2;
+};
+
+_Static_assert(sizeof(struct appbar_data) == 40, "APPBARDATAV2 layout");
+_Static_assert(sizeof(struct appbar_msg) == 64, "APPBARMSGDATAV3 layout");
+
+// shlwapi exports these by ordinal only.
+typedef void *(WINAPI *lock_shared_fn)(HANDLE, DWORD);
+typedef BOOL (WINAPI *unlock_shared_fn)(void *);
+
+// Where the "taskbar" is: swinewm's bar on the primary monitor, or the top
+// edge of that monitor when there is no bar.
+static UINT taskbar_pos(RECT *rc) {
+	POINT origin = {0, 0};
+	HMONITOR monitor = MonitorFromPoint(origin, MONITOR_DEFAULTTOPRIMARY);
+	MONITORINFO mi = { .cbSize = sizeof(mi) };
+	GetMonitorInfoW(monitor, &mi);
+	if (IsRectEmpty(&host_rect)) {
+		*rc = mi.rcMonitor;
+		rc->bottom = rc->top;
+		return ABE_TOP;
+	}
+	*rc = host_rect;
+	int above = host_rect.top - mi.rcMonitor.top;
+	int below = mi.rcMonitor.bottom - host_rect.bottom;
+	return above <= below ? ABE_TOP : ABE_BOTTOM;
+}
+
+// Without Explorer (swinewm is the shell) there is nobody to forward AppBar
+// messages to, and programs that place themselves next to the taskbar
+// (the "Open with" dialog, flyouts) get no answer and end up off screen.
+// Answer the queries like ManagedShell's AppBarManager; registering
+// AppBars (ABM_NEW/QUERYPOS/SETPOS) is not supported yet.
+static LRESULT handle_appbar(const COPYDATASTRUCT *cds) {
+	if (cds->cbData != sizeof(struct appbar_msg)) {
+		return 0;
+	}
+	const struct appbar_msg *amd = cds->lpData;
+	switch (amd->dwMessage) {
+	case ABM_GETTASKBARPOS: {
+		static lock_shared_fn lock_shared;
+		static unlock_shared_fn unlock_shared;
+		if (!lock_shared) {
+			HMODULE shlwapi = LoadLibraryW(L"shlwapi.dll");
+			if (shlwapi) {
+				lock_shared = (lock_shared_fn)(void (*)(void))GetProcAddress(
+					shlwapi, MAKEINTRESOURCEA(8));
+				unlock_shared = (unlock_shared_fn)(void (*)(void))GetProcAddress(
+					shlwapi, MAKEINTRESOURCEA(9));
+			}
+		}
+		if (!lock_shared || !unlock_shared) {
+			return 0;
+		}
+		struct appbar_data *abd = lock_shared(
+			(HANDLE)(INT_PTR)amd->hSharedMemory, amd->dwSourceProcessId);
+		if (!abd) {
+			return 0;
+		}
+		abd->uEdge = taskbar_pos(&abd->rc);
+		unlock_shared(abd);
+		return 1;
+	}
+	case ABM_GETSTATE:
+		return ABS_ALWAYSONTOP;
+	case ABM_GETAUTOHIDEBAR:
+	case ABM_GETAUTOHIDEBAREX:
+		return 0;
+	case ABM_ACTIVATE:
+	case ABM_WINDOWPOSCHANGED:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
 static void prune_icons(void) {
 	bool changed = false;
 	EnterCriticalSection(&lock);
@@ -363,6 +458,10 @@ static LRESULT CALLBACK tray_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 		}
 		if (cds->dwData == 3 && cds->cbData >= sizeof(struct tray_icon_query)) {
 			return handle_icon_query(cds->lpData);
+		}
+		if (cds->dwData == 0 &&
+				(win32_shell_mode || !win32_find_explorer_tray())) {
+			return handle_appbar(cds);
 		}
 		return forward(msg, wparam, lparam);   // AppBar messages (0)
 	}
