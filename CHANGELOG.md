@@ -40,8 +40,13 @@ the MSI and zip with the matching section below as release notes.
   monitor.
 - As the shell, swinewm now answers programs that ask where the taskbar
   is (`SHAppBarMessage(ABM_GETTASKBARPOS)`, which went unanswered without
-  Explorer); dialogs that place themselves next to the taskbar, such as
-  "Open with", should no longer end up off screen.
+  Explorer).
+- Windows whose middle is off every monitor are moved back on screen: a
+  floating window that moves itself away is centred again, and other
+  windows (dialogs swinewm does not tile, such as Windows 11's "Open
+  with") are centred on the nearest monitor. Windows parked far away on
+  purpose (at -32000) and windows being dragged are left alone; each such
+  move is logged with the window's class and program.
 - A two-part version tag (`0.1`) was not recognised, so its build was
   versioned after the previous tag; it now means `0.1.0`.
 - The release job failed when the release had already been created on
