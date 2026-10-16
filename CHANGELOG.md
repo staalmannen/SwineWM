@@ -6,7 +6,7 @@ All notable changes to SwineWM. The format follows
 change). A release is made by pushing a tag (`0.1.0`); CI then publishes
 the MSI and zip with the matching section below as release notes.
 
-## [Unreleased]
+## [0.1.0]
 
 Towards 0.1.0, the first preview (see the roadmap in
 [`doc/project_summary.md`](doc/project_summary.md)).
