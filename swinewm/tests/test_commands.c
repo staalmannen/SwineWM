@@ -82,7 +82,7 @@ static void test_every_command_is_found(void) {
 		"gaps", "grim", "hide_edge_borders", "include", "inhibit_idle", "input",
 		"kill", "layout", "makoctl", "max_render_time", "mode", "mouse_warping", "move",
 		"new_float", "new_window", "no_focus", "nop", "notify-send", "output",
-		"popup_during_fullscreen", "primary_selection", "reload", "resize",
+		"popup_during_fullscreen", "primary_selection", "reload", "resize", "restart",
 		"scratchpad", "seat", "set", "shortcuts_inhibitor", "show_marks",
 		"smart_borders", "smart_gaps", "split", "splith", "splitt", "splitv",
 		"swaybg_command", "swaynag_command", "tiling_drag",
@@ -103,6 +103,16 @@ static void test_every_command_is_found(void) {
 		free_cmd_results_list(res);
 		free(line);
 	}
+	fake_teardown();
+}
+
+static void test_restart(void) {
+	fake_setup();
+	CHECK(!run("restart now"));
+	CHECK(!fake.restart);
+	CHECK(run("restart"));
+	CHECK(fake.restart);
+	CHECK(!fake.quit);   // as the shell, exit logs off; restart must not
 	fake_teardown();
 }
 
@@ -148,4 +158,5 @@ void test_commands_all(void) {
 	test_chains_and_errors();
 	test_ipc();
 	test_grim();
+	test_restart();
 }

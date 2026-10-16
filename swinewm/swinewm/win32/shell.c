@@ -68,7 +68,8 @@ void win32_shell_detect(void) {
 	// reads: log to a file and close it. Started from a terminal (the
 	// console has other processes), keep logging there.
 	DWORD pids[2];
-	if (GetConsoleProcessList(pids, 2) == 1) {
+	// (0 processes: started without any console, e.g. by "restart".)
+	if (GetConsoleProcessList(pids, 2) <= 1) {
 		char *path = local_state_path("swinewm.log");
 		if (path) {
 			wchar_t *wpath = utf8_to_utf16(path);

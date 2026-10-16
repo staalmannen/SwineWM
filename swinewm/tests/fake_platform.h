@@ -14,6 +14,7 @@ struct fake_platform_state {
 	int close_calls;
 	int spawn_calls;
 	bool quit;
+	bool restart;
 	struct swine_view *last_activated;
 	struct swine_view *last_closed;
 	char last_spawn[256];

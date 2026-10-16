@@ -92,6 +92,7 @@ swine_cmd cmd_output;
 swine_cmd cmd_notify_send;
 swine_cmd cmd_grim;
 swine_cmd cmd_reload;
+swine_cmd cmd_restart;
 swine_cmd cmd_resize;
 swine_cmd cmd_scratchpad;
 swine_cmd cmd_set;

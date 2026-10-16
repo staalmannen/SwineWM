@@ -19,6 +19,19 @@ struct cmd_results *cmd_exit(int argc, char **argv) {
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 
+// i3's "restart" (sway has none): start the executable again, which picks
+// up a new swinewm.exe. Windows cannot overwrite a running .exe but can
+// rename it, so an update is: rename, copy the new one, "restart".
+struct cmd_results *cmd_restart(int argc, char **argv) {
+	(void)argv;
+	struct cmd_results *error = NULL;
+	if ((error = checkarg(argc, "restart", EXPECTED_EQUAL_TO, 0))) {
+		return error;
+	}
+	platform_restart();
+	return cmd_results_new(CMD_SUCCESS, NULL);
+}
+
 struct cmd_results *cmd_reload(int argc, char **argv) {
 	(void)argv;
 	struct cmd_results *error = NULL;
