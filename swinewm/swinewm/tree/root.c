@@ -195,3 +195,56 @@ void root_for_each_container(
 		}
 	}
 }
+
+static struct swine_container *find_in_list(list_t *list,
+		bool (*test)(struct swine_container *con, void *data), void *data) {
+	for (int i = 0; list && i < list->length; ++i) {
+		struct swine_container *con = list->items[i];
+		if (test(con, data)) {
+			return con;
+		}
+		struct swine_container *found = find_in_list(con->children, test, data);
+		if (found) {
+			return found;
+		}
+	}
+	return NULL;
+}
+
+static struct swine_container *find_on_output(struct swine_output *output,
+		bool (*test)(struct swine_container *con, void *data), void *data) {
+	for (int i = 0; i < output->workspaces->length; ++i) {
+		struct swine_workspace *ws = output->workspaces->items[i];
+		struct swine_container *con = find_in_list(ws->tiling, test, data);
+		if (!con) {
+			con = find_in_list(ws->floating, test, data);
+		}
+		if (con) {
+			return con;
+		}
+	}
+	return NULL;
+}
+
+struct swine_container *root_find_container(
+		bool (*test)(struct swine_container *con, void *data), void *data) {
+	struct swine_container *result = NULL;
+	for (int i = 0; i < root->outputs->length && !result; ++i) {
+		result = find_on_output(root->outputs->items[i], test, data);
+	}
+	if (!result && root->fallback_output) {
+		result = find_on_output(root->fallback_output, test, data);
+	}
+	// Hidden scratchpad containers are not on any workspace.
+	for (int i = 0; i < root->scratchpad->length && !result; ++i) {
+		struct swine_container *con = root->scratchpad->items[i];
+		if (!con->workspace) {
+			if (test(con, data)) {
+				result = con;
+			} else {
+				result = find_in_list(con->children, test, data);
+			}
+		}
+	}
+	return result;
+}

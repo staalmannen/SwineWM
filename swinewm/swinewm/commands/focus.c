@@ -49,6 +49,39 @@ struct swine_output *output_by_name_or_direction(const char *name,
 	return output_by_name(name);
 }
 
+// "focus prev|next": the direction along the parent's layout. Returns false
+// for an unknown name; *have_direction stays false when the container has no
+// siblings to move between (sway then does nothing).
+static bool get_direction_from_next_prev(struct swine_container *container,
+		const char *name, enum swine_direction *out, bool *have_direction) {
+	enum swine_container_layout parent_layout = L_NONE;
+	if (container) {
+		parent_layout = container_parent_layout(container);
+	}
+	bool prev;
+	if (swine_strcasecmp(name, "prev") == 0) {
+		prev = true;
+	} else if (swine_strcasecmp(name, "next") == 0) {
+		prev = false;
+	} else {
+		return false;
+	}
+	switch (parent_layout) {
+	case L_HORIZ:
+	case L_TABBED:
+		*out = prev ? DIR_LEFT : DIR_RIGHT;
+		break;
+	case L_VERT:
+	case L_STACKED:
+		*out = prev ? DIR_UP : DIR_DOWN;
+		break;
+	case L_NONE:
+		return true;
+	}
+	*have_direction = true;
+	return true;
+}
+
 static struct swine_node *get_node_in_output_direction(
 		struct swine_output *output, enum swine_direction dir) {
 	struct swine_workspace *ws = output_get_active_workspace(output);
@@ -308,11 +341,24 @@ struct cmd_results *cmd_focus(int argc, char **argv) {
 		return focus_child();
 	}
 
-	enum swine_direction direction;
+	enum swine_direction direction = DIR_LEFT;
+	bool have_direction = true;
+	bool descend = true;
 	if (!parse_direction(argv[0], &direction)) {
-		return cmd_results_new(CMD_INVALID,
-			"Expected 'focus <direction|parent|child|mode_toggle|floating|"
-			"tiling>' or 'focus output <direction|name>'");
+		have_direction = false;
+		if (!get_direction_from_next_prev(container, argv[0], &direction,
+					&have_direction)) {
+			return cmd_results_new(CMD_INVALID,
+				"Expected 'focus <direction|next|prev|parent|child|"
+				"mode_toggle|floating|tiling>' or "
+				"'focus output <direction|name>'");
+		} else if (argc == 2 && swine_strcasecmp(argv[1], "sibling") == 0) {
+			descend = false;
+		}
+	}
+
+	if (!have_direction) {
+		return cmd_results_new(CMD_SUCCESS, NULL);
 	}
 
 	if (node->type == N_WORKSPACE) {
@@ -333,7 +379,8 @@ struct cmd_results *cmd_focus(int argc, char **argv) {
 			container->fullscreen_mode == FULLSCREEN_NONE) {
 		next_focus = node_get_in_direction_floating(container, direction);
 	} else {
-		next_focus = node_get_in_direction_tiling(container, direction, true);
+		next_focus = node_get_in_direction_tiling(container, direction,
+			descend);
 	}
 	if (next_focus) {
 		seat_set_focus(next_focus);

@@ -62,6 +62,7 @@ static const struct cmd_handler handlers[] = {
 	{ "kill", cmd_kill, CMD_RUNTIME_ONLY },
 	{ "layout", cmd_layout, CMD_RUNTIME_ONLY },
 	{ "makoctl", cmd_makoctl, CMD_RUNTIME_ONLY },
+	{ "mark", cmd_mark, CMD_RUNTIME_ONLY },
 	{ "max_render_time", cmd_ignored, 0 },
 	{ "mode", cmd_mode, 0 },
 	{ "mouse_warping", cmd_ignored, 0 },
@@ -75,6 +76,7 @@ static const struct cmd_handler handlers[] = {
 	{ "popup_during_fullscreen", cmd_ignored, 0 },
 	{ "primary_selection", cmd_ignored, 0 },
 	{ "reload", cmd_reload, CMD_RUNTIME_ONLY },
+	{ "rename", cmd_rename, CMD_RUNTIME_ONLY },
 	{ "resize", cmd_resize, CMD_RUNTIME_ONLY },
 	{ "restart", cmd_restart, CMD_RUNTIME_ONLY },
 	{ "scratchpad", cmd_scratchpad, CMD_RUNTIME_ONLY },
@@ -88,6 +90,8 @@ static const struct cmd_handler handlers[] = {
 	{ "splith", cmd_splith, CMD_RUNTIME_ONLY },
 	{ "splitt", cmd_splitt, CMD_RUNTIME_ONLY },
 	{ "splitv", cmd_splitv, CMD_RUNTIME_ONLY },
+	{ "sticky", cmd_sticky, CMD_RUNTIME_ONLY },
+	{ "swap", cmd_swap, CMD_RUNTIME_ONLY },
 	{ "swaybg_command", cmd_ignored, CMD_CONFIG_ONLY },
 	{ "swaynag_command", cmd_ignored, CMD_CONFIG_ONLY },
 	{ "tiling_drag", cmd_ignored, 0 },
@@ -96,6 +100,7 @@ static const struct cmd_handler handlers[] = {
 	{ "titlebar_border_thickness", cmd_ignored, 0 },
 	{ "titlebar_padding", cmd_ignored, 0 },
 	{ "unbindsym", cmd_unbindsym, 0 },
+	{ "unmark", cmd_unmark, CMD_RUNTIME_ONLY },
 	{ "urgent", cmd_urgent, CMD_RUNTIME_ONLY },
 	{ "workspace", cmd_workspace, 0 },
 	{ "workspace_auto_back_and_forth", cmd_ws_auto_back_and_forth, 0 },
@@ -176,6 +181,7 @@ static void set_handler_context(struct swine_node *node) {
 	config->handler_context.node = node;
 	config->handler_context.container = NULL;
 	config->handler_context.workspace = NULL;
+	config->handler_context.node_overridden = false;
 	if (!node) {
 		return;
 	}
@@ -254,6 +260,7 @@ list_t *execute_command(char *_exec, struct swine_container *con) {
 		if (!using_criteria) {
 			set_handler_context(con ? &con->node :
 				seat_get_focus_inactive(&root->node));
+			config->handler_context.node_overridden = con != NULL;
 			struct cmd_results *res = handler->handle(argc - 1, argv + 1);
 			list_add(res_list, res);
 			if (res->status == CMD_INVALID) {
@@ -269,6 +276,7 @@ list_t *execute_command(char *_exec, struct swine_container *con) {
 			for (int i = 0; i < containers->length; ++i) {
 				struct swine_container *container = containers->items[i];
 				set_handler_context(&container->node);
+				config->handler_context.node_overridden = true;
 				struct cmd_results *res = handler->handle(argc - 1, argv + 1);
 				if (res->status == CMD_SUCCESS) {
 					free_cmd_results(res);

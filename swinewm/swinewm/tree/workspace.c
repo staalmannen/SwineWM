@@ -236,7 +236,17 @@ void workspace_detect_urgent(struct swine_workspace *ws) {
 }
 
 bool workspace_is_empty(struct swine_workspace *ws) {
-	return ws->tiling->length == 0 && ws->floating->length == 0;
+	if (ws->tiling->length) {
+		return false;
+	}
+	// Sticky views are not considered to be part of this workspace
+	for (int i = 0; i < ws->floating->length; ++i) {
+		struct swine_container *floater = ws->floating->items[i];
+		if (!container_is_sticky(floater)) {
+			return false;
+		}
+	}
+	return true;
 }
 
 static void set_workspace(struct swine_container *con, void *data) {

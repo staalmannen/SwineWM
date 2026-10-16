@@ -40,10 +40,11 @@ ignored · ❌ not implemented (error)
 | `focus left/right/up/down` | ✅ | Tree-based like sway, crosses outputs, honours `focus_wrapping` |
 | `focus parent/child`, `focus mode_toggle/floating/tiling` | ✅ | |
 | `focus output <name\|direction>` | ✅ | |
-| `focus prev/next [sibling]` | ❌ | |
+| `focus prev/next [sibling]` | ✅ | |
 | `move left/right/up/down [<n> px]` | ✅ | Port of sway's `container_move_in_direction`; floating windows move by n px |
 | `move [container\|window] [to] workspace <name\|number n\|next\|prev\|…\|back_and_forth>` | ✅ | Focus stays on the current workspace, like sway |
 | `move [container\|window] [to] output <name\|direction>` | ✅ | |
+| `move [container\|window] [to] mark <mark>` | ✅ | |
 | `move [to] scratchpad`, `scratchpad show` | ✅ | |
 | `move [absolute] position center\|<x> <y>` | 🟡 | Floating windows; coordinates relative to the output's work area |
 | `move workspace to output …` | ❌ | |
@@ -54,8 +55,8 @@ ignored · ❌ not implemented (error)
 | `workspace_auto_back_and_forth` | ✅ | |
 | `floating enable/disable/toggle` | ✅ | |
 | `fullscreen [enable/disable/toggle] [global]` | 🟡 | `global` behaves like per-output fullscreen |
-| `resize grow/shrink width/height [<n> [px\|ppt]]` | ✅ | |
-| `resize grow/shrink up/down/left/right`, `resize set` | ❌ | |
+| `resize grow/shrink width/height/up/down/left/right [<n> [px\|ppt]] [or <n> [px\|ppt]]` | ✅ | Port of sway's `resize.c`; floating windows are at least 75×50 and at most the output's work area |
+| `resize set [width] <w> [height] <h>` | ✅ | |
 | `gaps inner/outer/horizontal/vertical/top/right/bottom/left <n>` | ✅ | Config default |
 | `gaps <type> all\|current set\|plus\|minus\|toggle <n>` | ✅ | Runtime |
 | `default_orientation`, `workspace_layout` | ✅ | |
@@ -71,7 +72,11 @@ ignored · ❌ not implemented (error)
 | `xwayland`, `swaybg_command`, `swaynag_command`, `max_render_time`, `allow_tearing`, `primary_selection`, `inhibit_idle`, `shortcuts_inhibitor`, `tiling_drag*`, `mouse_warping`, `popup_during_fullscreen`, `focus_on_window_activation`, `force_display_urgency_hint`, `new_window`, `new_float`, `floating_minimum_size`, `floating_maximum_size` | ⚪ | |
 | `urgent enable\|disable\|allow\|deny` | ✅ | Windows' own "urgency" is a flashing taskbar button (`FlashWindowEx`); it marks the view and its workspace urgent until focused |
 | Application-requested fullscreen | ✅ | A window that makes itself fullscreen (F11) becomes a sway fullscreen container and returns when it leaves fullscreen |
-| `mark`, `unmark`, `swap`, `sticky`, `rename`, `title_format`, `opacity`, `create_output` | ❌ | |
+| `mark [--add\|--replace] [--toggle] <id>`, `unmark [<id>]` | ✅ | Marks are not drawn yet (`show_marks`) |
+| `swap container with id\|con_id\|mark <arg>` | ✅ | `id` is the window handle |
+| `sticky enable\|disable\|toggle` | ✅ | Floating windows follow workspace switches |
+| `rename workspace [<old>\|number <n>] to <new>` | ✅ | |
+| `title_format`, `opacity`, `create_output` | ❌ | |
 | `explorer_taskbar autohide\|show\|toggle` | ✅ | swinewm extension: while running next to Explorer, keep Explorer's taskbar auto-hidden (restored on exit) |
 
 ## Criteria
@@ -163,11 +168,12 @@ There is no grim on Windows, so it is built in: `grim` is a command, and
 | `RUN_COMMAND` | ✅ |
 | `GET_WORKSPACES`, `GET_OUTPUTS`, `GET_TREE`, `GET_VERSION` | ✅ (subset of sway's fields) |
 | `GET_BINDING_MODES`, `GET_BINDING_STATE`, `GET_CONFIG` | ✅ |
-| `GET_MARKS`, `GET_BAR_CONFIG`, `GET_INPUTS`, `GET_SEATS` | Empty lists |
+| `GET_MARKS` | ✅ |
+| `GET_BAR_CONFIG`, `GET_INPUTS`, `GET_SEATS` | Empty lists |
 | `GET_NOTIFICATIONS` (1000), `GET_NOTIFICATION_HISTORY` (1001) | ✅ swinewm extensions |
 | `SEND_TICK` | 🟡 replies success, no event |
 | `SUBSCRIBE` and events | ❌ next on the list (needed by swinebar) |
 
 `get_tree` reports native window properties as `app_id` (the executable
 name, e.g. `notepad.exe`), `pid`, `window` (the HWND) and
-`window_properties.class`/`title`.
+`window_properties.class`/`title`, plus `marks` and `sticky`.

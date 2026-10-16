@@ -15,6 +15,11 @@ the MSI and zip with the matching section below as release notes.
   engine. On Windows `app_id` is the executable's file name (matched
   ignoring case) and `class` the window class; see the token table in
   `doc/compatibility.md`.
+- `mark`, `unmark`, `swap container with …`, `sticky`,
+  `rename workspace … to …`, `move … to mark`, `focus prev|next [sibling]`
+  and the IPC `get_marks` request, as in sway.
+- `resize` is now a port of sway's: `grow`/`shrink` towards an edge
+  (`up`/`down`/`left`/`right`), `resize set`, and `<n> px or <m> ppt`.
 - `doc/linux-users.md`: Windows for Linux users (where things are,
   shells, package managers, getting unstuck when swinewm is the shell).
 

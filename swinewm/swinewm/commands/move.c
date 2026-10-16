@@ -16,6 +16,7 @@ static const char expected_syntax[] =
 	"'move [--no-auto-back-and-forth] <container|window> [to] workspace "
 	"<name|next|prev|next_on_output|prev_on_output|current|back_and_forth>' "
 	"or 'move <container|window> [to] output <name|direction>' or "
+	"'move <container|window> [to] mark <mark>' or "
 	"'move [container|window] [to] scratchpad' or "
 	"'move [window|container] [to] [absolute] position center'";
 
@@ -304,6 +305,23 @@ static struct cmd_results *cmd_move_in_direction(enum swine_direction direction,
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 
+static struct cmd_results *cmd_move_to_scratchpad(void);
+
+static struct swine_output *destination_output(struct swine_node *node) {
+	switch (node->type) {
+	case N_OUTPUT:
+		return node->output;
+	case N_WORKSPACE:
+		return node->workspace->output;
+	case N_CONTAINER:
+		return node->container->workspace ?
+			node->container->workspace->output : NULL;
+	case N_ROOT:
+		break;
+	}
+	return NULL;
+}
+
 static struct cmd_results *cmd_move_container(bool no_auto_back_and_forth,
 		int argc, char **argv) {
 	struct cmd_results *error = NULL;
@@ -377,6 +395,12 @@ static struct cmd_results *cmd_move_container(bool no_auto_back_and_forth,
 			// We have to create the workspace, but if the container is
 			// sticky and the workspace is going to be created on the same
 			// output, we'll bail out first.
+			if (container_is_sticky_or_child(container)) {
+				free(ws_name);
+				return cmd_results_new(CMD_FAILURE,
+					"Can't move sticky container to another workspace "
+					"on the same output");
+			}
 			ws = workspace_create(old_output, ws_name);
 		}
 		free(ws_name);
@@ -390,8 +414,26 @@ static struct cmd_results *cmd_move_container(bool no_auto_back_and_forth,
 				"Can't find output with name/direction '%s'", argv[1]);
 		}
 		destination = &new_output->node;
+	} else if (swine_strcasecmp(argv[0], "mark") == 0) {
+		struct swine_container *dest_con = container_find_mark(argv[1]);
+		if (dest_con == NULL) {
+			return cmd_results_new(CMD_FAILURE,
+				"Mark '%s' not found", argv[1]);
+		}
+		destination = &dest_con->node;
 	} else {
 		return cmd_results_new(CMD_INVALID, expected_syntax);
+	}
+
+	if (destination->type == N_CONTAINER &&
+			container_is_scratchpad_hidden(destination->container)) {
+		return cmd_move_to_scratchpad();
+	}
+
+	if (container_is_sticky_or_child(container) && old_output &&
+			destination_output(destination) == old_output) {
+		return cmd_results_new(CMD_FAILURE, "Can't move sticky "
+			"container to another workspace on the same output");
 	}
 
 	struct swine_node *focus = seat_get_focus();
@@ -533,7 +575,8 @@ struct cmd_results *cmd_move(int argc, char **argv) {
 	}
 
 	if (swine_strcasecmp(argv[0], "workspace") == 0 ||
-			swine_strcasecmp(argv[0], "output") == 0) {
+			swine_strcasecmp(argv[0], "output") == 0 ||
+			swine_strcasecmp(argv[0], "mark") == 0) {
 		return cmd_move_container(no_auto_back_and_forth, argc, argv);
 	} else if (swine_strcasecmp(argv[0], "scratchpad") == 0) {
 		return cmd_move_to_scratchpad();

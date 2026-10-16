@@ -12,6 +12,7 @@ void test_commands_all(void);
 void test_bar_all(void);
 void test_notify_all(void);
 void test_criteria_all(void);
+void test_marks_all(void);
 
 int main(void) {
 	swine_log_init(SWINE_SILENT);
@@ -22,6 +23,7 @@ int main(void) {
 	test_bar_all();
 	test_notify_all();
 	test_criteria_all();
+	test_marks_all();
 	printf("%d checks, %d failures\n", test_checks, test_failures);
 	return test_failures ? 1 : 0;
 }

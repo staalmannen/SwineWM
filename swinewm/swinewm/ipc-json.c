@@ -164,6 +164,14 @@ static void write_container(struct json_writer *w, struct swine_container *con) 
 	json_double(w, container_parent_layout(con) == L_VERT ?
 		con->height_fraction : con->width_fraction);
 	write_rect(w, "rect", &con->box);
+	json_key(w, "marks");
+	json_begin_array(w);
+	for (int i = 0; i < con->marks->length; ++i) {
+		json_string(w, con->marks->items[i]);
+	}
+	json_end_array(w);
+	json_key(w, "sticky");
+	json_bool(w, con->is_sticky);
 	if (con->view) {
 		json_key(w, "visible");
 		json_bool(w, con->view->pending.visible);
@@ -295,5 +303,21 @@ char *ipc_json_get_config(void) {
 	json_key(&w, "config");
 	json_string(&w, config->current_config ? config->current_config : "");
 	json_end_object(&w);
+	return json_finish(&w);
+}
+
+static void collect_marks(struct swine_container *con, void *data) {
+	struct json_writer *w = data;
+	for (int i = 0; i < con->marks->length; ++i) {
+		json_string(w, con->marks->items[i]);
+	}
+}
+
+char *ipc_json_get_marks(void) {
+	struct json_writer w;
+	json_init(&w);
+	json_begin_array(&w);
+	root_for_each_container(collect_marks, &w);
+	json_end_array(&w);
 	return json_finish(&w);
 }

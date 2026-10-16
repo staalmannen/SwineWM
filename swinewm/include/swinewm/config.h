@@ -87,6 +87,7 @@ struct swine_config {
 		struct swine_node *node;
 		struct swine_container *container;
 		struct swine_workspace *workspace;
+		bool node_overridden;   // criteria or an explicit container
 	} handler_context;
 };
 
