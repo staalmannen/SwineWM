@@ -15,8 +15,8 @@ console window, or `swinewm --recover` if windows were left hidden.
 
 ## Installing
 
-Every push to GitHub builds an MSI installer and a portable zip (Actions
-tab → a `build` run → Artifacts). The installer puts everything in
+Releases (GitHub → Releases) have an MSI installer and a portable zip;
+every push also builds them (Actions tab → a `build` run → Artifacts). The installer puts everything in
 `C:\Program Files\SwineWM`, adds a Start menu entry and puts `swinemsg` on
 the PATH. See [`../doc/packaging.md`](../doc/packaging.md), which also
 explains building the MSI yourself.
@@ -57,7 +57,11 @@ and `$menu`. Start a few applications, then run from a terminal:
 .\build\swinewm\Debug\swinewm.exe -V
 ```
 
-`-V` logs what it does; `-d` logs everything. Existing windows are tiled on
+`-V` logs what it does; `-d` logs everything. Where no options can be
+given (as the shell), set the environment variable `SWINEWM_LOG` to
+`info` or `debug` (`setx SWINEWM_LOG debug`, effective at the next
+logon); as the shell the log is `%LOCALAPPDATA%\swinewm\swinewm.log`,
+the previous session's `swinewm.old.log`. Existing windows are tiled on
 workspace 1.
 
 To use it instead of Explorer, run `swinewm --set-shell` once and log off

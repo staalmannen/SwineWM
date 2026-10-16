@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include "list.h"
 
-#define SWINEWM_VERSION "0.0.1-draft"
+#include "swinewm_version.h"   // SWINEWM_VERSION, generated from git
 
 struct swine_server {
 	list_t *views;     // struct swine_view *, mapped and unmapped

@@ -12,6 +12,11 @@ enum swine_log_importance {
 };
 
 void swine_log_init(enum swine_log_importance verbosity);
+// Colours are for terminals; off when the log goes to a file.
+void swine_log_set_colors(bool enable);
+// "error", "info" or "debug" (as in SWINEWM_LOG); false if not one of them.
+bool swine_log_parse_importance(const char *name,
+		enum swine_log_importance *out);
 enum swine_log_importance swine_log_get_verbosity(void);
 
 void _swine_log(enum swine_log_importance verbosity, const char *file, int line,

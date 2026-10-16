@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include "json.h"
 #include "list.h"
+#include "log.h"
 #include "stringop.h"
 #include "swinewm/input/keyboard.h"
 #include "test.h"
@@ -71,6 +72,17 @@ static void test_strings(void) {
 	list_free_items_and_destroy(parts);
 }
 
+static void test_log_levels(void) {
+	enum swine_log_importance level = SWINE_ERROR;
+	CHECK(swine_log_parse_importance("debug", &level));
+	CHECK_INT(level, SWINE_DEBUG);
+	CHECK(swine_log_parse_importance("info", &level));
+	CHECK_INT(level, SWINE_INFO);
+	CHECK(!swine_log_parse_importance("loud", &level));
+	CHECK(!swine_log_parse_importance(NULL, &level));
+	CHECK_INT(level, SWINE_INFO);
+}
+
 static void test_json(void) {
 	struct json_writer w;
 	json_init(&w);
@@ -115,5 +127,6 @@ void test_common_all(void) {
 	test_argsep();
 	test_strings();
 	test_json();
+	test_log_levels();
 	test_keys();
 }

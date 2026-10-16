@@ -30,6 +30,7 @@ int main(int argc, char **argv) {
 	bool validate = false;
 	bool recover = false;
 	enum swine_log_importance verbosity = SWINE_ERROR;
+	bool verbosity_given = false;
 
 	for (int i = 1; i < argc; ++i) {
 		const char *arg = argv[i];
@@ -44,8 +45,10 @@ int main(int argc, char **argv) {
 			validate = true;
 		} else if (strcmp(arg, "-d") == 0 || strcmp(arg, "--debug") == 0) {
 			verbosity = SWINE_DEBUG;
+			verbosity_given = true;
 		} else if (strcmp(arg, "-V") == 0 || strcmp(arg, "--verbose") == 0) {
 			verbosity = SWINE_INFO;
+			verbosity_given = true;
 		} else if (strcmp(arg, "-v") == 0 || strcmp(arg, "--version") == 0) {
 			printf("swinewm version " SWINEWM_VERSION "\n");
 			return EXIT_SUCCESS;
@@ -64,11 +67,23 @@ int main(int argc, char **argv) {
 			return EXIT_FAILURE;
 		}
 	}
+	// Started by Windows at logon there are no options: SWINEWM_LOG
+	// (error, info or debug) sets the log level instead.
+	const char *env_level = getenv("SWINEWM_LOG");
+	if (!verbosity_given && env_level) {
+		verbosity_given = swine_log_parse_importance(env_level, &verbosity);
+	}
 	swine_log_init(verbosity);
 	platform_set_shell_mode(shell_mode);
 	if (!recover) {
 		platform_setup_environment();
 	}
+	if (!verbosity_given && platform_is_shell()) {
+		// The log file is all there is to go on after a problem at logon.
+		swine_log_init(SWINE_INFO);
+	}
+	swine_log(SWINE_INFO, "swinewm %s%s", SWINEWM_VERSION,
+		platform_is_shell() ? ", as the Windows shell" : "");
 
 	if (recover) {
 		int n = platform_recover_windows();

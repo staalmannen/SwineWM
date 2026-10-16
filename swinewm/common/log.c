@@ -8,6 +8,7 @@
 #endif
 
 static enum swine_log_importance log_importance = SWINE_ERROR;
+static bool use_colors = true;
 
 static const char *verbosity_colors[] = {
 	[SWINE_SILENT] = "",
@@ -37,6 +38,22 @@ void swine_log_init(enum swine_log_importance verbosity) {
 #endif
 }
 
+void swine_log_set_colors(bool enable) {
+	use_colors = enable;
+}
+
+bool swine_log_parse_importance(const char *name,
+		enum swine_log_importance *out) {
+	static const char *names[] = {"silent", "error", "info", "debug"};
+	for (int i = 0; name && i <= SWINE_DEBUG; ++i) {
+		if (strcmp(name, names[i]) == 0) {
+			*out = (enum swine_log_importance)i;
+			return true;
+		}
+	}
+	return false;
+}
+
 enum swine_log_importance swine_log_get_verbosity(void) {
 	return log_importance;
 }
@@ -62,10 +79,11 @@ static void log_va(enum swine_log_importance verbosity, const char *file,
 		strftime(stamp, sizeof(stamp), "%H:%M:%S", tm_info);
 	}
 	unsigned c = verbosity <= SWINE_DEBUG ? (unsigned)verbosity : SWINE_DEBUG;
-	fprintf(stderr, "%s %s%s [%s:%d] ", stamp, verbosity_colors[c],
-		verbosity_headers[c], strip_path(file), line);
+	fprintf(stderr, "%s %s%s [%s:%d] ", stamp,
+		use_colors ? verbosity_colors[c] : "", verbosity_headers[c],
+		strip_path(file), line);
 	vfprintf(stderr, format, args);
-	fprintf(stderr, "\x1B[0m\n");
+	fprintf(stderr, "%s\n", use_colors ? "\x1B[0m" : "");
 	fflush(stderr);
 }
 

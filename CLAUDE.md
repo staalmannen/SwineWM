@@ -44,7 +44,10 @@ status changes.
   - `swinewm/cmake/packaging.cmake` — install layout and the CPack/WiX MSI;
     see `doc/packaging.md`. Never change `CPACK_WIX_UPGRADE_GUID`.
 - `.github/workflows/build.yml` — CI: Linux tests, MSVC build and tests,
-  MSI/zip artifacts. MSVC problems show up here first.
+  MSI/zip artifacts; a pushed version tag publishes a GitHub Release.
+  MSVC problems show up here first.
+- `CHANGELOG.md` — add user-visible changes under `[Unreleased]`. The
+  version comes from git tags (`swinewm/cmake/version.cmake`).
 - `sway/`, `waybar/`, `mako/` — upstream reference submodules. **Never edit
   files inside submodules.** Fetch them with
   `git submodule update --init --depth 1 sway waybar mako`.
