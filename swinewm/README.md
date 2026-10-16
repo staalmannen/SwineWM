@@ -31,6 +31,13 @@ cmake --build build/swinewm --config Debug
 ctest --test-dir build/swinewm -C Debug
 ```
 
+Or open the repository folder in Visual Studio ("Open a local folder"); it
+picks up `swinewm/CMakeLists.txt` by itself. The executables then end up in
+`swinewm\out\build\x64-Debug\` (in Solution Explorer, switch to "CMake
+Targets View", right-click `swinewm` → "Open Folder in File Explorer").
+Debugging from Visual Studio is easiest: set a breakpoint and press F5 with
+`swinewm.exe` selected as the startup item.
+
 With MSYS2/MinGW-w64:
 
 ```sh

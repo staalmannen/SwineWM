@@ -111,6 +111,7 @@ int main(int argc, char **argv) {
 	bool quiet = false;
 	char *pipe_name = NULL;
 	const char *type_name = "command";
+	SetConsoleOutputCP(CP_UTF8);   // replies are UTF-8 JSON
 	int i = 1;
 	for (; i < argc; ++i) {
 		const char *arg = argv[i];
