@@ -143,12 +143,15 @@ Win32 renderer.
   (`--set-shell`), which needs no administrator rights; this has to be
   confirmed on Home editions.
 - **Packaged apps as the shell.** As the shell, Microsoft Store/MSIX apps
-  (Firefox and Claude from the Store) start fine through their App
-  Execution Alias (`start firefox`, `exec firefox.exe`), but not from
-  Flow Launcher, which opens them as `shell:AppsFolder\<AUMID>` through the
-  shell namespace (Flow Launcher's `UWPPackage.Launch`). Still to find out:
-  whether any `shell:AppsFolder` launch fails without Explorer, or only
-  Flow Launcher's, and whether swinewm can provide what is missing.
+  start fine through their App Execution Alias (`start firefox`,
+  `exec firefox.exe`), but opening them as `shell:AppsFolder\<AUMID>`
+  fails with "Class not registered" for every caller (tested with
+  PowerShell `Start-Process`), so launchers that use it (Flow Launcher)
+  cannot start them. Most likely a COM class that Explorer registers while
+  it runs (its immersive shell) is missing. Open: whether
+  `IApplicationActivationManager::ActivateApplication` works without
+  Explorer; if so swinewm's `exec` could use it for `shell:AppsFolder`
+  paths, and launchers could be asked to do the same.
 - **Tray icons next to Explorer.** The `tray` module takes the tray icons
   over from Explorer (see [`architecture.md`](architecture.md)). Explorer's
   own tray then shows stale icons until swinewm exits. Hiding its taskbar
