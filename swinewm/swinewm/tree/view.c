@@ -86,7 +86,7 @@ static struct swine_workspace *view_target_workspace(void) {
 		root->outputs->items[0] : root->fallback_output;
 	ws = output_get_active_workspace(output);
 	if (!ws) {
-		char *name = workspace_next_name();
+		char *name = workspace_next_name(output);
 		ws = workspace_create(output, name);
 		free(name);
 		output->active_workspace = ws;
@@ -115,7 +115,7 @@ static struct swine_workspace *select_workspace(struct swine_view *view) {
 	for (int i = 0; i < criterias->length; ++i) {
 		struct criteria *criteria = criterias->items[i];
 		if (criteria->type == CT_ASSIGN_OUTPUT) {
-			struct swine_output *output = output_by_name(criteria->target);
+			struct swine_output *output = output_by_name_or_id(criteria->target);
 			if (output) {
 				ws = output_get_active_workspace(output);
 				break;

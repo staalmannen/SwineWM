@@ -20,6 +20,13 @@ the MSI and zip with the matching section below as release notes.
   and the IPC `get_marks` request, as in sway.
 - `resize` is now a port of sway's: `grow`/`shrink` towards an edge
   (`up`/`down`/`left`/`right`), `resize set`, and `<n> px or <m> ppt`.
+- Outputs: `workspace <name> output …` and `workspace <name> gaps …`,
+  `move workspace to output …`; workspaces return to their monitor when
+  it is plugged back in, as in sway. Monitors can be named by their model
+  (`output "DELL U2720Q" …`).
+- `output … mode|position|transform` change Windows' display settings
+  for as long as swinewm runs (restored on exit, after a crash and with
+  `--recover`).
 - `doc/linux-users.md`: Windows for Linux users (where things are,
   shells, package managers, getting unstuck when swinewm is the shell).
 

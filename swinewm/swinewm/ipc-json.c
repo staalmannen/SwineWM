@@ -100,6 +100,10 @@ char *ipc_json_get_outputs(void) {
 		json_key(&w, "make");
 		json_string(&w, "Unknown");
 		json_key(&w, "model");
+		json_string(&w, output->identifier ? output->identifier : "Unknown");
+		json_key(&w, "serial");
+		json_string(&w, "Unknown");
+		json_key(&w, "description");
 		json_string(&w, output->description ? output->description : "Unknown");
 		json_key(&w, "active");
 		json_bool(&w, true);
@@ -110,6 +114,20 @@ char *ipc_json_get_outputs(void) {
 			seat_get_focused_workspace()->output == output);
 		json_key(&w, "scale");
 		json_double(&w, output->scale);
+		json_key(&w, "transform");
+		static const char *transforms[] = {"normal", "90", "180", "270"};
+		json_string(&w, transforms[output->transform & 3]);
+		json_key(&w, "current_mode");
+		json_begin_object(&w);
+		json_key(&w, "width");
+		json_int(&w, output->transform & 1 ?
+			output->box.height : output->box.width);
+		json_key(&w, "height");
+		json_int(&w, output->transform & 1 ?
+			output->box.width : output->box.height);
+		json_key(&w, "refresh");
+		json_int(&w, output->refresh_mhz);
+		json_end_object(&w);
 		json_key(&w, "current_workspace");
 		json_string(&w, ws ? ws->name : NULL);
 		write_rect(&w, "rect", &output->box);

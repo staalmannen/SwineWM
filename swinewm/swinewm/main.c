@@ -4,6 +4,7 @@
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/config.h"
+#include "swinewm/tree/output.h"
 #include "swinewm/desktop/transaction.h"
 #include "swinewm/platform.h"
 #include "swinewm/server.h"
@@ -121,6 +122,7 @@ int main(int argc, char **argv) {
 	}
 	config->active = true;
 	config_run_deferred();
+	output_apply_configs();
 	platform_config_changed();
 	transaction_commit_dirty();
 

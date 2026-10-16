@@ -103,6 +103,7 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *info) {
 	// hidden taskbar, or (as the shell) no shell at all.
 	win32_windows_show_all();
 	win32_shell_restore_taskbar();
+	win32_outputs_restore_settings();
 	win32_tray_crash();
 	win32_shell_rescue();
 	return EXCEPTION_CONTINUE_SEARCH;
@@ -250,6 +251,8 @@ void platform_finish(void) {
 	win32_bar_finish();
 	win32_notify_finish();
 	win32_wallpaper_finish();
+	win32_outputs_finish();
+	win32_recover_display_done();
 	CoUninitialize();
 	win32_fonts_clear();
 	win32_recover_clear();

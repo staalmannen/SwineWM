@@ -6,7 +6,7 @@
 #
 # The syntax is sway's; read `man 5 sway` or sway(5) online for a complete
 # reference. doc/compatibility.md lists what swinewm supports so far.
-# Commands that have no effect on Windows yet (output, input, bar, font, ...)
+# Commands that have no effect on Windows yet (input, font, ...)
 # are accepted and ignored, so an existing sway config should load.
 
 ### Variables
@@ -34,12 +34,14 @@ set $menu %LOCALAPPDATA%\FlowLauncher\Flow.Launcher.exe
 # relative paths are relative to this config file.
 output * bg %SWINEWM_DATA%\wallpapers\swinewm-default.png fill
 #
-# Only the background options are implemented. Windows display settings
-# decide resolution, position and scale, so lines like this are ignored:
+# Example configuration (resolution, position and rotation change the
+# Windows display settings while swinewm runs; scale is set in Windows'
+# Settings -> Display):
 #
 #   output DISPLAY1 resolution 1920x1080 position 1920,0
 #
 # You can get the names of your outputs by running: swinemsg -t get_outputs
+# ("name", or the monitor model in "model").
 
 ### Key bindings
 #

@@ -4,6 +4,7 @@
 #include "stringop.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
+#include "swinewm/tree/output.h"
 #include "swinewm/platform.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/view.h"
@@ -42,6 +43,7 @@ struct cmd_results *cmd_reload(int argc, char **argv) {
 	bool ok = load_main_config(path, true, false);
 	free(path);
 	config_run_deferred();
+	output_apply_configs();
 	platform_config_changed();
 	if (!ok) {
 		return cmd_results_new(CMD_FAILURE,

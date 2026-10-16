@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,29 +23,90 @@ enum swine_container_layout output_get_default_layout(struct swine_output *outpu
 	return L_HORIZ;
 }
 
+struct workspace_config *workspace_find_config(const char *ws_name) {
+	if (!config) {
+		return NULL;
+	}
+	for (int i = 0; i < config->workspace_configs->length; ++i) {
+		struct workspace_config *wsc = config->workspace_configs->items[i];
+		if (strcmp(wsc->workspace, ws_name) == 0) {
+			return wsc;
+		}
+	}
+	return NULL;
+}
+
+struct swine_output *workspace_get_initial_output(const char *name) {
+	// Check workspace configs for a workspace<->output pair
+	struct workspace_config *wsc = workspace_find_config(name);
+	if (wsc) {
+		for (int i = 0; i < wsc->outputs->length; i++) {
+			struct swine_output *output =
+				output_by_name_or_id(wsc->outputs->items[i]);
+			if (output) {
+				return output;
+			}
+		}
+	}
+	// Otherwise try to put it on the focused output
+	struct swine_node *focus = seat_get_focus_inactive(&root->node);
+	if (focus && focus->type == N_WORKSPACE && focus->workspace->output) {
+		return focus->workspace->output;
+	} else if (focus && focus->type == N_CONTAINER &&
+			focus->container->workspace &&
+			focus->container->workspace->output) {
+		return focus->container->workspace->output;
+	}
+	// Fallback to the first output or the headless output
+	return root->outputs->length ?
+		root->outputs->items[0] : root->fallback_output;
+}
+
 struct swine_workspace *workspace_create(struct swine_output *output,
 		const char *name) {
 	if (!output) {
-		// Like sway, new workspaces appear on the focused output.
-		struct swine_workspace *focused = seat_get_focused_workspace();
-		if (focused && focused->output) {
-			output = focused->output;
-		} else {
-			output = root->outputs->length ?
-				root->outputs->items[0] : root->fallback_output;
-		}
+		output = workspace_get_initial_output(name);
 	}
 	struct swine_workspace *ws = calloc(1, sizeof(*ws));
 	node_init(&ws->node, N_WORKSPACE, ws);
 	ws->name = swine_strdup(name);
 	ws->tiling = create_list();
 	ws->floating = create_list();
+	ws->output_priority = create_list();
 	ws->layout = output_get_default_layout(output);
 	ws->prev_split_layout = L_NONE;
 	if (config) {
 		ws->gaps_inner = config->gaps_inner;
 		ws->gaps_outer = config->gaps_outer;
 	}
+	struct workspace_config *wsc = workspace_find_config(name);
+	if (wsc) {
+		if (wsc->gaps_outer.top != INT_MIN) {
+			ws->gaps_outer.top = wsc->gaps_outer.top;
+		}
+		if (wsc->gaps_outer.right != INT_MIN) {
+			ws->gaps_outer.right = wsc->gaps_outer.right;
+		}
+		if (wsc->gaps_outer.bottom != INT_MIN) {
+			ws->gaps_outer.bottom = wsc->gaps_outer.bottom;
+		}
+		if (wsc->gaps_outer.left != INT_MIN) {
+			ws->gaps_outer.left = wsc->gaps_outer.left;
+		}
+		if (wsc->gaps_inner != INT_MIN) {
+			ws->gaps_inner = wsc->gaps_inner;
+		}
+		// Add output priorities
+		for (int i = 0; i < wsc->outputs->length; ++i) {
+			char *output_name = wsc->outputs->items[i];
+			if (strcmp(output_name, "*") != 0) {
+				list_add(ws->output_priority, swine_strdup(output_name));
+			}
+		}
+	}
+	// If not already added, add the output to the lowest priority
+	workspace_output_add_priority(ws, output);
+
 	output_add_workspace(output, ws);
 	seat_node_created(&ws->node);
 	swine_log(SWINE_DEBUG, "Created workspace %s on %s", ws->name,
@@ -60,6 +122,7 @@ void workspace_destroy(struct swine_workspace *ws) {
 	seat_node_destroyed(&ws->node);
 	list_free(ws->tiling);
 	list_free(ws->floating);
+	list_free_items_and_destroy(ws->output_priority);
 	free(ws->name);
 	free(ws);
 }
@@ -140,12 +203,244 @@ struct swine_workspace *workspace_by_number(const char *name) {
 	return root_find_workspace(test_number, &number);
 }
 
-char *workspace_next_name(void) {
+static bool workspace_valid_on_output(struct swine_output *output,
+		const char *ws_name) {
+	struct workspace_config *wsc = workspace_find_config(ws_name);
+	if (!wsc) {
+		return true;
+	}
+	for (int i = 0; i < wsc->outputs->length; i++) {
+		struct swine_output *ws_output =
+			output_by_name_or_id(wsc->outputs->items[i]);
+		if (ws_output) {
+			return ws_output == output;
+		}
+	}
+	return false;
+}
+
+// Ported from sway/tree/workspace.c.
+static void workspace_name_from_binding(const struct swine_binding *binding,
+		struct swine_output *output, int *min_order, char **earliest_name) {
+	char *cmdlist = swine_strdup(binding->command);
+	char *dup = cmdlist;
+	char *name = NULL;
+
+	// workspace n
+	char *cmd = argsep(&cmdlist, " ", NULL);
+	if (cmdlist) {
+		name = argsep(&cmdlist, ",;", NULL);
+	}
+
+	// TODO: support "move container to workspace" bindings as well
+
+	if (strcmp("workspace", cmd) == 0 && name) {
+		char *target = swine_strdup(name);
+		target = do_var_replacement(target);
+		strip_quotes(target);
+
+		// Make sure that the command references an actual workspace
+		// not a command about workspaces
+		if (strcmp(target, "next") == 0 ||
+				strcmp(target, "prev") == 0 ||
+				strcmp(target, "next_on_output") == 0 ||
+				strcmp(target, "prev_on_output") == 0 ||
+				strcmp(target, "number") == 0 ||
+				strcmp(target, "back_and_forth") == 0 ||
+				strcmp(target, "current") == 0) {
+			free(target);
+			free(dup);
+			return;
+		}
+
+		// If the command is workspace number <name>, isolate the name
+		if (has_prefix(target, "number ")) {
+			char *temp = swine_strdup(target + strlen("number "));
+			free(target);
+			target = temp;
+			// Make sure the workspace number doesn't already exist
+			if (isdigit((unsigned char)target[0]) &&
+					workspace_by_number(target)) {
+				free(target);
+				free(dup);
+				return;
+			}
+		}
+
+		// Make sure that the workspace doesn't already exist, and that it
+		// can appear on the given output
+		if (workspace_by_name(target) ||
+				!workspace_valid_on_output(output, target)) {
+			free(target);
+			free(dup);
+			return;
+		}
+
+		if (binding->order < *min_order) {
+			*min_order = binding->order;
+			free(*earliest_name);
+			*earliest_name = target;
+		} else {
+			free(target);
+		}
+	}
+	free(dup);
+}
+
+char *workspace_next_name(struct swine_output *output) {
+	// Scan for available workspace names by looking through output-workspace
+	// assignments primarily, falling back to bindings and numbers.
+	int order = INT_MAX;
+	char *target = NULL;
+	if (config && output) {
+		struct swine_mode *mode = config->current_mode;
+		for (int i = 0; i < mode->keysym_bindings->length; ++i) {
+			workspace_name_from_binding(mode->keysym_bindings->items[i],
+				output, &order, &target);
+		}
+		for (int i = 0; i < config->workspace_configs->length; ++i) {
+			// Unlike with bindings, this does not guarantee order
+			const struct workspace_config *wsc =
+				config->workspace_configs->items[i];
+			if (workspace_by_name(wsc->workspace)) {
+				continue;
+			}
+			bool found = false;
+			for (int j = 0; j < wsc->outputs->length; ++j) {
+				struct swine_output *ws_output =
+					output_by_name_or_id(wsc->outputs->items[j]);
+				if (ws_output) {
+					if (ws_output == output) {
+						found = true;
+						free(target);
+						target = swine_strdup(wsc->workspace);
+					}
+					break;
+				}
+			}
+			if (found) {
+				break;
+			}
+		}
+	}
+	if (target != NULL) {
+		return target;
+	}
+	// As a fall back, use the next available number
 	for (int n = 1;; ++n) {
 		if (!root_find_workspace(test_number, &n)) {
 			return format_str("%d", n);
 		}
 	}
+}
+
+static int find_output(const void *id1, const void *id2) {
+	return swine_strcasecmp(id1, id2);
+}
+
+static int workspace_output_get_priority(struct swine_workspace *ws,
+		struct swine_output *output) {
+	int index_id = output->identifier ? list_seq_find(ws->output_priority,
+		find_output, output->identifier) : -1;
+	int index_name = list_seq_find(ws->output_priority, find_output,
+		output->name);
+	return index_name < 0 || (index_id >= 0 && index_id < index_name) ?
+		index_id : index_name;
+}
+
+// Outputs are remembered by name: Windows' "DISPLAY<n>" stays with the
+// connector, the identifier (monitor model) is shared by identical monitors.
+void workspace_output_raise_priority(struct swine_workspace *ws,
+		struct swine_output *old_output, struct swine_output *output) {
+	int old_index = workspace_output_get_priority(ws, old_output);
+	if (old_index < 0) {
+		return;
+	}
+	int new_index = workspace_output_get_priority(ws, output);
+	if (new_index < 0) {
+		list_insert(ws->output_priority, old_index, swine_strdup(output->name));
+	} else if (new_index > old_index) {
+		char *name = ws->output_priority->items[new_index];
+		list_del(ws->output_priority, new_index);
+		list_insert(ws->output_priority, old_index, name);
+	}
+}
+
+void workspace_output_add_priority(struct swine_workspace *ws,
+		struct swine_output *output) {
+	if (output == root->fallback_output) {
+		return;
+	}
+	if (workspace_output_get_priority(ws, output) < 0) {
+		list_add(ws->output_priority, swine_strdup(output->name));
+	}
+}
+
+struct swine_output *workspace_output_get_highest_available(
+		struct swine_workspace *ws) {
+	for (int i = 0; i < ws->output_priority->length; i++) {
+		struct swine_output *output =
+			output_by_name_or_id(ws->output_priority->items[i]);
+		if (output) {
+			return output;
+		}
+	}
+	return NULL;
+}
+
+void workspace_move_to_output(struct swine_workspace *ws,
+		struct swine_output *output) {
+	if (ws->output == output) {
+		return;
+	}
+	struct swine_output *old_output = ws->output;
+	workspace_detach(ws);
+	struct swine_workspace *new_output_old_ws =
+		output_get_active_workspace(output);
+	if (!swine_assert(new_output_old_ws, "Expected output to have a workspace")) {
+		return;
+	}
+
+	output_add_workspace(output, ws);
+	// sway derives an output's active workspace from the focus order.
+	struct swine_node *focus = seat_get_focus_inactive(&output->node);
+	if (focus) {
+		struct swine_workspace *active = focus->type == N_WORKSPACE ?
+			focus->workspace : focus->container->workspace;
+		if (active) {
+			output->active_workspace = active;
+		}
+	}
+
+	// If moving the last workspace from the old output, create a new workspace
+	// on the old output
+	if (old_output->workspaces->length == 0) {
+		char *ws_name = workspace_next_name(old_output);
+		struct swine_workspace *new_ws = workspace_create(old_output, ws_name);
+		free(ws_name);
+		old_output->active_workspace = new_ws;
+		seat_set_raw_focus(&new_ws->node);
+	} else if (old_output->active_workspace == NULL) {
+		old_output->active_workspace = old_output->workspaces->items[0];
+	}
+
+	workspace_consider_destroy(new_output_old_ws);
+
+	output_sort_workspaces(output);
+	workspace_output_raise_priority(ws, old_output, output);
+}
+
+static void count_sticky_containers(struct swine_container *con, void *data) {
+	if (container_is_sticky(con)) {
+		size_t *count = data;
+		*count += 1;
+	}
+}
+
+size_t workspace_num_sticky_containers(struct swine_workspace *ws) {
+	size_t count = 0;
+	workspace_for_each_container(ws, count_sticky_containers, &count);
+	return count;
 }
 
 struct ws_collect {

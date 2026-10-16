@@ -28,12 +28,25 @@ struct swine_mode {
 	list_t *keysym_bindings;   // struct swine_binding *
 };
 
-// "output <name> bg <file> <mode> [<fallback color>]" (swaybg options).
+// "output <name|identifier|*> ..." (swaybg options and the display mode).
 struct output_config {
-	char *name;               // output name or "*"
+	char *name;               // output name, identifier or "*"
 	char *background;         // image path (resolved), or a #color
 	char *background_mode;    // stretch|fill|fit|center|tile|solid_color
 	char *background_fallback; // #color shown around/instead of the image
+	int width, height;        // "mode", in the unrotated frame; 0 = unset
+	float refresh_rate;       // Hz; 0 = the highest for the mode
+	int x, y;                 // "position"; INT_MIN = unset
+	int transform;            // quarter turns clockwise; -1 = unset
+	float scale;              // accepted; 0 = unset (not applied, see doc)
+};
+
+// "workspace <name> output <outputs...>" and "workspace <name> gaps ..."
+struct workspace_config {
+	char *workspace;
+	list_t *outputs;          // char *: output names/identifiers, in order
+	int gaps_inner;           // INT_MIN when not set
+	struct side_gaps gaps_outer;
 };
 
 struct swine_variable {
@@ -55,6 +68,7 @@ struct swine_config {
 	list_t *cmd_queue;         // deferred exec commands (char *)
 	list_t *output_configs;    // struct output_config *
 	list_t *criteria;          // struct criteria *: for_window, assign, no_focus
+	list_t *workspace_configs; // struct workspace_config *
 
 	// Integrated Waybar-compatible bar, enabled by a sway "bar { }" block or
 	// by "exec waybar". Everything else comes from the Waybar config.
@@ -95,6 +109,7 @@ extern struct swine_config *config;
 
 struct swine_config *config_create(void);
 void free_config(struct swine_config *config);
+void free_workspace_config(struct workspace_config *wsc);
 // Returns the first existing file among platform_config_paths(name), or
 // NULL. Caller frees.
 char *find_config_file(const char *name);
@@ -113,8 +128,10 @@ char *do_var_replacement(char *str);   // may realloc; returns the new pointer
 // of the config file being read. Caller frees.
 char *config_resolve_path(const char *path);
 struct output_config *config_find_output_config(const char *name);
-// The config for an output: its own, else the "*" one, else NULL.
+// The config whose background applies to an output: its own if it sets a
+// background, else the "*" one, else NULL.
 struct output_config *output_config_for_name(const char *output_name);
+void free_output_config(struct output_config *oc);
 void free_swine_binding(struct swine_binding *binding);
 struct swine_mode *config_find_mode(const char *name);
 struct swine_mode *config_add_mode(const char *name);

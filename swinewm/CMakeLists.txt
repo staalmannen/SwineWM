@@ -172,6 +172,7 @@ if(SWINEWM_BUILD_TESTS)
     tests/test_config.c
     tests/test_criteria.c
     tests/test_marks.c
+    tests/test_outputs.c
     tests/test_tree.c
     tests/test_bar.c
     tests/test_notify.c

@@ -5,6 +5,7 @@
 #include "list.h"
 #include "swinewm/tree/node.h"
 
+struct swine_output;
 struct swine_view;
 
 // Boundary between the portable window-manager core and the OS. The Win32
@@ -55,6 +56,19 @@ char *platform_pictures_dir(void);
 // On failure *error may receive a message (caller frees).
 bool platform_screenshot(const struct swine_box *box, const char *path,
 		bool jpeg, char **error);
+// Display settings for one output, merged from its "output" configs.
+// Unset fields keep the current setting.
+struct output_display_config {
+	int width, height;     // unrotated mode; 0 = unset
+	float refresh_rate;    // Hz; 0 = the highest for the mode
+	int x, y;              // INT_MIN = unset
+	int transform;         // quarter turns clockwise; -1 = unset
+	bool any;              // false: nothing set, restore the defaults
+};
+// Applies display settings (on Windows temporarily, undone on exit and by
+// --recover). Returns false if they could not be applied.
+bool platform_output_configure(struct swine_output *output,
+		const struct output_display_config *cfg);
 // Called after the config changed so the platform can re-register hooks.
 void platform_config_changed(void);
 // The bar or notifications need repainting (called after every commit).

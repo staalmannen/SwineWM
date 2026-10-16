@@ -91,6 +91,10 @@ char *win32_error_string(DWORD error);
 
 // output.c
 void win32_outputs_update(void);
+// Returns every monitor to its saved settings if swinewm changed any
+// (output mode/position/transform).
+void win32_outputs_restore_settings(void);
+void win32_outputs_finish(void);
 
 // window.c
 bool win32_windows_init(void);
@@ -120,5 +124,9 @@ void win32_ipc_handle(struct win32_ipc_request *request);
 void win32_recover_schedule_save(void);
 void win32_recover_save(void);
 void win32_recover_clear(void);
+// Remembers that display settings were changed, so that --recover (or the
+// next start) restores them after a crash.
+void win32_recover_note_display_changed(void);
+void win32_recover_display_done(void);
 
 #endif

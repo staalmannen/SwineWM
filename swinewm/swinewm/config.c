@@ -47,6 +47,7 @@ struct swine_config *config_create(void) {
 	c->cmd_queue = create_list();
 	c->output_configs = create_list();
 	c->criteria = create_list();
+	c->workspace_configs = create_list();
 	c->current_mode = mode_create("default");
 	list_add(c->modes, c->current_mode);
 	c->default_orientation = L_NONE;
@@ -73,18 +74,17 @@ void free_config(struct swine_config *c) {
 	list_free(c->modes);
 	list_free_items_and_destroy(c->cmd_queue);
 	for (int i = 0; i < c->output_configs->length; ++i) {
-		struct output_config *oc = c->output_configs->items[i];
-		free(oc->name);
-		free(oc->background);
-		free(oc->background_mode);
-		free(oc->background_fallback);
-		free(oc);
+		free_output_config(c->output_configs->items[i]);
 	}
 	list_free(c->output_configs);
 	for (int i = 0; i < c->criteria->length; ++i) {
 		criteria_destroy(c->criteria->items[i]);
 	}
 	list_free(c->criteria);
+	for (int i = 0; i < c->workspace_configs->length; ++i) {
+		free_workspace_config(c->workspace_configs->items[i]);
+	}
+	list_free(c->workspace_configs);
 	free(c->current_config_path);
 	free(c->current_config);
 	free(c);
@@ -407,7 +407,15 @@ struct output_config *config_find_output_config(const char *name) {
 
 struct output_config *output_config_for_name(const char *output_name) {
 	struct output_config *oc = config_find_output_config(output_name);
-	return oc ? oc : config_find_output_config("*");
+	return oc && oc->background ? oc : config_find_output_config("*");
+}
+
+void free_output_config(struct output_config *oc) {
+	free(oc->name);
+	free(oc->background);
+	free(oc->background_mode);
+	free(oc->background_fallback);
+	free(oc);
 }
 
 char *do_var_replacement(char *str) {

@@ -42,11 +42,15 @@ bool layout_parallel_to_direction(enum swine_container_layout layout,
 
 struct swine_output *output_by_name_or_direction(const char *name,
 		struct swine_output *from) {
+	if (swine_strcasecmp(name, "current") == 0) {
+		struct swine_workspace *active_ws = seat_get_focused_workspace();
+		return active_ws ? active_ws->output : NULL;
+	}
 	enum swine_direction dir;
 	if (parse_direction(name, &dir)) {
 		return output_get_in_direction(from, dir);
 	}
-	return output_by_name(name);
+	return output_by_name_or_id(name);
 }
 
 // "focus prev|next": the direction along the parent's layout. Returns false

@@ -77,6 +77,18 @@ char *platform_pictures_dir(void) {
 	return swine_strdup("C:\\Users\\pig\\Pictures");
 }
 
+bool platform_output_configure(struct swine_output *output,
+		const struct output_display_config *cfg) {
+	// Only calls that change something are interesting to tests.
+	if (cfg->any) {
+		fake.output_configure_calls++;
+		snprintf(fake.last_configured_output,
+			sizeof(fake.last_configured_output), "%s", output->name);
+		fake.last_output_config = *cfg;
+	}
+	return true;
+}
+
 bool platform_screenshot(const struct swine_box *box, const char *path,
 		bool jpeg, char **error) {
 	(void)jpeg;
