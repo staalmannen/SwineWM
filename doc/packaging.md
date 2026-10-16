@@ -134,7 +134,9 @@ PATH entry in [`swinewm/cmake/wix-patch.xml`](../swinewm/cmake/wix-patch.xml).
    start a new empty `## [Unreleased]`, and update the links at the end.
 2. Merge to `main`.
 3. Tag the merge commit on `main` and push the tag:
-   `git tag 0.1.0 && git push origin 0.1.0`.
+   `git tag 0.1.0 && git push origin 0.1.0` (`0.1` works too and means
+   0.1.0). Creating the release on GitHub instead also works: CI then
+   attaches the files to it.
 
 CI builds the tag, and the `release` job publishes a GitHub Release named
 "SwineWM 0.1.0" with `SwineWM-0.1.0-win64.msi`, the zip, and that
