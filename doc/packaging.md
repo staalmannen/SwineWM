@@ -104,9 +104,12 @@ PATH entry in [`swinewm/cmake/wix-patch.xml`](../swinewm/cmake/wix-patch.xml).
 
 ## Things to know before distributing
 
-- **Version numbers.** The version comes from `project(SwineWM VERSION …)`
-  in `swinewm/CMakeLists.txt`. Windows Installer only upgrades to a higher
-  version, so bump it for every release.
+- **Version numbers.** The version comes from the git tag
+  (`swinewm/cmake/version.cmake`): `0.1.0` on the tagged commit,
+  `0.1.0-5-g1234abc` five commits later (`-dirty` with uncommitted
+  changes). The MSI gets `0.1.0.5`; Windows Installer compares the first
+  three parts, and builds with the same three parts replace each other.
+  Without git (a source archive) the fallback in `version.cmake` is used.
 - **Upgrade code.** `CPACK_WIX_UPGRADE_GUID` identifies "SwineWM" across all
   versions; that is how a new MSI knows to replace an old one. It must never
   change.
@@ -124,6 +127,18 @@ PATH entry in [`swinewm/cmake/wix-patch.xml`](../swinewm/cmake/wix-patch.xml).
     `swinewm --unset-shell` undoes it). If SwineWM is the shell and crashes,
     it starts Explorer so the session stays usable; Ctrl+Alt+Del → Task
     Manager → Run `explorer.exe` always works too.
+
+## Making a release
+
+1. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [0.1.0] - <date>`,
+   start a new empty `## [Unreleased]`, and update the links at the end.
+2. Merge to `main`.
+3. Tag the merge commit on `main` and push the tag:
+   `git tag 0.1.0 && git push origin 0.1.0`.
+
+CI builds the tag, and the `release` job publishes a GitHub Release named
+"SwineWM 0.1.0" with `SwineWM-0.1.0-win64.msi`, the zip, and that
+changelog section as the notes.
 
 ## Updating a running swinewm
 

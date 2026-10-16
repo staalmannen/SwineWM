@@ -71,14 +71,22 @@ void win32_shell_detect(void) {
 	// (0 processes: started without any console, e.g. by "restart".)
 	if (GetConsoleProcessList(pids, 2) <= 1) {
 		char *path = local_state_path("swinewm.log");
-		if (path) {
+		char *old_path = local_state_path("swinewm.old.log");
+		if (path && old_path) {
 			wchar_t *wpath = utf8_to_utf16(path);
+			wchar_t *wold = utf8_to_utf16(old_path);
+			// Keep the previous session's log: after a crash or a
+			// "restart" that is the interesting one.
+			MoveFileExW(wpath, wold, MOVEFILE_REPLACE_EXISTING);
 			if (_wfreopen(wpath, L"w", stderr)) {
 				FreeConsole();
+				swine_log_set_colors(false);
 			}
+			free(wold);
 			free(wpath);
-			free(path);
 		}
+		free(old_path);
+		free(path);
 	}
 	swine_log(SWINE_INFO, "Running as the Windows shell");
 }

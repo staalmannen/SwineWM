@@ -6,6 +6,7 @@
 #include "ipc.h"
 #include "ipc-client.h"
 #include "stringop.h"
+#include "swinewm_version.h"
 
 static const char usage[] =
 	"Usage: swinemsg [options] [message]\n"
@@ -129,7 +130,7 @@ int main(int argc, char **argv) {
 				i + 1 < argc) {
 			type_name = argv[++i];
 		} else if (strcmp(arg, "-v") == 0 || strcmp(arg, "--version") == 0) {
-			printf("swinemsg version 0.0.1-draft\n");
+			printf("swinemsg version " SWINEWM_VERSION "\n");
 			return 0;
 		} else if (strcmp(arg, "--") == 0) {
 			++i;

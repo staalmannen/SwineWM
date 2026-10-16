@@ -35,11 +35,11 @@ char *ipc_json_get_version(void) {
 	json_key(&w, "variant");
 	json_string(&w, "swinewm");
 	json_key(&w, "major");
-	json_int(&w, 0);
+	json_int(&w, SWINEWM_VERSION_MAJOR);
 	json_key(&w, "minor");
-	json_int(&w, 0);
+	json_int(&w, SWINEWM_VERSION_MINOR);
 	json_key(&w, "patch");
-	json_int(&w, 1);
+	json_int(&w, SWINEWM_VERSION_PATCH);
 	json_key(&w, "loaded_config_file_name");
 	json_string(&w, config->current_config_path);
 	json_end_object(&w);

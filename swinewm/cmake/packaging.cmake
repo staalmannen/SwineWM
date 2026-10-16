@@ -24,7 +24,12 @@ set(CPACK_PACKAGE_NAME "SwineWM")
 set(CPACK_PACKAGE_VENDOR "SwineWM")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
   "Sway-like tiling window manager, bar and notifications for Windows")
+# X.Y.Z.N: the MSI compares X.Y.Z, and a build with the same X.Y.Z
+# replaces an installed one (CPack allows same-version upgrades).
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+# File names carry the readable version: SwineWM-0.1.0-win64.msi on a
+# release, SwineWM-0.1.0-5-g1234abc-win64.msi in between.
+set(CPACK_PACKAGE_FILE_NAME "SwineWM-${SWINEWM_VERSION}-win64")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "SwineWM")
 set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/staalmannen/SwineWM")
 # Start menu shortcut: SwineWM -> swinewm.exe

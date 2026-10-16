@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
-project(SwineWM LANGUAGES C VERSION 0.0.1)
+include(cmake/version.cmake)
+project(SwineWM LANGUAGES C VERSION ${SWINEWM_VERSION_NUMERIC})
 
 # The portable core (tree, commands, config, IPC JSON) builds everywhere so
 # that its unit tests run on Linux CI as well as on Windows. The executables
@@ -36,6 +37,8 @@ endif()
 # Built-in defaults are generated from the files in resources/, which are
 # also installed, so the two cannot drift apart.
 set(SWINEWM_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+configure_file(swinewm/version.h.in ${SWINEWM_GENERATED_DIR}/swinewm_version.h
+  @ONLY)
 function(swinewm_embed input name)
   set(output ${SWINEWM_GENERATED_DIR}/${name}.h)
   add_custom_command(OUTPUT ${output}
@@ -91,7 +94,7 @@ add_library(swinewm_core STATIC
   swinewm/tree/view.c
   swinewm/tree/workspace.c
 )
-target_include_directories(swinewm_core PRIVATE ${SWINEWM_GENERATED_DIR})
+target_include_directories(swinewm_core PUBLIC ${SWINEWM_GENERATED_DIR})
 target_link_libraries(swinewm_core PUBLIC swine_common)
 if(NOT MSVC)
   target_link_libraries(swinewm_core PUBLIC m)
@@ -131,6 +134,7 @@ if(WIN32)
   add_executable(swinemsg swinemsg/main.c)
   target_compile_definitions(swinemsg PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
   target_link_libraries(swinemsg PRIVATE swine_common)
+  target_include_directories(swinemsg PRIVATE ${SWINEWM_GENERATED_DIR})
 
   # Put the default config files next to the executable in the build tree
   # too, laid out as they are installed, so a build runs like an install.

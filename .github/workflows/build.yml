@@ -1,5 +1,7 @@
 # Builds and tests SwineWM, and on Windows produces the MSI installer and a
-# portable zip as downloadable artifacts (see doc/packaging.md).
+# portable zip as downloadable artifacts (see doc/packaging.md). Pushing a
+# version tag ("0.1.0") also publishes them as a GitHub Release, with the
+# matching CHANGELOG.md section as release notes.
 name: build
 
 on:
@@ -13,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags, for the version (git describe)
       - name: Configure
         run: >
           cmake -S swinewm -B build -DCMAKE_BUILD_TYPE=Debug
@@ -27,6 +31,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags, for the version (git describe)
       - name: Configure
         run: cmake -S swinewm -B build -A x64
       - name: Build
@@ -49,3 +55,40 @@ jobs:
             build/*.msi
             build/*.zip
           if-no-files-found: error
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: SwineWM-windows
+          path: dist
+      - name: Release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          section() {
+            awk -v head="$1" '
+              index($0, "## [" head "]") == 1 { found = 1; next }
+              found && /^## \[/ { exit }
+              found && /^\[.*\]: / { exit }
+              found { print }
+            ' CHANGELOG.md
+          }
+          section "$version" > notes.md
+          if [ ! -s notes.md ]; then
+            section "Unreleased" > notes.md
+          fi
+          cat notes.md
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" dist/*.msi dist/*.zip
+          --title "SwineWM $GITHUB_REF_NAME" --notes-file notes.md
+          --verify-tag
