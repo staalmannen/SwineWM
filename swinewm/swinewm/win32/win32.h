@@ -75,6 +75,9 @@ char *win32_process_name(DWORD pid);
 
 // wallpaper.c
 void win32_wallpaper_refresh(void);
+// As the shell: draws the wallpapers into the desktop window, whose client
+// area starts at (origin_x, origin_y) on the virtual screen.
+void win32_wallpaper_paint(HDC dc, int origin_x, int origin_y);
 void win32_wallpaper_finish(void);
 
 // notify.c
