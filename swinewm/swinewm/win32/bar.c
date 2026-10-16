@@ -14,6 +14,7 @@
 struct hit {
 	RECT rect;
 	int module_index;
+	uint64_t tray_id;
 	char *on_click;
 	char *on_scroll_up;
 	char *on_scroll_down;
@@ -76,11 +77,16 @@ static int text_width(HDC dc, HFONT font, const wchar_t *text) {
 static int item_outer_width(struct bar_window *bw, HDC dc,
 		const struct bar_item *item, int *inner) {
 	const struct swine_style *s = &item->style;
-	wchar_t *text = utf8_to_utf16(item->text);
-	int w = text_width(dc, style_font(bw, s), text) +
-		px(bw, s->padding.left + s->padding.right +
-			s->border_left.width + s->border_right.width);
-	free(text);
+	int content;
+	if (item->tray_id) {
+		content = px(bw, item->icon_size);
+	} else {
+		wchar_t *text = utf8_to_utf16(item->text);
+		content = text_width(dc, style_font(bw, s), text);
+		free(text);
+	}
+	int w = content + px(bw, s->padding.left + s->padding.right +
+		s->border_left.width + s->border_right.width);
 	if (w < px(bw, s->min_width)) {
 		w = px(bw, s->min_width);
 	}
@@ -95,6 +101,9 @@ static int module_width(struct bar_window *bw, HDC dc,
 	int w = 0;
 	for (int i = 0; i < view->items->length; ++i) {
 		w += item_outer_width(bw, dc, view->items->items[i], NULL);
+	}
+	if (view->items->length > 1) {
+		w += px(bw, view->item_spacing) * (view->items->length - 1);
 	}
 	if (view->is_box) {
 		const struct swine_style *s = &view->style;
@@ -157,17 +166,26 @@ static int draw_item(struct bar_window *bw, HDC dc, int x, int top, int bottom,
 		box.right - px(bw, s->padding.right + s->border_right.width),
 		box.bottom - px(bw, s->padding.bottom + s->border_bottom.width),
 	};
-	wchar_t *text = utf8_to_utf16(item->text);
-	HFONT old = SelectObject(dc, style_font(bw, s));
-	SetTextColor(dc, win32_blend(s->color, bg));
-	DrawTextW(dc, text, -1, &text_rect,
-		DT_SINGLELINE | DT_VCENTER | DT_CENTER | DT_NOPREFIX);
-	SelectObject(dc, old);
-	free(text);
+	if (item->tray_id) {
+		int size = px(bw, item->icon_size);
+		int ix = text_rect.left + (text_rect.right - text_rect.left - size) / 2;
+		int iy = text_rect.top + (text_rect.bottom - text_rect.top - size) / 2;
+		RECT icon = {ix, iy, ix + size, iy + size};
+		win32_tray_draw(dc, item->tray_id, item->icon_path, &icon, bw->hwnd);
+	} else {
+		wchar_t *text = utf8_to_utf16(item->text);
+		HFONT old = SelectObject(dc, style_font(bw, s));
+		SetTextColor(dc, win32_blend(s->color, bg));
+		DrawTextW(dc, text, -1, &text_rect,
+			DT_SINGLELINE | DT_VCENTER | DT_CENTER | DT_NOPREFIX);
+		SelectObject(dc, old);
+		free(text);
+	}
 
 	struct hit *h = calloc(1, sizeof(*h));
 	h->rect = box;
 	h->module_index = module_index;
+	h->tray_id = item->tray_id;
 	h->on_click = item->on_click ? swine_strdup(item->on_click) : NULL;
 	h->on_scroll_up = item->on_scroll_up ? swine_strdup(item->on_scroll_up) : NULL;
 	h->on_scroll_down = item->on_scroll_down ?
@@ -196,10 +214,34 @@ static void draw_module(struct bar_window *bw, HDC dc, int x, int top,
 	int item_top = box.top + px(bw, s->padding.top + s->border_top.width);
 	int item_bottom = box.bottom - px(bw, s->padding.bottom +
 		s->border_bottom.width);
+	bool tray = false;
 	for (int i = 0; i < view->items->length; ++i) {
-		item_x = draw_item(bw, dc, item_x, item_top, item_bottom,
-			view->items->items[i], bg, view->module_index);
+		struct bar_item *item = view->items->items[i];
+		item_x = draw_item(bw, dc, item_x, item_top, item_bottom, item, bg,
+			view->module_index) + px(bw, view->item_spacing);
+		tray = tray || item->tray_id;
 	}
+	if (tray) {
+		RECT screen = box;
+		MapWindowPoints(bw->hwnd, NULL, (POINT *)&screen, 2);
+		win32_tray_set_host_rect(&screen);
+	}
+}
+
+static struct hit *hit_test(struct bar_window *bw, int x, int y);
+
+// Mouse buttons on tray icons go to the icon's program.
+static bool tray_mouse(struct bar_window *bw, int button, bool down,
+		LPARAM lparam) {
+	struct hit *h = bw ? hit_test(bw, (short)LOWORD(lparam),
+		(short)HIWORD(lparam)) : NULL;
+	if (!h || !h->tray_id) {
+		return false;
+	}
+	POINT p = {(short)LOWORD(lparam), (short)HIWORD(lparam)};
+	ClientToScreen(bw->hwnd, &p);
+	win32_tray_mouse(h->tray_id, button, down, p);
+	return true;
 }
 
 static void paint(struct bar_window *bw, HDC target) {
@@ -277,7 +319,21 @@ static LRESULT CALLBACK bar_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 		return 1;
 	case WM_MOUSEACTIVATE:
 		return MA_NOACTIVATE;   // clicking the bar never takes focus
+	case WM_LBUTTONDOWN:
+		tray_mouse(bw, 0, true, lparam);
+		return 0;
+	case WM_MBUTTONDOWN:
+	case WM_MBUTTONUP:
+		tray_mouse(bw, 1, msg == WM_MBUTTONDOWN, lparam);
+		return 0;
+	case WM_RBUTTONDOWN:
+	case WM_RBUTTONUP:
+		tray_mouse(bw, 2, msg == WM_RBUTTONDOWN, lparam);
+		return 0;
 	case WM_LBUTTONUP: {
+		if (tray_mouse(bw, 0, false, lparam)) {
+			return 0;
+		}
 		struct hit *h = bw ? hit_test(bw, (short)LOWORD(lparam),
 			(short)HIWORD(lparam)) : NULL;
 		if (h) {

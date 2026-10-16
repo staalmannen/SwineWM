@@ -109,6 +109,8 @@ post or send messages to the shell's hidden top-level window:
   the command.
 - **IPC client threads** pass each request with `SendMessageTimeout` and
   write the reply back.
+- **The tray thread** owns swinewm's `Shell_TrayWnd` (see the tray section
+  below) and posts `WM_SWINE_TRAY` when icons change.
 - A hidden top-level window (not a message-only window) is used because only
   top-level windows receive `WM_DISPLAYCHANGE` and `WM_SETTINGCHANGE`.
 
@@ -224,6 +226,48 @@ the tree directly; only the configuration is Waybar's.
   output, painted with GDI into a back buffer. Clicks run the item's
   command (for example `workspace "2"`); the wheel switches workspaces.
   Translucent colours are blended over black for now.
+
+## The tray (Waybar's `tray` module)
+
+On Linux, Waybar's tray shows StatusNotifierItems that programs such as
+nm-applet register over D-Bus. On Windows the equivalent is the
+notification area: programs call `Shell_NotifyIcon`, which sends
+`WM_COPYDATA` to the first window of class `Shell_TrayWnd` that
+`FindWindow` returns. When the bar has a `tray` module, swinewm becomes
+that window (`win32/tray.c`, after ManagedShell's `TrayService`):
+
+- It creates `Shell_TrayWnd` (never shown) with a `TrayNotifyWnd` child and
+  keeps it topmost, re-raising it every 100 ms, so `FindWindow` finds it
+  before Explorer's. It then broadcasts the registered `TaskbarCreated`
+  message, and running programs add their icons again, now to swinewm.
+- The window runs on its own thread: `Shell_NotifyIcon` waits for the
+  answer, and messages swinewm does not handle (AppBar messages, Explorer's
+  private ones) are passed on to Explorer's taskbar with
+  `SendMessageTimeout`. Neither can block the main thread. The icon table
+  (window, id or GUID, callback message, version, a copy of the icon,
+  tooltip, hidden state) is shared under a lock; the main thread copies it
+  into the core (`swinewm/bar/tray.c`) on `WM_SWINE_TRAY`, and the bar
+  module (`swinewm/bar/bar.c`) applies Waybar's options. Icons whose window
+  is gone are pruned every 2 s.
+- Clicks on an icon are sent to its program with `SendNotifyMessage`,
+  encoded as Explorer does: button down/up (double click when quick
+  enough), then `NIN_SELECT` after a left click and `WM_CONTEXTMENU` after a
+  right click; version-4 icons get the position in `wParam`.
+  `AllowSetForegroundWindow` lets the program show its menu.
+  `Shell_NotifyIconGetRect` is answered with where the bar drew the icon.
+- Balloon tips (`NIF_INFO`) become notifications of the built-in Mako.
+- As the shell, swinewm also loads the SysTray shell service object
+  (`stobject.dll`), which adds the volume, network and power icons that
+  Explorer would otherwise show.
+- Undo: when the tray module goes away or swinewm exits, the window is
+  destroyed and `TaskbarCreated` is broadcast again, so programs give their
+  icons back to Explorer. After a crash the window is dropped to the bottom
+  of the z-order instead (its thread may be stuck) before the broadcast;
+  `swinewm --recover` broadcasts too.
+
+Explorer keeps showing the icons it had when swinewm took over (it never
+learns they moved), so its own tray looks stale until swinewm exits;
+`explorer_taskbar autohide` hides it anyway.
 
 ## Wallpapers (swaybg)
 

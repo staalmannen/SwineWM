@@ -64,9 +64,9 @@ To use it instead of Explorer, run `swinewm --set-shell` once and log off
 and on again (`swinewm --unset-shell` brings Explorer back). As the shell it
 starts your Windows startup programs, logs to
 `%LOCALAPPDATA%\swinewm\swinewm.log`, and `exit` (Win+Shift+e) logs you off.
-Tray icons are not shown yet, so programs that live only in the tray cannot
-be reached in that mode. Running next to Explorer, `explorer_taskbar
-autohide` in the config hides Explorer's taskbar while swinewm runs.
+Tray icons appear in the bar's `tray` module (on by default), in either
+mode. Running next to Explorer, `explorer_taskbar autohide` in the config
+hides Explorer's taskbar while swinewm runs.
 
 With the default config:
 

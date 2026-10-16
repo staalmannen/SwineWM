@@ -5,6 +5,7 @@
 #include "swinewm/bar/bar.h"
 #include "swinewm/bar/css.h"
 #include "swinewm/bar/format.h"
+#include "swinewm/bar/tray.h"
 #include "swinewm/config.h"
 #include "swinewm/tree/root.h"
 #include "test.h"
@@ -156,7 +157,7 @@ static void test_bar_model(void) {
 	bar_load_from_strings(
 		"{\n"
 		"  \"height\": 24,\n"
-		"  \"modules-left\": [\"sway/workspaces\", \"sway/mode\", \"tray\"],\n"
+		"  \"modules-left\": [\"sway/workspaces\", \"sway/mode\", \"pulseaudio\"],\n"
 		"  \"modules-center\": [\"sway/window\"],\n"
 		"  \"modules-right\": [\"cpu\", \"battery#bat0\", \"clock\", \"custom/hello\"],\n"
 		"  \"sway/window\": { \"max-length\": 5 },\n"
@@ -181,7 +182,7 @@ static void test_bar_model(void) {
 	run("workspace 2");
 	fake.cpu_usage = 70;
 	struct bar_model *model = bar_build(output, 0);
-	// "tray" is unsupported, so the indexes are 0 ws, 1 mode, 2 window, ...
+	// "pulseaudio" is unsupported, so the indexes are 0 ws, 1 mode, 2 window, ...
 	struct bar_module_view *ws = find_view(model, 0);
 	CHECK(ws && ws->is_box && ws->items->length == 2);
 	if (ws && ws->items->length == 2) {
@@ -265,10 +266,90 @@ static void test_bar_config_enabling(void) {
 	fake_teardown();
 }
 
+static uint64_t tray_id_at(struct bar_module_view *view, int i) {
+	return view && i < view->items->length ?
+		((struct bar_item *)view->items->items[i])->tray_id : 0;
+}
+
+static void test_tray(void) {
+	fake_setup();
+	config->bar_enabled = true;
+	bar_load_from_strings(
+		"{ \"modules-right\": [\"clock\", \"tray\"],\n"
+		"  \"tray\": { \"spacing\": 7, \"icon-size\": 20,\n"
+		"    \"icons\": { \"spotify\": false, \"Steam.exe\": \"C:/steam.ico\" },\n"
+		"    \"orders\": { \"discord\": 5 },\n"
+		"    \"ignore-list\": [\"Updater\"] } }\n",
+		"#tray > .passive { color: #ff0000; }\n"
+		"#tray > .active { color: #00ff00; }\n");
+	CHECK(bar_has_tray());
+	struct swine_output *output = root->outputs->items[0];
+
+	// An empty tray is hidden, as in Waybar.
+	struct bar_model *model = bar_build(output, 0);
+	CHECK(find_view(model, 1) == NULL);
+	bar_model_free(model);
+
+	tray_item_set(1, "Discord.exe", "Discord", false);
+	tray_item_set(2, "Spotify.exe", "Spotify", false);
+	tray_item_set(3, "Steam.exe", "Steam", false);
+	tray_item_set(4, "OneDrive.exe", "OneDrive Updater", false);
+	tray_item_set(5, "Teams.exe", "Teams", true);   // hidden by its program
+	model = bar_build(output, 0);
+	struct bar_module_view *tray = find_view(model, 1);
+	CHECK(tray && tray->is_box && tray->items->length == 2);
+	if (tray && tray->items->length == 2) {
+		CHECK_INT(tray->item_spacing, 7);
+		// Steam (order 0) before Discord (order 5); Spotify hidden by
+		// "icons", OneDrive by "ignore-list", Teams is passive.
+		CHECK_INT((int)tray_id_at(tray, 0), 3);
+		CHECK_INT((int)tray_id_at(tray, 1), 1);
+		struct bar_item *steam = tray->items->items[0];
+		CHECK_INT(steam->icon_size, 20);
+		CHECK_STR(steam->icon_path, "C:/steam.ico");
+		CHECK_INT(steam->style.color.g, 255);
+		struct bar_item *discord = tray->items->items[1];
+		CHECK(discord->icon_path == NULL);
+		CHECK_STR(discord->text, "");
+	}
+	bar_model_free(model);
+
+	// show-passive-items and reverse-direction
+	bar_load_from_strings(
+		"{ \"modules-right\": [\"tray\"],\n"
+		"  \"tray\": { \"show-passive-items\": true,"
+		" \"reverse-direction\": true } }\n",
+		"#tray > .passive { color: #ff0000; }\n");
+	tray_item_set(1, "Discord.exe", "Discord (3)", false);   // update in place
+	CHECK(tray_item_remove(4));
+	CHECK(!tray_item_remove(42));
+	model = bar_build(output, 0);
+	tray = find_view(model, 0);
+	CHECK(tray && tray->items->length == 4);
+	if (tray && tray->items->length == 4) {
+		// newest first: Teams, Steam, Spotify, Discord
+		CHECK_INT((int)tray_id_at(tray, 0), 5);
+		CHECK_INT((int)tray_id_at(tray, 3), 1);
+		struct bar_item *teams = tray->items->items[0];
+		CHECK_INT(teams->style.color.r, 255);
+		CHECK_INT(teams->style.color.g, 0);
+	}
+	bar_model_free(model);
+	struct tray_item *first = tray_get_items()->items[0];
+	CHECK_STR(first->title, "Discord (3)");
+
+	bar_load_from_strings("{ \"modules-right\": [\"clock\"] }", NULL);
+	CHECK(!bar_has_tray());
+	tray_clear();
+	CHECK_INT(tray_get_items()->length, 0);
+	fake_teardown();
+}
+
 void test_bar_all(void) {
 	test_json_parse();
 	test_css();
 	test_format();
 	test_bar_model();
 	test_bar_config_enabling();
+	test_tray();
 }

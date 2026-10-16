@@ -48,7 +48,7 @@ Waybar config and style sheet, and Mako-style notifications from a mako
 config. Its core is unit-tested on Linux and Windows, and it has been
 smoke-tested under Wine; it has not yet been used on a real Windows
 desktop. Not yet done: title bars and borders, mouse bindings, criteria
-rules, output configuration, IPC events, script-driven and tray bar modules,
+rules, output configuration, IPC events, script-driven bar modules,
 Windows toast notifications. See [`doc/compatibility.md`](doc/compatibility.md).
 
 To try it, see [`swinewm/README.md`](swinewm/README.md). It runs as an

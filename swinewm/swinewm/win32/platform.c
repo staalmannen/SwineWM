@@ -58,6 +58,9 @@ static LRESULT CALLBACK shell_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 	case WM_SWINE_SAVE_HIDDEN:
 		win32_recover_save();
 		return 0;
+	case WM_SWINE_TRAY:
+		win32_tray_handle_message(wparam, lparam);
+		return 0;
 	case WM_DISPLAYCHANGE:
 		win32_shell_resize_desktop();
 		win32_outputs_update();
@@ -99,6 +102,7 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *info) {
 	// hidden taskbar, or (as the shell) no shell at all.
 	win32_windows_show_all();
 	win32_shell_restore_taskbar();
+	win32_tray_crash();
 	win32_shell_rescue();
 	return EXCEPTION_CONTINUE_SEARCH;
 }
@@ -161,6 +165,7 @@ void platform_ui_refresh(void) {
 	}
 	win32_shell_update_work_area(false);
 	win32_shell_apply_taskbar();
+	win32_tray_update();
 	win32_wallpaper_refresh();
 	win32_bar_refresh();
 	win32_notify_refresh();
@@ -203,6 +208,7 @@ void platform_finish(void) {
 	win32_shell_finish();
 	win32_windows_finish();
 	win32_windows_show_all();
+	win32_tray_finish();
 	win32_bar_finish();
 	win32_notify_finish();
 	win32_wallpaper_finish();

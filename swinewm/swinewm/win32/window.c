@@ -191,7 +191,7 @@ static char *window_title(HWND hwnd) {
 	return title;
 }
 
-static char *process_name(DWORD pid) {
+char *win32_process_name(DWORD pid) {
 	HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
 	if (!process) {
 		return NULL;
@@ -217,7 +217,7 @@ static struct swine_view *create_view(HWND hwnd) {
 	DWORD pid = 0;
 	GetWindowThreadProcessId(hwnd, &pid);
 	view->pid = pid;
-	view->app_id = process_name(pid);
+	view->app_id = win32_process_name(pid);
 	view->natural_floating = should_float(hwnd);
 	view->natural = visible_rect(hwnd);
 	update_insets(view);

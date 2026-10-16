@@ -84,7 +84,8 @@ ignored · ❌ not implemented (error)
 | `clock` | 🟡 | `format`, `format-alt` (click), strftime specs; no calendar tooltip |
 | `cpu`, `memory`, `battery` | 🟡 | Main fields, `states`, `format-icons`, battery `format-charging/plugged/full` |
 | `custom/*` | 🟡 | Static `format` and `on-click`; `exec` scripts not yet |
-| `tray`, `network`, `pulseaudio`, others | ❌ | Skipped with a log message |
+| `tray` | 🟡 | Windows notification area icons. `icon-size`, `spacing`, `show-passive-items` (icons a program hides), `reverse-direction`, `orders`, `ignore-list`, `icons` (`false`, or an `.ico` file; keys are the program, `"Discord.exe"` or `"discord"`); `#tray > .active\|.passive` styling. Left/middle/right clicks go to the program as Explorer sends them; balloon tips become notifications. No tooltips, no scroll, no `-gtk-icon-effect` |
+| `network`, `pulseaudio`, others | ❌ | Skipped with a log message |
 | `on-click`, `on-scroll-up/down` | ✅ | Run through `exec` |
 | Tooltips, `rotate`, markup beyond stripping | ❌ | |
 | `style.css` | 🟡 | Selectors by type/#id/.class with descendants; `@define-color`, `alpha()`; colours, fonts, padding, margin, borders, `box-shadow: inset`; no `:hover`, animations, transparency (blended over black) |

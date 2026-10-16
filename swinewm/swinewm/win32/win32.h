@@ -19,6 +19,7 @@ struct swine_output;
 #define WM_SWINE_IPC (WM_APP + 2)      // lParam: struct win32_ipc_request *
 #define WM_SWINE_EVENTS (WM_APP + 3)   // drain queued WinEvents
 #define WM_SWINE_SAVE_HIDDEN (WM_APP + 4)
+#define WM_SWINE_TRAY (WM_APP + 5)     // tray.c: icons changed, or a balloon
 
 extern HWND win32_shell_hwnd;
 
@@ -50,6 +51,25 @@ bool win32_shell_recover_taskbar(void);
 void win32_shell_finish(void);
 void win32_shell_exit(void);
 void win32_shell_rescue(void);
+
+// Explorer's own taskbar window, skipping swinewm's Shell_TrayWnd.
+HWND win32_find_explorer_tray(void);
+
+// tray.c: hosting the notification area for the bar's "tray" module
+void win32_tray_update(void);
+void win32_tray_finish(void);
+void win32_tray_crash(void);
+void win32_tray_recover(void);
+void win32_tray_handle_message(WPARAM wparam, LPARAM lparam);
+void win32_tray_draw(HDC dc, uint64_t id, const char *icon_path,
+		const RECT *rect, HWND bar);
+void win32_tray_set_host_rect(const RECT *screen);
+// button: 0 left, 1 middle, 2 right
+void win32_tray_mouse(uint64_t id, int button, bool down, POINT screen);
+
+// window.c
+// The executable's file name ("Discord.exe"), or NULL.
+char *win32_process_name(DWORD pid);
 
 // wallpaper.c
 void win32_wallpaper_refresh(void);

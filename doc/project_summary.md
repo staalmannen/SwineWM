@@ -103,13 +103,14 @@ Win32 renderer.
    criteria (`[app_id=…]`, `for_window`, `assign`), `output` configuration,
    IPC event subscriptions, a swaynag equivalent.
 5. **Richer bar and notifications** — `custom/*` modules running scripts,
-   network, audio (pulseaudio module on Windows' audio API), tray (the
-   notification-area icons), translucent backgrounds; notification icons,
+   network, audio (pulseaudio module on Windows' audio API), tray
+   tooltips and hover, translucent backgrounds; notification icons,
    actions, grouping, and receiving Windows' own toast notifications.
 6. **Shell replacement** *(draft)* — `swinewm --set-shell` runs SwineWM
    instead of Explorer at logon: shell window, logon "ready" event,
    startup programs, work area, `exit` logs off, Explorer as a rescue after
-   a crash. Next: the tray (notification area icons) and AppBar support.
+   a crash, and the tray (notification area icons, including Windows'
+   volume/network/power icons). Next: AppBar support.
    See [`research/windows-shell.md`](research/windows-shell.md).
 
 ## Open design questions
@@ -140,11 +141,11 @@ Win32 renderer.
   `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon`
   (`--set-shell`), which needs no administrator rights; this has to be
   confirmed on Home editions.
-- **Tray icons without Explorer.** Programs put their tray icons on
-  whatever window is called `Shell_TrayWnd`. As the shell, SwineWM must
-  host them (design in [`research/windows-shell.md`](research/windows-shell.md));
-  until then, tray-only programs cannot be reached when Explorer is not
-  running.
+- **Tray icons next to Explorer.** The `tray` module takes the tray icons
+  over from Explorer (see [`architecture.md`](architecture.md)). Explorer's
+  own tray then shows stale icons until swinewm exits. Hiding its taskbar
+  (`explorer_taskbar autohide`) avoids the confusion; whether the tray
+  should do that by itself is open.
 
 ## Using the reference sources
 
