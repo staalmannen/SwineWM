@@ -89,11 +89,13 @@ Win32 renderer.
 Where things stand: the core, the Win32 layer, the bar, notifications,
 the tray, grim and shell mode work as drafts and have been used on a real
 Windows 11 machine as the shell. The milestones below lead to a 1.0 that
-can be maintained as a long-term release; each 0.x is a usable release
-with an (unsigned) MSI on GitHub Releases. Details per command are in
+can be maintained as a long-term release; each milestone is a usable
+release with an (unsigned) MSI on GitHub Releases. Versions always have
+three parts (`0.2.0`, tagged `0.2.0`); fixes in between are patch
+releases (`0.1.1`). Details per command are in
 [`compatibility.md`](compatibility.md).
 
-### 0.1 — first preview
+### 0.1.0 — first preview
 
 Make what exists dependable before adding more.
 
@@ -105,7 +107,7 @@ Make what exists dependable before adding more.
 - A `swinewm.log` that is useful by default (warnings and lifecycle
   events), and `-d` for the shell via an environment variable or config.
 
-### 0.2 — sway configs that real people have
+### 0.2.0 — sway configs that real people have
 
 What an existing sway config needs to load and behave.
 
@@ -119,7 +121,7 @@ What an existing sway config needs to load and behave.
   `move workspace to output`, `focus output`, monitor hot-plug.
 - `include` with glob patterns; a swaynag equivalent for config errors.
 
-### 0.3 — mouse and decorations
+### 0.3.0 — mouse and decorations
 
 - `focus_follows_mouse`, `mouse_warping`, `floating_modifier` drag and
   resize, mouse `bindsym`/`bindcode` (button and wheel).
@@ -127,14 +129,14 @@ What an existing sway config needs to load and behave.
   borders and `client.*` colours, `default_border`, `title_format`,
   `hide_edge_borders`, `smart_borders`, as small layered windows.
 
-### 0.4 — IPC parity
+### 0.4.0 — IPC parity
 
 - `SUBSCRIBE` with workspace, window, mode, output, binding, shutdown and
   tick events, matching sway-ipc(7), so i3/sway IPC libraries and scripts
   (autotiling, workspace renamers) work against the pipe.
 - `get_marks`, `get_binding_state`, `get_seats` and the remaining replies.
 
-### 0.5 — Waybar beyond the basics
+### 0.5.0 — Waybar beyond the basics
 
 - `custom/*` running scripts (`exec`, `interval`, `return-type json`,
   `signal` via `pkill -RTMIN+n` equivalents), which most Waybar setups use.
@@ -145,7 +147,7 @@ What an existing sway config needs to load and behave.
   `left`/`right` positions, `rotate`.
 - Tray: tooltips, hover messages, scrolling, AppBar answers as the shell.
 
-### 0.6 — Mako, grim and the rest of the desktop
+### 0.6.0 — Mako, grim and the rest of the desktop
 
 - Mako: icons, actions (`makoctl invoke`/`menu`), `border-radius`,
   progress bars, grouping, `makoctl list|history` output.
@@ -157,7 +159,7 @@ What an existing sway config needs to load and behave.
 - Store apps as the shell: `IApplicationActivationManager` for
   `shell:AppsFolder` launches.
 
-### 1.0 — long-term release
+### 1.0.0 — long-term release
 
 Feature work stops; reliability and documentation.
 

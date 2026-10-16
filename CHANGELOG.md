@@ -68,6 +68,6 @@ built-in Waybar (config.jsonc, CSS subset, common modules) and Mako
 (config, criteria, modes, `notify-send`, `makoctl`), wallpapers,
 running as the Windows shell (`--set-shell`), and an MSI installer.
 
-[Unreleased]: https://github.com/staalmannen/SwineWM/compare/0.1...HEAD
-[0.1.0]: https://github.com/staalmannen/SwineWM/compare/0.0.1...0.1
+[Unreleased]: https://github.com/staalmannen/SwineWM/compare/0.1.0...HEAD
+[0.1.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.1.0
 [0.0.1]: https://github.com/staalmannen/SwineWM/releases/tag/0.0.1
