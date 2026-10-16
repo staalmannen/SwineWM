@@ -45,6 +45,12 @@ bool platform_spawn(const char *cmdline);
 list_t *platform_config_paths(const char *name);
 // Expands ~ and %VAR% in a path. Caller frees.
 char *platform_expand_path(const char *path);
+// The user's Pictures folder, or NULL. Caller frees.
+char *platform_pictures_dir(void);
+// Saves the screen area box (desktop coordinates) as a PNG or JPEG file.
+// On failure *error may receive a message (caller frees).
+bool platform_screenshot(const struct swine_box *box, const char *path,
+		bool jpeg, char **error);
 // Called after the config changed so the platform can re-register hooks.
 void platform_config_changed(void);
 // The bar or notifications need repainting (called after every commit).

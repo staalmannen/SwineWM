@@ -101,7 +101,8 @@ Win32 renderer.
 4. **Daily-drivable WM** — focus-follows-mouse, mouse bindings and
    `floating_modifier` drag/resize, tab/stack title bars and focus borders,
    criteria (`[app_id=…]`, `for_window`, `assign`), `output` configuration,
-   IPC event subscriptions, a swaynag equivalent.
+   IPC event subscriptions, a swaynag equivalent, `slurp` (area selection
+   for the built-in `grim`).
 5. **Richer bar and notifications** — `custom/*` modules running scripts,
    network, audio (pulseaudio module on Windows' audio API), tray
    tooltips and hover, translucent backgrounds; notification icons,
@@ -141,6 +142,16 @@ Win32 renderer.
   `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon`
   (`--set-shell`), which needs no administrator rights; this has to be
   confirmed on Home editions.
+- **Packaged apps as the shell.** As the shell, Microsoft Store/MSIX apps
+  start fine through their App Execution Alias (`start firefox`,
+  `exec firefox.exe`), but opening them as `shell:AppsFolder\<AUMID>`
+  fails with "Class not registered" for every caller (tested with
+  PowerShell `Start-Process`), so launchers that use it (Flow Launcher)
+  cannot start them. Most likely a COM class that Explorer registers while
+  it runs (its immersive shell) is missing. Open: whether
+  `IApplicationActivationManager::ActivateApplication` works without
+  Explorer; if so swinewm's `exec` could use it for `shell:AppsFolder`
+  paths, and launchers could be asked to do the same.
 - **Tray icons next to Explorer.** The `tray` module takes the tray icons
   over from Explorer (see [`architecture.md`](architecture.md)). Explorer's
   own tray then shows stale icons until swinewm exits. Hiding its taskbar

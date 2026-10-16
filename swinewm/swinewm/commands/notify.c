@@ -211,15 +211,10 @@ static char *program_name(const char *arg) {
 	return name;
 }
 
-struct cmd_results *exec_builtin(const char *cmdline, bool persistent_only) {
-	int argc;
-	char **argv = split_args(cmdline, &argc);
+static struct cmd_results *run_builtin(int argc, char **argv,
+		bool persistent_only) {
 	if (argc == 0) {
-		free_argv(argc, argv);
 		return NULL;
-	}
-	for (int i = 0; i < argc; ++i) {
-		strip_quotes(argv[i]);
 	}
 	char *name = program_name(argv[0]);
 	struct cmd_results *res = NULL;
@@ -236,8 +231,67 @@ struct cmd_results *exec_builtin(const char *cmdline, bool persistent_only) {
 		res = cmd_makoctl(argc - 1, argv + 1);
 	} else if (strcmp(name, "notify-send") == 0) {
 		res = cmd_notify_send(argc - 1, argv + 1);
+	} else if (strcmp(name, "grim") == 0) {
+		res = cmd_grim(argc - 1, argv + 1);
 	}
 	free(name);
+	return res;
+}
+
+struct cmd_results *exec_builtin(const char *cmdline, bool persistent_only) {
+	int argc;
+	char **argv = split_args(cmdline, &argc);
+	if (argc == 0) {
+		free_argv(argc, argv);
+		return NULL;
+	}
+	// sway runs exec through sh, so "grim && notify-send Saved" is common:
+	// run such chains here when every part is built in.
+	int segments = 1;
+	for (int i = 0; i < argc; ++i) {
+		if (strcmp(argv[i], "&&") == 0) {
+			segments++;
+		}
+	}
+	if (segments > 1 && persistent_only) {
+		free_argv(argc, argv);
+		return NULL;
+	}
+	if (segments > 1) {
+		int start = 0;
+		for (int i = 0; i <= argc && start < argc; ++i) {
+			if (i < argc && strcmp(argv[i], "&&") != 0) {
+				continue;
+			}
+			char *name = program_name(argv[start]);
+			bool builtin = strcmp(name, "makoctl") == 0 ||
+				strcmp(name, "notify-send") == 0 || strcmp(name, "grim") == 0;
+			free(name);
+			if (!builtin) {
+				free_argv(argc, argv);
+				return NULL;   // not ours: run the whole line as a program
+			}
+			start = i + 1;
+		}
+	}
+	for (int i = 0; i < argc; ++i) {
+		strip_quotes(argv[i]);
+	}
+	struct cmd_results *res = NULL;
+	int start = 0;
+	for (int i = 0; i <= argc; ++i) {
+		if (i < argc && (segments == 1 || strcmp(argv[i], "&&") != 0)) {
+			continue;
+		}
+		if (res) {
+			free_cmd_results(res);
+		}
+		res = run_builtin(i - start, argv + start, persistent_only);
+		if (!res || res->status != CMD_SUCCESS) {
+			break;
+		}
+		start = i + 1;
+	}
 	free_argv(argc, argv);
 	return res;
 }

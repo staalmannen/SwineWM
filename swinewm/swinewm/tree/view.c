@@ -49,6 +49,19 @@ static struct swine_workspace *view_target_workspace(void) {
 	return ws;
 }
 
+// Whether the middle of the box is on some output.
+static bool box_on_an_output(const struct swine_box *box) {
+	int cx = box->x + box->width / 2, cy = box->y + box->height / 2;
+	for (int i = 0; i < root->outputs->length; ++i) {
+		struct swine_output *o = root->outputs->items[i];
+		if (cx >= o->box.x && cx < o->box.x + o->box.width &&
+				cy >= o->box.y && cy < o->box.y + o->box.height) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void view_map(struct swine_view *view) {
 	if (view->container) {
 		return;
@@ -62,6 +75,11 @@ void view_map(struct swine_view *view) {
 		if (con->floating_box.width <= 0 || con->floating_box.height <= 0) {
 			con->floating_box.width = 640;
 			con->floating_box.height = 480;
+			container_floating_move_to_center(con);
+		} else if (!box_on_an_output(&con->floating_box)) {
+			// Dialogs keep the position they chose, unless it is off every
+			// screen (placed relative to a taskbar that is not there, for
+			// example); sway centers new floating windows.
 			container_floating_move_to_center(con);
 		}
 	} else {

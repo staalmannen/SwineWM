@@ -63,6 +63,7 @@ add_library(swinewm_core STATIC
   swinewm/commands/floating.c
   swinewm/commands/focus.c
   swinewm/commands/gaps.c
+  swinewm/commands/grim.c
   swinewm/commands/layout.c
   swinewm/commands/mode.c
   swinewm/commands/move.c
@@ -114,6 +115,7 @@ if(WIN32)
     swinewm/win32/output.c
     swinewm/win32/platform.c
     swinewm/win32/recover.c
+    swinewm/win32/screenshot.c
     swinewm/win32/shell.c
     swinewm/win32/sysinfo.c
     swinewm/win32/tray.c

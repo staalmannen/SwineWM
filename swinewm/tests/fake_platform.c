@@ -72,6 +72,21 @@ void platform_ui_refresh(void) {
 	fake.ui_refreshes++;
 }
 
+char *platform_pictures_dir(void) {
+	return swine_strdup("C:\\Users\\pig\\Pictures");
+}
+
+bool platform_screenshot(const struct swine_box *box, const char *path,
+		bool jpeg, char **error) {
+	(void)jpeg;
+	(void)error;
+	fake.screenshot_calls++;
+	fake.last_screenshot = *box;
+	snprintf(fake.last_screenshot_path, sizeof(fake.last_screenshot_path),
+		"%s", path);
+	return true;
+}
+
 long long platform_now_ms(void) {
 	return fake.now_ms;
 }

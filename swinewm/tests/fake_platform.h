@@ -17,6 +17,9 @@ struct fake_platform_state {
 	struct swine_view *last_activated;
 	struct swine_view *last_closed;
 	char last_spawn[256];
+	int screenshot_calls;
+	struct swine_box last_screenshot;
+	char last_screenshot_path[256];
 	const char *config_dir;
 	int ui_refreshes;
 	long long now_ms;

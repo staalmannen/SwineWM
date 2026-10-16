@@ -87,6 +87,16 @@ Wine's `Shell_NotifyIcon` sends a different, Wine-specific message, so the
 tray cannot be tested with ordinary programs under Wine; a test program
 that sends the Windows format works.
 
+## Without Explorer: what is known to be missing
+
+- `shell:AppsFolder\<AUMID>` (how Flow Launcher and others open Store/MSIX
+  apps) fails with "Class not registered"; the apps' App Execution Aliases
+  (`firefox.exe` in `%LOCALAPPDATA%\Microsoft\WindowsApps`) still work.
+- ManagedShell keeps the volume tray icon hidden as the shell on Windows
+  10+ because its flyout needs Explorer; the same family of features
+  (`CImmersiveShell`, `IShellExperienceManagerFactory`) is hosted by
+  Explorer.
+
 ## Other ideas noted
 
 - Windows 11: WPF tool windows stop receiving `WM_DPICHANGED`; ManagedShell

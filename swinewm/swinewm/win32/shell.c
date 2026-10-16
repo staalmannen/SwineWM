@@ -122,9 +122,15 @@ static void create_shell_window(void) {
 	int y = GetSystemMetrics(SM_YVIRTUALSCREEN);
 	int w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
 	int h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
-	desktop_hwnd = CreateWindowExW(WS_EX_TOOLWINDOW, L"swinewm-desktop",
-		L"swinewm desktop", WS_POPUP | WS_VISIBLE, x, y, w, h, NULL, NULL,
-		instance, NULL);
+	// Created hidden and then shown at the bottom: a window created visible
+	// starts at the top of the Z order, above the wallpapers.
+	desktop_hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+		L"swinewm-desktop", L"swinewm desktop", WS_POPUP, x, y, w, h, NULL,
+		NULL, instance, NULL);
+	if (desktop_hwnd) {
+		SetWindowPos(desktop_hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE |
+			SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+	}
 	typedef BOOL (WINAPI *set_shell_window_fn)(HWND);
 	set_shell_window_fn set_shell_window = (set_shell_window_fn)(void *)
 		GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetShellWindow");
@@ -133,6 +139,10 @@ static void create_shell_window(void) {
 	} else {
 		swine_log(SWINE_INFO, "Unable to register as the shell window");
 	}
+}
+
+HWND win32_shell_desktop_window(void) {
+	return desktop_hwnd;
 }
 
 void win32_shell_resize_desktop(void) {

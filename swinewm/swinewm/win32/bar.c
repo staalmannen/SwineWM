@@ -214,17 +214,10 @@ static void draw_module(struct bar_window *bw, HDC dc, int x, int top,
 	int item_top = box.top + px(bw, s->padding.top + s->border_top.width);
 	int item_bottom = box.bottom - px(bw, s->padding.bottom +
 		s->border_bottom.width);
-	bool tray = false;
 	for (int i = 0; i < view->items->length; ++i) {
-		struct bar_item *item = view->items->items[i];
-		item_x = draw_item(bw, dc, item_x, item_top, item_bottom, item, bg,
-			view->module_index) + px(bw, view->item_spacing);
-		tray = tray || item->tray_id;
-	}
-	if (tray) {
-		RECT screen = box;
-		MapWindowPoints(bw->hwnd, NULL, (POINT *)&screen, 2);
-		win32_tray_set_host_rect(&screen);
+		item_x = draw_item(bw, dc, item_x, item_top, item_bottom,
+			view->items->items[i], bg, view->module_index) +
+			px(bw, view->item_spacing);
 	}
 }
 
@@ -437,6 +430,13 @@ void win32_bar_refresh(void) {
 				rect.height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
 			bw->rect = rect;
 			bw->shown = true;
+		}
+		// Programs place tray menus and some dialogs next to the
+		// "taskbar" (our Shell_TrayWnd): make that the primary bar, as
+		// ManagedShell does with Cairo's menu bar.
+		if (output->box.x == 0 && output->box.y == 0) {
+			RECT r = {rect.x, rect.y, rect.x + rect.width, rect.y + rect.height};
+			win32_tray_set_host_rect(&r);
 		}
 		InvalidateRect(bw->hwnd, NULL, FALSE);
 	}
