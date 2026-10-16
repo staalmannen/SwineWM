@@ -4,6 +4,7 @@
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/config.h"
+#include "swinewm/swaynag.h"
 #include "swinewm/tree/output.h"
 #include "swinewm/desktop/transaction.h"
 #include "swinewm/platform.h"
@@ -124,6 +125,7 @@ int main(int argc, char **argv) {
 	config_run_deferred();
 	output_apply_configs();
 	platform_config_changed();
+	swaynag_show_config_errors();
 	transaction_commit_dirty();
 
 	swine_log(SWINE_INFO, "Running swinewm " SWINEWM_VERSION);

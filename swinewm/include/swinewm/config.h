@@ -69,6 +69,8 @@ struct swine_config {
 	list_t *output_configs;    // struct output_config *
 	list_t *criteria;          // struct criteria *: for_window, assign, no_focus
 	list_t *workspace_configs; // struct workspace_config *
+	list_t *config_chain;      // char *: files read (main config, includes)
+	list_t *errors;            // char *: for swaynag (see swaynag.h)
 
 	// Integrated Waybar-compatible bar, enabled by a sway "bar { }" block or
 	// by "exec waybar". Everything else comes from the Waybar config.
@@ -119,7 +121,9 @@ char *read_file(const char *path);
 bool load_main_config(const char *path, bool is_active, bool validating);
 // Reads config text into the active config. Used by include and tests.
 bool read_config_text(const char *text, const char *name);
-bool load_include_config(const char *path);
+// "include <path>": every file matching the path (wildcards in the file
+// name), sorted, each at most once; relative to the including file.
+void load_include_configs(const char *path);
 // Runs queued exec/exec_always commands collected while reading.
 void config_run_deferred(void);
 

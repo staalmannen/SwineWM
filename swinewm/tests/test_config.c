@@ -1,10 +1,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include "fake_platform.h"
+#include "stringop.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/notify.h"
+#include "swinewm/swaynag.h"
 #include "swinewm/input/keyboard.h"
 #include "swinewm/tree/workspace.h"
 #include "test.h"
@@ -192,6 +194,66 @@ static void test_output_bg(void) {
 	fake_teardown();
 }
 
+static void test_include(void) {
+	fake_setup();
+	CHECK(glob_match("*.conf", "10-vars.CONF"));
+	CHECK(glob_match("[0-9]?-*", "30-layout"));
+	CHECK(!glob_match("[!0-9]*", "30-layout"));
+	CHECK(glob_match("a*b*c", "aXbYbZc"));
+	CHECK(!glob_match("a*b", "aXbY"));
+	CHECK(!glob_match("[ab", "a"));
+
+	CHECK(load_main_config(SWINEWM_SOURCE_DIR "/tests/data/include/config",
+		false, true));
+	// Sorted: 10-vars.conf, "20 gaps.conf", 30-layout; each file once
+	// (the second glob, the quoted name and the loop back to the main
+	// config are skipped), hidden files are not matched, a missing file is
+	// no error.
+	CHECK_INT(config->config_chain->length, 4);
+	CHECK_INT(config->gaps_inner, 20);
+	CHECK_INT(config->gaps_outer.top, 0);
+	CHECK(config->default_layout == L_TABBED);
+	fake_teardown();
+}
+
+static int count_swaynag(void) {
+	int count = 0;
+	list_t *active = notify_active();
+	for (int i = 0; i < active->length; ++i) {
+		struct swine_notification *n = active->items[i];
+		if (strcmp(n->category, "swaynag") == 0) {
+			count++;
+		}
+	}
+	return count;
+}
+
+static void test_swaynag(void) {
+	fake_setup();
+	config->active = false;
+	config->reading = true;
+	CHECK(!read_config_text("frobnicate\ngaps inner\nmode \"x\" {\n", "cfg"));
+	config->reading = false;
+	config->active = true;
+	CHECK_INT(config->errors->length, 3);
+	swaynag_show_config_errors();
+	CHECK_INT(count_swaynag(), 1);
+	struct swine_notification *n = notify_active()->items[0];
+	CHECK(n->urgency == NOTIFY_URGENCY_CRITICAL);
+	CHECK(n->expire_ms == 0);
+	CHECK(strstr(n->body, "Error on line 1 (cfg) 'frobnicate'") != NULL);
+	CHECK(strstr(n->body, "Unclosed block") != NULL);
+	// Showing again replaces the message; a clean config removes it.
+	swaynag_show_config_errors();
+	CHECK_INT(count_swaynag(), 1);
+	list_free_items_and_destroy(config->errors);
+	config->errors = create_list();
+	swaynag_show_config_errors();
+	CHECK_INT(count_swaynag(), 0);
+	notify_dismiss_all(false);
+	fake_teardown();
+}
+
 static void test_shipped_defaults(void) {
 	// The files installed next to swinewm.exe must load without errors.
 	fake_setup();
@@ -213,6 +275,8 @@ static void test_shipped_defaults(void) {
 
 void test_config_all(void) {
 	test_output_bg();
+	test_include();
+	test_swaynag();
 	test_shipped_defaults();
 	test_variables_and_bindings();
 	test_modes_and_blocks();

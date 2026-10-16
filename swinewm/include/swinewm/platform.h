@@ -48,6 +48,9 @@ bool platform_spawn(const char *cmdline);
 // frees). name is relative, with '/' separators: "config",
 // "waybar/config.jsonc", "mako/config", ...
 list_t *platform_config_paths(const char *name);
+// Names of the entries of a directory (char *, without "." and ".."), or
+// NULL if it cannot be read. Caller frees.
+list_t *platform_list_dir(const char *dir);
 // Expands ~ and %VAR% in a path. Caller frees.
 char *platform_expand_path(const char *path);
 // The user's Pictures folder, or NULL. Caller frees.

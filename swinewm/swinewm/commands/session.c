@@ -4,6 +4,7 @@
 #include "stringop.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
+#include "swinewm/swaynag.h"
 #include "swinewm/tree/output.h"
 #include "swinewm/platform.h"
 #include "swinewm/tree/container.h"
@@ -45,6 +46,7 @@ struct cmd_results *cmd_reload(int argc, char **argv) {
 	config_run_deferred();
 	output_apply_configs();
 	platform_config_changed();
+	swaynag_show_config_errors();
 	if (!ok) {
 		return cmd_results_new(CMD_FAILURE,
 			"Error(s) reloading config; see the log");

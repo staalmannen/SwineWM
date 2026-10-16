@@ -95,6 +95,7 @@ add_library(swinewm_core STATIC
   swinewm/ipc-server.c
   swinewm/notify/notify.c
   swinewm/server.c
+  swinewm/swaynag.c
   swinewm/tree/arrange.c
   swinewm/tree/container.c
   swinewm/tree/node.c

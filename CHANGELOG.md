@@ -27,6 +27,9 @@ the MSI and zip with the matching section below as release notes.
 - `output … mode|position|transform` change Windows' display settings
   for as long as swinewm runs (restored on exit, after a crash and with
   `--recover`).
+- `include` takes wildcards (`include config.d/*`), as in sway.
+- Config errors are shown as a notification (swinewm's swaynag), on start
+  and on reload.
 - `doc/linux-users.md`: Windows for Linux users (where things are,
   shells, package managers, getting unstuck when swinewm is the shell).
 

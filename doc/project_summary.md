@@ -95,7 +95,7 @@ three parts (`0.2.0`, tagged `0.2.0`); fixes in between are patch
 releases (`0.1.1`). Details per command are in
 [`compatibility.md`](compatibility.md).
 
-### 0.1.0 — first preview
+### 0.1.0 — first preview (released)
 
 Make what exists dependable before adding more.
 
@@ -107,7 +107,7 @@ Make what exists dependable before adding more.
 - A `swinewm.log` that is useful by default (warnings and lifecycle
   events), and `-d` for the shell via an environment variable or config.
 
-### 0.2.0 — sway configs that real people have
+### 0.2.0 — sway configs that real people have (implemented, being tested)
 
 What an existing sway config needs to load and behave.
 

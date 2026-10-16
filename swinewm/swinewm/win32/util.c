@@ -138,6 +138,28 @@ list_t *platform_config_paths(const char *name) {
 	return paths;
 }
 
+list_t *platform_list_dir(const char *dir) {
+	char *pattern = format_str("%s\\*", dir);
+	wchar_t *wpattern = utf8_to_utf16(pattern);
+	free(pattern);
+	WIN32_FIND_DATAW data;
+	HANDLE find = FindFirstFileExW(wpattern, FindExInfoBasic, &data,
+		FindExSearchNameMatch, NULL, 0);
+	free(wpattern);
+	if (find == INVALID_HANDLE_VALUE) {
+		return NULL;
+	}
+	list_t *names = create_list();
+	do {
+		if (wcscmp(data.cFileName, L".") != 0 &&
+				wcscmp(data.cFileName, L"..") != 0) {
+			list_add(names, utf16_to_utf8(data.cFileName));
+		}
+	} while (FindNextFileW(find, &data));
+	FindClose(find);
+	return names;
+}
+
 char *platform_expand_path(const char *path) {
 	char *tilde = NULL;
 	if (path[0] == '~' && (path[1] == '\0' || path[1] == '/' || path[1] == '\\')) {
