@@ -11,6 +11,7 @@
 #include <string.h>
 #include <wchar.h>
 #include <wincodec.h>
+#include <dwmapi.h>
 #include "list.h"
 #include "log.h"
 #include "stringop.h"
@@ -44,6 +45,18 @@ static bool is_desktop_window(HWND hwnd) {
 		wcscmp(cls, L"swinewm-desktop") == 0;
 }
 
+// Visible and not cloaked: Windows 11 keeps cloaked windows of modern
+// apps around that IsWindowVisible reports as visible but that are never
+// drawn; they must not count as "a window above the desktop".
+static bool is_shown(HWND hwnd) {
+	if (!IsWindowVisible(hwnd)) {
+		return false;
+	}
+	DWORD cloaked = 0;
+	return FAILED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked,
+		sizeof(cloaked))) || !cloaked;
+}
+
 static bool is_wallpaper_window(HWND hwnd) {
 	wchar_t cls[32];
 	return GetClassNameW(hwnd, cls, 32) &&
@@ -53,6 +66,11 @@ static bool is_wallpaper_window(HWND hwnd) {
 // The window our wallpapers must sit directly above: the highest of the
 // desktop windows at the bottom of the Z order, or NULL without Explorer.
 static HWND desktop_top(void) {
+	// As the shell, the desktop is our own window.
+	HWND own = win32_shell_desktop_window();
+	if (own && IsWindowVisible(own)) {
+		return own;
+	}
 	HWND top_window = GetTopWindow(NULL);
 	if (!top_window) {
 		return NULL;
@@ -60,7 +78,7 @@ static HWND desktop_top(void) {
 	HWND found = NULL;
 	for (HWND w = GetWindow(top_window, GW_HWNDLAST); w;
 			w = GetWindow(w, GW_HWNDPREV)) {
-		if (!IsWindowVisible(w) || is_wallpaper_window(w)) {
+		if (!is_shown(w) || is_wallpaper_window(w)) {
 			continue;
 		}
 		if (!is_desktop_window(w)) {
@@ -71,15 +89,17 @@ static HWND desktop_top(void) {
 	return found;
 }
 
-// True if only invisible windows, other wallpapers and the desktop are below.
+// True if only hidden windows and other wallpapers lie between this one and
+// the desktop below it. Without a desktop window, being at the bottom is
+// enough; with one, the wallpaper must not have ended up underneath it.
 static bool placed_correctly(HWND hwnd) {
 	for (HWND w = GetWindow(hwnd, GW_HWNDNEXT); w; w = GetWindow(w, GW_HWNDNEXT)) {
-		if (!IsWindowVisible(w) || is_wallpaper_window(w)) {
+		if (!is_shown(w) || is_wallpaper_window(w)) {
 			continue;
 		}
 		return is_desktop_window(w);
 	}
-	return true;
+	return desktop_top() == NULL;
 }
 
 static void place_at_bottom(struct wallpaper_window *ww,

@@ -89,6 +89,27 @@ static void test_split_and_layouts(void) {
 	fake_teardown();
 }
 
+// $mod+w / $mod+s / $mod+e with two windows directly on the workspace.
+static void test_workspace_layouts(void) {
+	fake_setup();
+	struct swine_view *a = fake_map_view("a");
+	struct swine_view *b = fake_map_view("b");
+	CHECK(a->pending.visible && b->pending.visible);
+	CHECK(run("layout tabbed"));
+	CHECK(b->pending.visible);
+	CHECK(!a->pending.visible);
+	CHECK_INT(b->pending.box.width, 1000);
+	CHECK(run("layout stacking"));
+	CHECK(b->pending.visible && !a->pending.visible);
+	CHECK(run("layout toggle split"));
+	CHECK(a->pending.visible && b->pending.visible);
+	CHECK_INT(b->pending.box.width, 500);
+	CHECK(run("layout toggle split"));
+	CHECK_INT(b->pending.box.width, 1000);   // now split vertically
+	CHECK_INT(b->pending.box.height, 400);
+	fake_teardown();
+}
+
 static void test_workspaces(void) {
 	fake_setup();
 	struct swine_view *a = fake_map_view("a");
@@ -221,6 +242,16 @@ static void test_natural_floating(void) {
 	CHECK(container_is_floating(dialog->container));
 	CHECK_INT(dialog->pending.box.x, 100);
 	CHECK_INT(a->pending.box.width, 1000);
+
+	// A dialog that places itself off the screen is centered.
+	struct swine_view *lost = view_create((void *)0x9998);
+	lost->natural_floating = true;
+	lost->natural = (struct swine_box){-400, -300, 300, 200};
+	view_map(lost);
+	transaction_commit_dirty();
+	CHECK_INT(lost->pending.box.x, 350);
+	CHECK_INT(lost->pending.box.y, 300);
+	CHECK_INT(lost->pending.box.width, 300);
 	fake_teardown();
 }
 
@@ -338,6 +369,7 @@ void test_tree_all(void) {
 	test_requested_fullscreen();
 	test_tiling_geometry();
 	test_split_and_layouts();
+	test_workspace_layouts();
 	test_workspaces();
 	test_move_to_workspace();
 	test_move_direction();

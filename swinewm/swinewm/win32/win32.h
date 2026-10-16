@@ -44,6 +44,8 @@ extern bool win32_shell_mode;
 void win32_shell_detect(void);
 void win32_shell_start(void);
 void win32_shell_resize_desktop(void);
+// swinewm's desktop window as the shell, or NULL.
+HWND win32_shell_desktop_window(void);
 void win32_shell_update_work_area(bool reset);
 void win32_shell_apply_taskbar(void);
 void win32_shell_restore_taskbar(void);

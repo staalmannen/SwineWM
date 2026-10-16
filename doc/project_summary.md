@@ -101,7 +101,9 @@ Win32 renderer.
 4. **Daily-drivable WM** — focus-follows-mouse, mouse bindings and
    `floating_modifier` drag/resize, tab/stack title bars and focus borders,
    criteria (`[app_id=…]`, `for_window`, `assign`), `output` configuration,
-   IPC event subscriptions, a swaynag equivalent.
+   IPC event subscriptions, a swaynag equivalent, a screenshot binding
+   (sway users bind `grim`/`slurp`; as the shell, Windows' Print Screen
+   handling may be gone).
 5. **Richer bar and notifications** — `custom/*` modules running scripts,
    network, audio (pulseaudio module on Windows' audio API), tray
    tooltips and hover, translucent backgrounds; notification icons,
@@ -141,6 +143,12 @@ Win32 renderer.
   `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon`
   (`--set-shell`), which needs no administrator rights; this has to be
   confirmed on Home editions.
+- **Packaged apps as the shell.** First reports: as the shell, Flow
+  Launcher could not open some programs (Firefox, Claude) but could open
+  others. Suspected cause: Microsoft Store/MSIX apps are activated through
+  Explorer's immersive shell, which is missing without Explorer. To
+  confirm (are those installs packaged? do they start from a terminal?)
+  before looking for a workaround.
 - **Tray icons next to Explorer.** The `tray` module takes the tray icons
   over from Explorer (see [`architecture.md`](architecture.md)). Explorer's
   own tray then shows stale icons until swinewm exits. Hiding its taskbar
