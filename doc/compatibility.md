@@ -27,7 +27,8 @@ ignored · ❌ not implemented (error)
 
 | Command | Status | Notes |
 | --- | --- | --- |
-| `bindsym [--release] [--no-repeat] [--locked] <combo> <command>` | 🟡 | Keyboard only. `--to-code`, `--no-warn`, `--inhibited`, … accepted. Mouse buttons not yet |
+| `bindsym [--release] [--no-repeat] [--locked] <combo> <command>` | 🟡 | `--to-code`, `--no-warn`, `--inhibited`, … accepted |
+| `bindsym [--whole-window] [--border] [--exclude-titlebar] <mod>+button<n> <command>` | 🟡 | Mouse bindings: `button1`–`button9` (4–7 are the wheel) and `BTN_*` names. Without a flag a binding is for title bars, as in sway; until swinewm draws title bars only `--whole-window` bindings fire on windows (and on the desktop). `--border` never fires: Windows windows have no border swinewm can tell apart. No `bindcode` |
 | `unbindsym` | ✅ | |
 | `bindcode`, `bindswitch`, `bindgesture` | ⚪ | |
 | `mode <name>`, `mode <name> { … }` | ✅ | `--pango_markup` accepted |
@@ -62,7 +63,10 @@ ignored · ❌ not implemented (error)
 | `gaps <type> all\|current set\|plus\|minus\|toggle <n>` | ✅ | Runtime |
 | `default_orientation`, `workspace_layout` | ✅ | |
 | `focus_wrapping` | ✅ | |
-| `focus_follows_mouse`, `floating_modifier` | 🟡 | Parsed and stored; mouse handling not implemented yet |
+| `focus_follows_mouse yes\|no\|always` | ✅ | Port of sway's `seatop_default.c`. Not while a mouse button is held, and never away from a window swinewm does not manage that has the focus (a menu, a launcher, a dialog it leaves alone) |
+| `floating_modifier <mod> [normal\|inverse]` | ✅ | $mod + left button moves floating windows and drags tiled ones (`tiling_drag`), $mod + right button resizes either, from the nearest corner; Shift keeps the aspect ratio of a floating window. A click with the modifier never reaches the window, and Win released after it does not open the Start menu |
+| `tiling_drag enable\|disable\|toggle`, `tiling_drag_threshold <px>` | ✅ | Drop zones as in sway, shown with a translucent rectangle; dropped on a window's middle the two swap. Dragging by title bar waits for the threshold |
+| `mouse_warping output\|container\|none` | ✅ | After `focus` commands and `move workspace to output`, as in sway |
 | `smart_gaps`, `smart_borders`, `hide_edge_borders` | ⚪ | |
 | `border`, `default_border`, `default_floating_border`, `client.*`, `font`, `title_align`, `titlebar_*`, `show_marks` | ⚪ | Decorations not drawn yet |
 | `for_window`, `assign` (`workspace`, `number`, `output`, `→`), `no_focus` | ✅ | As in sway: rules run when a window appears and again when its title changes (once per rule and window); `assign` picks the workspace, `no_focus` keeps the focus where it was |
@@ -72,7 +76,7 @@ ignored · ❌ not implemented (error)
 | `output <identifier>` | ✅ | The monitor name shown in Windows' display settings (e.g. `"DELL U2720Q"`); also in `workspace … output` and `get_outputs` (`model`) |
 | `output … scale`, `enable`, `disable`, `dpms`, `power`, `adaptive_sync`, `subpixel`, …, `input`, `seat` | ⚪ | Windows settings apply (scaling is per monitor in Settings → Display) |
 | `bar { … }`, `bar <option>` | 🟡 | Enables the built-in Waybar-compatible bar; `position`, `mode invisible\|dock\|toggle` honoured, other swaybar options ignored (see below) |
-| `xwayland`, `swaybg_command`, `swaynag_command`, `max_render_time`, `allow_tearing`, `primary_selection`, `inhibit_idle`, `shortcuts_inhibitor`, `tiling_drag*`, `mouse_warping`, `popup_during_fullscreen`, `focus_on_window_activation`, `force_display_urgency_hint`, `new_window`, `new_float`, `floating_minimum_size`, `floating_maximum_size` | ⚪ | |
+| `xwayland`, `swaybg_command`, `swaynag_command`, `max_render_time`, `allow_tearing`, `primary_selection`, `inhibit_idle`, `shortcuts_inhibitor`, `popup_during_fullscreen`, `focus_on_window_activation`, `force_display_urgency_hint`, `new_window`, `new_float`, `floating_minimum_size`, `floating_maximum_size` | ⚪ | |
 | `urgent enable\|disable\|allow\|deny` | ✅ | Windows' own "urgency" is a flashing taskbar button (`FlashWindowEx`); it marks the view and its workspace urgent until focused |
 | Application-requested fullscreen | ✅ | A window that makes itself fullscreen (F11) becomes a sway fullscreen container and returns when it leaves fullscreen |
 | `mark [--add\|--replace] [--toggle] <id>`, `unmark [<id>]` | ✅ | Marks are not drawn yet (`show_marks`) |

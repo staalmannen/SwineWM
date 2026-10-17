@@ -45,6 +45,8 @@ struct swine_output *output_by_name(const char *name);
 // Matches the name or, failing that, the identifier (ignoring case).
 struct swine_output *output_by_name_or_id(const char *name_or_id);
 struct swine_output *output_by_handle(void *handle);
+// The output whose monitor contains the point, or NULL.
+struct swine_output *output_at_point(int x, int y);
 // Applies the mode, position and transform from the "output" configs to
 // every output (after the config has been read, and on hot-plug).
 void output_apply_configs(void);

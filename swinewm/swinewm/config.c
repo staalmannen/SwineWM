@@ -20,6 +20,7 @@ static struct swine_mode *mode_create(const char *name) {
 	struct swine_mode *mode = calloc(1, sizeof(*mode));
 	mode->name = swine_strdup(name);
 	mode->keysym_bindings = create_list();
+	mode->mouse_bindings = create_list();
 	return mode;
 }
 
@@ -28,6 +29,10 @@ static void free_mode(struct swine_mode *mode) {
 		free_swine_binding(mode->keysym_bindings->items[i]);
 	}
 	list_free(mode->keysym_bindings);
+	for (int i = 0; i < mode->mouse_bindings->length; ++i) {
+		free_swine_binding(mode->mouse_bindings->items[i]);
+	}
+	list_free(mode->mouse_bindings);
 	free(mode->name);
 	free(mode);
 }
@@ -56,7 +61,10 @@ struct swine_config *config_create(void) {
 	c->default_orientation = L_NONE;
 	c->default_layout = L_NONE;
 	c->focus_wrapping = WRAP_YES;
-	c->focus_follows_mouse = true;
+	c->focus_follows_mouse = FOLLOWS_YES;
+	c->mouse_warping = WARP_OUTPUT;
+	c->tiling_drag = true;
+	c->tiling_drag_threshold = 9;
 	return c;
 }
 

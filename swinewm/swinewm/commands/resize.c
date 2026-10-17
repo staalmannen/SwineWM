@@ -19,11 +19,11 @@
 #define FLOATING_MIN_H 50
 
 enum {
-	EDGE_NONE = 0,
-	EDGE_TOP = 1 << 0,
-	EDGE_BOTTOM = 1 << 1,
-	EDGE_LEFT = 1 << 2,
-	EDGE_RIGHT = 1 << 3,
+	EDGE_NONE = SWINE_EDGE_NONE,
+	EDGE_TOP = SWINE_EDGE_TOP,
+	EDGE_BOTTOM = SWINE_EDGE_BOTTOM,
+	EDGE_LEFT = SWINE_EDGE_LEFT,
+	EDGE_RIGHT = SWINE_EDGE_RIGHT,
 };
 #define AXIS_HORIZONTAL (EDGE_LEFT | EDGE_RIGHT)
 #define AXIS_VERTICAL (EDGE_TOP | EDGE_BOTTOM)
@@ -104,7 +104,7 @@ static bool is_horizontal(unsigned axis) {
 	return (axis & (EDGE_LEFT | EDGE_RIGHT)) != 0;
 }
 
-static struct swine_container *container_find_resize_parent(
+struct swine_container *container_find_resize_parent(
 		struct swine_container *con, unsigned axis) {
 	enum swine_container_layout parallel_layout =
 		is_horizontal(axis) ? L_HORIZ : L_VERT;
@@ -127,7 +127,7 @@ static bool hidden_scratchpad_or_child(struct swine_container *con) {
 	return container_is_scratchpad_hidden(container_toplevel_ancestor(con));
 }
 
-static void container_resize_tiled(struct swine_container *con,
+void container_resize_tiled(struct swine_container *con,
 		unsigned axis, int amount) {
 	con = container_find_resize_parent(con, axis);
 	if (!con || hidden_scratchpad_or_child(con)) {
@@ -185,7 +185,7 @@ cleanup:
 	list_free(resize);
 }
 
-static void floating_calculate_constraints(struct swine_container *con,
+void floating_calculate_constraints(struct swine_container *con,
 		int *min_width, int *max_width, int *min_height, int *max_height) {
 	*min_width = FLOATING_MIN_W;
 	*min_height = FLOATING_MIN_H;

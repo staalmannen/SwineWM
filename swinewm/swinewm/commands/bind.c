@@ -4,12 +4,15 @@
 #include "stringop.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
+#include "swinewm/input/cursor.h"
 #include "swinewm/input/keyboard.h"
 
-// Parses "Mod4+Shift+q" into modifiers and a key code.
+// Parses "Mod4+Shift+q" into modifiers and a key code, or "Mod4+button3"
+// into modifiers and a mouse button (*mouse set).
 static struct cmd_results *parse_combo(const char *combo, uint32_t *modifiers,
-		uint32_t *keycode) {
+		uint32_t *keycode, bool *mouse) {
 	*modifiers = 0;
+	*mouse = false;
 	bool have_key = false;
 	list_t *parts = split_string(combo, "+");
 	struct cmd_results *error = NULL;
@@ -25,12 +28,17 @@ static struct cmd_results *parse_combo(const char *combo, uint32_t *modifiers,
 				"Only one key may be bound in '%s'", combo);
 			break;
 		}
-		if (has_prefix(part, "button") || has_prefix(part, "BTN_")) {
-			error = cmd_results_new(CMD_FAILURE,
-				"Mouse button bindings are not supported yet ('%s')", combo);
+		char *button_error = NULL;
+		uint32_t button = get_mouse_button(part, &button_error);
+		if (button_error) {
+			error = cmd_results_new(CMD_INVALID, "%s", button_error);
+			free(button_error);
 			break;
 		}
-		if (!keyname_to_keycode(part, keycode)) {
+		if (button) {
+			*keycode = button;
+			*mouse = true;
+		} else if (!keyname_to_keycode(part, keycode)) {
 			error = cmd_results_new(CMD_INVALID,
 				"Unknown key '%s' in '%s'", part, combo);
 			break;
@@ -47,8 +55,10 @@ static struct cmd_results *parse_combo(const char *combo, uint32_t *modifiers,
 static int find_binding(list_t *bindings, struct swine_binding *needle) {
 	for (int i = 0; i < bindings->length; ++i) {
 		struct swine_binding *b = bindings->items[i];
+		uint32_t conflict_flags = BINDING_RELEASE | BINDING_BORDER |
+			BINDING_CONTENTS | BINDING_TITLEBAR;
 		if (b->keycode == needle->keycode && b->modifiers == needle->modifiers &&
-				(b->flags & BINDING_RELEASE) == (needle->flags & BINDING_RELEASE)) {
+				(b->flags & conflict_flags) == (needle->flags & conflict_flags)) {
 			return i;
 		}
 	}
@@ -64,6 +74,7 @@ static struct cmd_results *cmd_bindsym_or_unbind(int argc, char **argv,
 	}
 
 	struct swine_binding *binding = calloc(1, sizeof(*binding));
+	bool exclude_titlebar = false;
 	while (argc > 0 && has_prefix(argv[0], "--")) {
 		if (strcmp(argv[0], "--release") == 0) {
 			binding->flags |= BINDING_RELEASE;
@@ -73,11 +84,14 @@ static struct cmd_results *cmd_bindsym_or_unbind(int argc, char **argv,
 			binding->flags |= BINDING_NOREPEAT;
 		} else if (strcmp(argv[0], "--inhibited") == 0) {
 			binding->flags |= BINDING_INHIBITED;
+		} else if (strcmp(argv[0], "--whole-window") == 0) {
+			binding->flags |= BINDING_BORDER | BINDING_CONTENTS | BINDING_TITLEBAR;
+		} else if (strcmp(argv[0], "--border") == 0) {
+			binding->flags |= BINDING_BORDER;
+		} else if (strcmp(argv[0], "--exclude-titlebar") == 0) {
+			exclude_titlebar = true;
 		} else if (strcmp(argv[0], "--to-code") == 0 ||
 				strcmp(argv[0], "--no-warn") == 0 ||
-				strcmp(argv[0], "--whole-window") == 0 ||
-				strcmp(argv[0], "--border") == 0 ||
-				strcmp(argv[0], "--exclude-titlebar") == 0 ||
 				has_prefix(argv[0], "--input-device=")) {
 			// Accepted for config compatibility; no effect on Windows yet.
 		} else {
@@ -93,13 +107,26 @@ static struct cmd_results *cmd_bindsym_or_unbind(int argc, char **argv,
 		return error;
 	}
 
-	if ((error = parse_combo(argv[0], &binding->modifiers, &binding->keycode))) {
+	bool mouse = false;
+	if ((error = parse_combo(argv[0], &binding->modifiers, &binding->keycode,
+			&mouse))) {
 		free_swine_binding(binding);
 		return error;
 	}
 	binding->input = swine_strdup(argv[0]);
+	// As in sway: a mouse binding is for the title bar unless flags say
+	// otherwise; --whole-window and friends make any binding a mouse one.
+	if (binding->flags & (BINDING_BORDER | BINDING_CONTENTS | BINDING_TITLEBAR)) {
+		mouse = true;
+	}
+	if (exclude_titlebar) {
+		binding->flags &= ~(uint32_t)BINDING_TITLEBAR;
+	} else if (mouse) {
+		binding->flags |= BINDING_TITLEBAR;
+	}
 
-	list_t *bindings = config->current_mode->keysym_bindings;
+	list_t *bindings = mouse ? config->current_mode->mouse_bindings :
+		config->current_mode->keysym_bindings;
 	int existing = find_binding(bindings, binding);
 	if (unbind) {
 		free_swine_binding(binding);

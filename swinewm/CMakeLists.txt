@@ -90,6 +90,7 @@ add_library(swinewm_core STATIC
   swinewm/config.c
   swinewm/criteria.c
   swinewm/desktop/transaction.c
+  swinewm/input/cursor.c
   swinewm/input/keyboard.c
   swinewm/input/seat.c
   swinewm/ipc-json.c
@@ -125,6 +126,7 @@ if(WIN32)
     swinewm/win32/draw.c
     swinewm/win32/ipc.c
     swinewm/win32/keyboard.c
+    swinewm/win32/mouse.c
     swinewm/win32/notify.c
     swinewm/win32/output.c
     swinewm/win32/platform.c
@@ -182,6 +184,7 @@ if(SWINEWM_BUILD_TESTS)
     tests/test_criteria.c
     tests/test_marks.c
     tests/test_outputs.c
+    tests/test_cursor.c
     tests/test_tree.c
     tests/test_bar.c
     tests/test_notify.c

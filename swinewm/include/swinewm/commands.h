@@ -80,6 +80,9 @@ swine_cmd cmd_floating;
 swine_cmd cmd_floating_modifier;
 swine_cmd cmd_focus;
 swine_cmd cmd_focus_follows_mouse;
+swine_cmd cmd_mouse_warping;
+swine_cmd cmd_tiling_drag;
+swine_cmd cmd_tiling_drag_threshold;
 swine_cmd cmd_focus_wrapping;
 swine_cmd cmd_fullscreen;
 swine_cmd cmd_gaps;
@@ -113,5 +116,14 @@ swine_cmd cmd_urgent;
 swine_cmd cmd_workspace;
 swine_cmd cmd_workspace_layout;
 swine_cmd cmd_ws_auto_back_and_forth;
+
+// From commands/resize.c (as in sway), also used by mouse resizing. axis
+// is a combination of enum swine_edges.
+struct swine_container *container_find_resize_parent(
+		struct swine_container *con, unsigned axis);
+void container_resize_tiled(struct swine_container *con, unsigned axis,
+		int amount);
+void floating_calculate_constraints(struct swine_container *con,
+		int *min_width, int *max_width, int *min_height, int *max_height);
 
 #endif

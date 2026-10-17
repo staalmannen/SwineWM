@@ -12,6 +12,7 @@
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
 #include "swinewm/desktop/transaction.h"
+#include "swinewm/input/cursor.h"
 #include "swinewm/platform.h"
 #include "swinewm/server.h"
 #include "swinewm/sysinfo.h"
@@ -55,6 +56,29 @@ bool platform_view_activate(struct swine_view *view) {
 	fake.activate_calls++;
 	fake.last_activated = view;
 	return true;
+}
+
+void platform_queue_command(const char *command) {
+	run(command);
+}
+
+bool platform_cursor_position(int *x, int *y) {
+	*x = fake.cursor_x;
+	*y = fake.cursor_y;
+	return true;
+}
+
+void platform_cursor_warp(int x, int y) {
+	fake.cursor_x = x;
+	fake.cursor_y = y;
+	fake.warp_calls++;
+}
+
+void platform_drop_indicator(const struct swine_box *box) {
+	fake.drop_indicator_shown = box != NULL;
+	if (box) {
+		fake.drop_indicator = *box;
+	}
 }
 
 void platform_view_close(struct swine_view *view) {
@@ -190,6 +214,7 @@ struct swine_output *fake_add_output(const char *name, int x, int y, int w, int 
 
 static void setup_common(void) {
 	fake_reset();
+	cursor_reset();
 	server_init();
 	config = config_create();
 	config->active = true;

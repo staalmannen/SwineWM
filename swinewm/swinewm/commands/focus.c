@@ -5,6 +5,7 @@
 #include "swinewm/commands.h"
 #include "swinewm/commands_util.h"
 #include "swinewm/config.h"
+#include "swinewm/input/cursor.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/output.h"
@@ -257,6 +258,7 @@ static struct cmd_results *focus_mode(struct swine_workspace *ws, bool floating)
 		new_focus = seat_get_focus_inactive_view(&new_focus->node);
 	}
 	seat_set_focus_container(new_focus);
+	seat_consider_warp_to_focus();
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 
@@ -280,6 +282,7 @@ static struct cmd_results *focus_output(int argc, char **argv) {
 	if (target) {
 		struct swine_node *focus = seat_get_focus_inactive(&target->node);
 		seat_set_focus(focus ? focus : &target->node);
+		seat_consider_warp_to_focus();
 	}
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
@@ -289,6 +292,7 @@ static struct cmd_results *focus_parent(void) {
 	struct swine_node *parent = node ? node_get_parent(node) : NULL;
 	if (parent && (parent->type == N_CONTAINER || parent->type == N_WORKSPACE)) {
 		seat_set_focus(parent);
+		seat_consider_warp_to_focus();
 	}
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
@@ -307,6 +311,7 @@ static struct cmd_results *focus_child(void) {
 	}
 	if (focus) {
 		seat_set_focus(focus);
+		seat_consider_warp_to_focus();
 	}
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
@@ -322,6 +327,7 @@ struct cmd_results *cmd_focus(int argc, char **argv) {
 	if (argc == 0) {
 		if (container) {
 			seat_set_focus_container(container);
+			seat_consider_warp_to_focus();
 		}
 		return cmd_results_new(CMD_SUCCESS, NULL);
 	}
@@ -375,6 +381,7 @@ struct cmd_results *cmd_focus(int argc, char **argv) {
 		struct swine_node *focus = get_node_in_output_direction(new_output,
 			direction);
 		seat_set_focus(focus);
+		seat_consider_warp_to_focus();
 		return cmd_results_new(CMD_SUCCESS, NULL);
 	}
 
@@ -388,6 +395,13 @@ struct cmd_results *cmd_focus(int argc, char **argv) {
 	}
 	if (next_focus) {
 		seat_set_focus(next_focus);
+		// A floating window may cover the spot on the tiling layer the
+		// pointer would go to, so "container" always warps here.
+		if (config->mouse_warping == WARP_CONTAINER) {
+			cursor_request_warp(true);
+		} else {
+			seat_consider_warp_to_focus();
+		}
 	}
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }

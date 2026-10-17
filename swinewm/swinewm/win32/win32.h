@@ -108,6 +108,19 @@ void win32_windows_shell_hook(WPARAM code, LPARAM lparam);
 // keyboard.c
 bool win32_keyboard_init(void);
 void win32_keyboard_finish(void);
+uint32_t win32_keyboard_modifiers(void);
+// A mouse binding or move used these modifiers: releasing Win or Alt must
+// not open the Start menu or the window's menu bar.
+void win32_keyboard_used_modifiers(uint32_t mods);
+
+// mouse.c: pointer input through a low-level mouse hook
+#define WM_SWINE_MOTION (WM_APP + 6)   // the pointer moved
+bool win32_mouse_init(void);
+void win32_mouse_finish(void);
+void win32_mouse_handle_motion(void);
+// Nonzero while the main thread runs swinewm code; the mouse hook then
+// leaves input alone instead of re-entering the core.
+extern int win32_busy;
 
 // ipc.c
 struct win32_ipc_request {

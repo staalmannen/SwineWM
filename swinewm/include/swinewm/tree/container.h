@@ -77,6 +77,12 @@ void container_for_each_child(struct swine_container *con,
 
 void container_set_floating(struct swine_container *con, bool enable);
 void container_floating_move_to_center(struct swine_container *con);
+// Moves a floating container; it joins the workspace of the output under
+// its centre (as sway's container_floating_move_to).
+void container_floating_move_to(struct swine_container *con, int x, int y);
+struct swine_output *container_floating_find_output(
+		struct swine_container *con);
+void container_raise_floating(struct swine_container *con);
 void container_set_fullscreen(struct swine_container *con,
 		enum swine_fullscreen_mode mode);
 // Marks (sway: container_has_mark and friends). A mark is unique: it is on

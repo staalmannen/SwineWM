@@ -193,6 +193,18 @@ struct swine_output *output_by_name_or_id(const char *name_or_id) {
 	return output;
 }
 
+struct swine_output *output_at_point(int x, int y) {
+	for (int i = 0; i < root->outputs->length; ++i) {
+		struct swine_output *output = root->outputs->items[i];
+		const struct swine_box *b = &output->box;
+		if (x >= b->x && x < b->x + b->width &&
+				y >= b->y && y < b->y + b->height) {
+			return output;
+		}
+	}
+	return NULL;
+}
+
 struct swine_output *output_by_handle(void *handle) {
 	for (int i = 0; i < root->outputs->length; ++i) {
 		struct swine_output *output = root->outputs->items[i];

@@ -34,6 +34,10 @@ void seat_set_focus_workspace(struct swine_workspace *ws);
 // Updates the stack without any workspace side effects.
 void seat_set_raw_focus(struct swine_node *node);
 
+// mouse_warping: moves the pointer to the new focus after a focus command
+// (as sway's seat_consider_warp_to_focus), at the next commit.
+void seat_consider_warp_to_focus(void);
+
 struct swine_node *seat_get_focus(void);
 struct swine_container *seat_get_focused_container(void);
 struct swine_workspace *seat_get_focused_workspace(void);

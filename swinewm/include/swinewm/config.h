@@ -12,13 +12,16 @@ enum binding_flags {
 	BINDING_LOCKED = 1 << 1,
 	BINDING_NOREPEAT = 1 << 2,
 	BINDING_INHIBITED = 1 << 3,
+	BINDING_BORDER = 1 << 4,    // mouse only: on a container's border
+	BINDING_CONTENTS = 1 << 5,  // mouse only: on a container's contents
+	BINDING_TITLEBAR = 1 << 6,  // mouse only: on a container's title bar
 };
 
 struct swine_binding {
 	int order;
 	uint32_t flags;
 	uint32_t modifiers;
-	uint32_t keycode;
+	uint32_t keycode; // key: virtual-key code; mouse: button (cursor.h)
 	char *input;      // the original key combination text
 	char *command;
 };
@@ -26,6 +29,7 @@ struct swine_binding {
 struct swine_mode {
 	char *name;
 	list_t *keysym_bindings;   // struct swine_binding *
+	list_t *mouse_bindings;    // struct swine_binding *
 };
 
 // "output <name|identifier|*> ..." (swaybg options and the display mode).
@@ -52,6 +56,18 @@ struct workspace_config {
 struct swine_variable {
 	char *name;
 	char *value;
+};
+
+enum focus_follows_mouse_mode {
+	FOLLOWS_NO,
+	FOLLOWS_YES,
+	FOLLOWS_ALWAYS,
+};
+
+enum mouse_warping_mode {
+	WARP_NO,
+	WARP_OUTPUT,
+	WARP_CONTAINER,
 };
 
 enum focus_wrapping_mode {
@@ -84,9 +100,13 @@ struct swine_config {
 	int gaps_inner;
 	struct side_gaps gaps_outer;
 	enum focus_wrapping_mode focus_wrapping;
-	bool focus_follows_mouse;
+	enum focus_follows_mouse_mode focus_follows_mouse;
+	enum mouse_warping_mode mouse_warping;
 	bool auto_back_and_forth;
 	uint32_t floating_mod;
+	bool floating_mod_inverse;   // move with the right button, resize left
+	bool tiling_drag;
+	int tiling_drag_threshold;
 
 	char *current_config_path;
 	char *current_config;      // full text of the main config file

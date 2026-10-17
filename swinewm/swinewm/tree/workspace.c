@@ -430,6 +430,19 @@ void workspace_move_to_output(struct swine_workspace *ws,
 	workspace_output_raise_priority(ws, old_output, output);
 }
 
+static void count_tiling_views(struct swine_container *con, void *data) {
+	if (con->view && !container_is_floating_or_child(con)) {
+		size_t *count = data;
+		*count += 1;
+	}
+}
+
+size_t workspace_num_tiling_views(struct swine_workspace *ws) {
+	size_t count = 0;
+	workspace_for_each_container(ws, count_tiling_views, &count);
+	return count;
+}
+
 static void count_sticky_containers(struct swine_container *con, void *data) {
 	if (container_is_sticky(con)) {
 		size_t *count = data;

@@ -44,6 +44,16 @@ void platform_view_set_visible(struct swine_view *view, bool visible);
 bool platform_view_activate(struct swine_view *view);
 void platform_view_close(struct swine_view *view);
 
+// Runs a command line on the main loop soon (a mouse binding: the input
+// hook that found it must return quickly).
+void platform_queue_command(const char *command);
+// The mouse pointer (virtual-desktop pixels).
+bool platform_cursor_position(int *x, int *y);
+void platform_cursor_warp(int x, int y);
+// Shows where a window dragged with the mouse will land (box), or hides
+// the indicator (NULL).
+void platform_drop_indicator(const struct swine_box *box);
+
 // Starts a process from a command line. Returns false on failure.
 bool platform_spawn(const char *cmdline);
 
