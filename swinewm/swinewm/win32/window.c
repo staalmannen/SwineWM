@@ -359,6 +359,104 @@ void win32_windows_shell_hook(WPARAM code, LPARAM lparam) {
 	}
 }
 
+// Windows that put themselves (mostly) off every monitor: dialogs that
+// position themselves relative to a taskbar or a shell window that is not
+// there when swinewm is the shell ("Open with" on Windows 11), or that move
+// after they appeared. Their centre must be on some monitor.
+static bool center_on_a_monitor(const RECT *r) {
+	POINT c = {r->left + (r->right - r->left) / 2,
+		r->top + (r->bottom - r->top) / 2};
+	return MonitorFromPoint(c, MONITOR_DEFAULTTONULL) != NULL;
+}
+
+static HWND moving_hwnd;   // in a mouse move/resize loop (user drags it)
+
+// An unmanaged window worth bringing back: a real, visible top-level window
+// (not a hidden helper parked at -32000, an overlay or a tiny popup).
+static bool is_lost_window(HWND hwnd) {
+	if (hwnd == moving_hwnd || !IsWindowVisible(hwnd) || IsIconic(hwnd) ||
+			GetAncestor(hwnd, GA_ROOT) != hwnd) {
+		return false;
+	}
+	RECT r;
+	if (!GetWindowRect(hwnd, &r) || r.right - r.left < 50 ||
+			r.bottom - r.top < 50 || r.left <= -30000 || r.top <= -30000 ||
+			center_on_a_monitor(&r)) {
+		return false;
+	}
+	LONG style = GetWindowLongW(hwnd, GWL_STYLE);
+	LONG exstyle = GetWindowLongW(hwnd, GWL_EXSTYLE);
+	if ((style & WS_CHILD) || (exstyle & (WS_EX_TRANSPARENT | WS_EX_NOACTIVATE))) {
+		return false;
+	}
+	DWORD pid = 0;
+	GetWindowThreadProcessId(hwnd, &pid);
+	return pid != GetCurrentProcessId() && !is_cloaked(hwnd);
+}
+
+// Centres a lost unmanaged window on the nearest monitor's work area. A
+// window that keeps moving itself away is given up on after a few tries.
+static void rescue_window(HWND hwnd) {
+	static struct { HWND hwnd; int tries; } recent[8];
+	static int next;
+	int slot = -1;
+	for (int i = 0; i < 8; ++i) {
+		if (recent[i].hwnd == hwnd) {
+			slot = i;
+		}
+	}
+	if (slot < 0) {
+		slot = next;
+		next = (next + 1) % 8;
+		recent[slot].hwnd = hwnd;
+		recent[slot].tries = 0;
+	}
+	if (++recent[slot].tries > 3) {
+		return;
+	}
+	RECT r;
+	GetWindowRect(hwnd, &r);
+	MONITORINFO mi = { .cbSize = sizeof(mi) };
+	GetMonitorInfoW(MonitorFromRect(&r, MONITOR_DEFAULTTONEAREST), &mi);
+	int w = r.right - r.left, h = r.bottom - r.top;
+	int x = mi.rcWork.left + ((mi.rcWork.right - mi.rcWork.left) - w) / 2;
+	int y = mi.rcWork.top + ((mi.rcWork.bottom - mi.rcWork.top) - h) / 2;
+	x = x < mi.rcWork.left ? (int)mi.rcWork.left : x;
+	y = y < mi.rcWork.top ? (int)mi.rcWork.top : y;
+	wchar_t cls[128] = L"";
+	GetClassNameW(hwnd, cls, 128);
+	char *class_name = utf16_to_utf8(cls);
+	char *title = window_title(hwnd);
+	DWORD pid = 0;
+	GetWindowThreadProcessId(hwnd, &pid);
+	char *exe = win32_process_name(pid);
+	swine_log(SWINE_INFO, "Window '%s' (%s, %s, style 0x%lx/0x%lx) is off "
+		"screen at %ld,%ld %dx%d; moving it to %d,%d", title,
+		exe ? exe : "?", class_name,
+		(unsigned long)GetWindowLongW(hwnd, GWL_STYLE),
+		(unsigned long)GetWindowLongW(hwnd, GWL_EXSTYLE),
+		r.left, r.top, w, h, x, y);
+	free(exe);
+	free(title);
+	free(class_name);
+	SetWindowPos(hwnd, NULL, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER |
+		SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+}
+
+// A managed floating window that moved itself off screen goes back to the
+// middle, as when it appeared there (view_map).
+static void rescue_floating_view(struct swine_view *view, HWND hwnd) {
+	RECT r;
+	if (hwnd == moving_hwnd || !GetWindowRect(hwnd, &r) ||
+			center_on_a_monitor(&r)) {
+		return;
+	}
+	swine_log(SWINE_INFO, "'%s' (%s, %s) moved itself off screen; centring it",
+		view->title, view->app_id ? view->app_id : "?", view->class_name);
+	container_floating_move_to_center(view->container);
+	view->current.valid = false;
+}
+
 static void handle_event(DWORD event, HWND hwnd) {
 	struct swine_view *view = view_from_handle(hwnd);
 	struct win32_view *w = view ? wv(view) : NULL;
@@ -380,6 +478,8 @@ static void handle_event(DWORD event, HWND hwnd) {
 		if (!view) {
 			if (is_manageable(hwnd)) {
 				map_view(create_view(hwnd));
+			} else if (is_lost_window(hwnd)) {
+				rescue_window(hwnd);
 			}
 		} else if (!view->container) {
 			if (is_manageable(hwnd)) {
@@ -443,11 +543,28 @@ static void handle_event(DWORD event, HWND hwnd) {
 		break;
 
 	case EVENT_OBJECT_LOCATIONCHANGE:
+		if (!view || !view->container) {
+			if (is_lost_window(hwnd)) {
+				rescue_window(hwnd);
+			}
+			return;
+		}
+		if (container_is_floating(view->container) && view->pending.visible &&
+				view->container->fullscreen_mode == FULLSCREEN_NONE) {
+			rescue_floating_view(view, hwnd);
+			if (!view->current.valid) {
+				break;
+			}
+		}
 		// Frequent (every frame of a drag): only commit on a change.
-		if (!view || !view->container || !check_fullscreen(hwnd)) {
+		if (!check_fullscreen(hwnd)) {
 			return;
 		}
 		break;
+
+	case EVENT_SYSTEM_MOVESIZESTART:
+		moving_hwnd = hwnd;
+		return;
 
 	case EVENT_OBJECT_NAMECHANGE:
 		if (view) {
@@ -462,6 +579,7 @@ static void handle_event(DWORD event, HWND hwnd) {
 		return;
 
 	case EVENT_SYSTEM_MOVESIZEEND:
+		moving_hwnd = NULL;
 		if (view && view->container) {
 			update_insets(view);
 			if (container_is_floating(view->container)) {
@@ -497,8 +615,9 @@ static void CALLBACK win_event_proc(HWINEVENTHOOK hook, DWORD event, HWND hwnd,
 	if (!hwnd || object_id != OBJID_WINDOW || child_id != CHILDID_SELF) {
 		return;
 	}
-	if (event == EVENT_OBJECT_LOCATIONCHANGE && !view_from_handle(hwnd)) {
-		return;   // very frequent; only managed windows matter
+	if (event == EVENT_OBJECT_LOCATIONCHANGE && !view_from_handle(hwnd) &&
+			!is_lost_window(hwnd)) {
+		return;   // very frequent; only managed or lost windows matter
 	}
 	if (queue_len == queue_cap) {
 		queue_cap = queue_cap ? queue_cap * 2 : 64;
@@ -523,7 +642,7 @@ static void add_hook(DWORD min, DWORD max) {
 
 bool win32_windows_init(void) {
 	add_hook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND);
-	add_hook(EVENT_SYSTEM_MOVESIZEEND, EVENT_SYSTEM_MOVESIZEEND);
+	add_hook(EVENT_SYSTEM_MOVESIZESTART, EVENT_SYSTEM_MOVESIZEEND);
 	add_hook(EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND);
 	add_hook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE);   // destroy, show, hide
 	add_hook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_NAMECHANGE);

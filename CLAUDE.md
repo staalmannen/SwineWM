@@ -56,6 +56,9 @@ status changes.
   shell problems (being the shell, AppBars, tray, task tracking,
   fullscreen), what SwineWM took from it and what remains (AppBars).
   Start there before working on shell integration.
+- `doc/research/glazewm.md` — how GlazeWM (GPL-3.0: ideas only, no code)
+  hides windows (cloaking), cleans up after a crash (watcher process),
+  decorates windows through DWM and picks the windows it manages.
 
 ## Where to look in the reference sources
 

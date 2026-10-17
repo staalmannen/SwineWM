@@ -136,7 +136,11 @@ What an existing sway config needs to load and behave.
   resize, mouse `bindsym`/`bindcode` (button and wheel).
 - Title bars for tabbed/stacked containers (clickable tabs), focus
   borders and `client.*` colours, `default_border`, `title_format`,
-  `hide_edge_borders`, `smart_borders`, as small layered windows.
+  `hide_edge_borders`, `smart_borders`. Borders through DWM's own border
+  colour (`DWMWA_BORDER_COLOR`, 1 px) rather than extra layered windows,
+  square corners for tiled windows, `border none/pixel` by removing the
+  title bar, and `opacity` with layered-window alpha; all undone on exit,
+  crash and `--recover` (see [`research/glazewm.md`](research/glazewm.md)).
 
 ### 0.4.0 — IPC parity
 
@@ -144,6 +148,9 @@ What an existing sway config needs to load and behave.
   tick events, matching sway-ipc(7), so i3/sway IPC libraries and scripts
   (autotiling, workspace renamers) work against the pipe.
 - `get_marks`, `get_binding_state`, `get_seats` and the remaining replies.
+- A watchdog (`swinewm --watch`): a second process that follows the IPC
+  events and shows every window again if swinewm is killed or hangs, which
+  an in-process crash handler cannot cover (as GlazeWM's watcher does).
 
 ### 0.5.0 — Waybar beyond the basics
 

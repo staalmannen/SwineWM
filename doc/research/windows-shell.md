@@ -10,6 +10,10 @@ an idea came from.
 
 Status column: ✅ implemented in SwineWM, 🔜 planned, ❌ not planned.
 
+For window management itself (hiding windows, crash cleanup, DWM borders,
+which windows to manage), see also the notes on GlazeWM in
+[`glazewm.md`](glazewm.md).
+
 ## Being the shell
 
 | Topic | How Cairo/ManagedShell does it | SwineWM |
