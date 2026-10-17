@@ -1,4 +1,4 @@
-# Lists every visible top-level window with what swinewm needs to know about
+# Lists every visible top-level window, top of the z-order first, with what swinewm needs to know about
 # it: process, class, title, rectangle, styles, owner and DWM cloaking.
 # For bug reports about windows swinewm handles badly (dialogs off screen,
 # popups that get tiled, windows that are not managed).
@@ -13,8 +13,6 @@ param([int]$Delay = 5)
 Add-Type @"
 using System; using System.Text; using System.Runtime.InteropServices;
 public class SwineWindows {
-  public delegate bool EnumProc(IntPtr h, IntPtr l);
-  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc f, IntPtr l);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
@@ -24,6 +22,9 @@ public class SwineWindows {
   [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr h, uint c);
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
   [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr c);
+  [DllImport("user32.dll")] public static extern IntPtr GetDesktopWindow();
+  // Undocumented but exported since Windows 8: the z-order band (1 = desktop).
+  [DllImport("user32.dll")] public static extern bool GetWindowBand(IntPtr h, out uint band);
   [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int a, out int v, int s);
   [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int a, out RECT v, int s);
   public struct RECT { public int L, T, R, B; }
@@ -39,8 +40,11 @@ for ($i = $Delay; $i -gt 0; $i--) {
 }
 
 $lines = New-Object System.Collections.Generic.List[string]
-[void][SwineWindows]::EnumWindows({
-  param($h, $l)
+# EnumWindows only returns windows of desktop apps (see its documentation);
+# walking the desktop's children with GetWindow also finds the "immersive"
+# windows of modern Windows dialogs, flyouts and Store apps.
+$h = [SwineWindows]::GetWindow([SwineWindows]::GetDesktopWindow(), 5)   # GW_CHILD
+while ($h -ne [IntPtr]::Zero) {
   if ([SwineWindows]::IsWindowVisible($h)) {
     $title = New-Object Text.StringBuilder 256
     [void][SwineWindows]::GetWindowText($h, $title, 256)
@@ -54,6 +58,8 @@ $lines = New-Object System.Collections.Generic.List[string]
     $cloaked = 0
     # DWMWA_CLOAKED (14)
     [void][SwineWindows]::DwmGetWindowAttribute($h, 14, [ref]$cloaked, 4)
+    $band = [uint32]0
+    try { [void][SwineWindows]::GetWindowBand($h, [ref]$band) } catch { }
     $procId = [uint32]0
     [void][SwineWindows]::GetWindowThreadProcessId($h, [ref]$procId)
     $proc = (Get-Process -Id $procId -ErrorAction SilentlyContinue).ProcessName
@@ -63,6 +69,7 @@ $lines = New-Object System.Collections.Generic.List[string]
     $flags = @()
     if ([SwineWindows]::IsIconic($h)) { $flags += "minimized" }
     if ($cloaked -ne 0) { $flags += "cloaked=$cloaked" }
+    if ($band -gt 1) { $flags += "band=$band" }
     if (($style -band 0x00C00000) -eq 0x00C00000) { $flags += "caption" }
     if ($style -band 0x40000000) { $flags += "child" }
     if ($exstyle -band 0x00000080) { $flags += "toolwindow" }
@@ -76,8 +83,8 @@ $lines = New-Object System.Collections.Generic.List[string]
       $r.L, $r.T, ($r.R - $r.L), ($r.B - $r.T), $f.L, $f.T, ($f.R - $f.L), ($f.B - $f.T),
       $style, $exstyle, [int64]$owner, ($flags -join " ")))
   }
-  $true
-}, [IntPtr]::Zero)
+  $h = [SwineWindows]::GetWindow($h, 2)   # GW_HWNDNEXT, in z-order
+}
 
 $out = Join-Path $env:TEMP "swinewm-windows.txt"
 $lines | Set-Content -Path $out -Encoding UTF8
