@@ -10,6 +10,11 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- Store apps start as the shell: `exec shell:AppsFolder\<AppUserModelID>`
+  uses the documented `IApplicationActivationManager` instead of the shell
+  namespace, which fails with "Class not registered" without Explorer.
+  `Get-StartApps` in PowerShell lists the IDs, e.g.
+  `bindsym $mod+c exec shell:AppsFolder\AnthropicPBC.Claude_fnn82j28hfe8t!Claude`.
 - `swinewm --set-autostart` / `--unset-autostart` (experimental): start
   swinewm at logon next to Explorer, which stays the shell behind it with
   its taskbar hidden (`explorer_taskbar autohide`, now in the default

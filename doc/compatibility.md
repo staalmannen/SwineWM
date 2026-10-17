@@ -32,7 +32,7 @@ ignored · ❌ not implemented (error)
 | `bindcode`, `bindswitch`, `bindgesture` | ⚪ | |
 | `mode <name>`, `mode <name> { … }` | ✅ | `--pango_markup` accepted |
 | `set` | ✅ | |
-| `exec`, `exec_always` | ✅ | See architecture: CreateProcess, then ShellExecute; `%VAR%` expanded; no implicit shell. `waybar`, `mako`, `makoctl`, `notify-send`, `grim` run the built-in versions; `a && b` chains of those run like `sh` would |
+| `exec`, `exec_always` | ✅ | See architecture: CreateProcess, then ShellExecute; `%VAR%` expanded; no implicit shell. `waybar`, `mako`, `makoctl`, `notify-send`, `grim` run the built-in versions; `a && b` chains of those run like `sh` would. Store apps: `exec shell:AppsFolder\<AppUserModelID> [args]` starts them through `IApplicationActivationManager`, also as the shell (PowerShell's `Get-StartApps` lists the IDs) |
 | `exit` | ✅ | Shows all hidden windows and quits |
 | `reload` | ✅ | |
 | `restart` | ✅ | i3's command (sway has none): exits cleanly without logging off and starts `swinewm.exe` again with the same arguments; hidden workspaces are shown and re-tiled. For updating a running swinewm |

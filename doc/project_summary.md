@@ -181,8 +181,9 @@ What an existing sway config needs to load and behave.
   as the shell.
 - grim: `slurp` (drag an area), clipboard output (the `wl-copy` habit),
   `grim -` once `exec` supports pipes.
-- Store apps as the shell: `IApplicationActivationManager` for
-  `shell:AppsFolder` launches (`tools/launch-store-app.bat` tests it).
+- Store apps as the shell: done for `exec shell:AppsFolder\<AUMID>`
+  (`IApplicationActivationManager`); still open for launchers such as Flow
+  Launcher, which start them their own way.
 - Next to Explorer (`--set-autostart`, experimental): register the bar as an
   AppBar so that Explorer reserves its space for every window, and find out
   which keys Explorer still takes.
@@ -238,12 +239,12 @@ Feature work stops; reliability and documentation.
   start fine through their App Execution Alias (`start firefox`,
   `exec firefox.exe`), but opening them as `shell:AppsFolder\<AUMID>`
   fails with "Class not registered" for every caller (tested with
-  PowerShell `Start-Process`), so launchers that use it (Flow Launcher)
-  cannot start them. Most likely a COM class that Explorer registers while
-  it runs (its immersive shell) is missing. Open: whether
-  `IApplicationActivationManager::ActivateApplication` works without
-  Explorer; if so swinewm's `exec` could use it for `shell:AppsFolder`
-  paths, and launchers could be asked to do the same.
+  PowerShell `Start-Process`, and with `explorer.exe shell:AppsFolder\…`),
+  so launchers that use it (Flow Launcher) cannot start them. Most likely a
+  COM class that Explorer registers while it is the shell is missing. The
+  documented `IApplicationActivationManager::ActivateApplication` does work
+  without Explorer (tested on Windows 11), so swinewm's `exec` uses it for
+  `shell:AppsFolder\<AUMID>`; launchers could be asked to do the same.
 - **Tray icons next to Explorer.** The `tray` module takes the tray icons
   over from Explorer (see [`architecture.md`](architecture.md)). Explorer's
   own tray then shows stale icons until swinewm exits. Hiding its taskbar

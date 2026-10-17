@@ -1,9 +1,65 @@
+#define COBJMACROS
 #include <stdlib.h>
 #include <wchar.h>
 #include "log.h"
 #include "swinewm/platform.h"
 #include "win32.h"
 #include <shellapi.h>
+#include <shobjidl.h>
+
+// Store (packaged) apps: "shell:AppsFolder\<AppUserModelID> [arguments]".
+// ShellExecute fails for these with "Class not registered" when swinewm is
+// the shell (the shell namespace needs Explorer as the shell), but the
+// documented IApplicationActivationManager starts them without Explorer.
+// The IDs are listed by PowerShell's Get-StartApps.
+static const wchar_t apps_folder[] = L"shell:AppsFolder\\";
+
+// Defined here rather than taken from uuid.lib, which may lack them.
+static const CLSID clsid_activation_manager = {0x45ba127d, 0x10a8, 0x46ea,
+	{0x8a, 0xb7, 0x56, 0xea, 0x90, 0x78, 0x94, 0x3c}};
+static const IID iid_activation_manager = {0x2e941141, 0x7f97, 0x4756,
+	{0xba, 0x1d, 0x9d, 0xec, 0xde, 0x89, 0x4a, 0x3d}};
+
+// Returns true if cmdline named a Store app (whether or not it started).
+static bool activate_store_app(const wchar_t *cmdline, const char *utf8) {
+	const wchar_t *p = cmdline;
+	bool quoted = *p == L'"';
+	if (quoted) {
+		++p;
+	}
+	size_t prefix = wcslen(apps_folder);
+	if (_wcsnicmp(p, apps_folder, prefix) != 0) {
+		return false;
+	}
+	p += prefix;
+	const wchar_t *end = p + wcscspn(p, quoted ? L"\"" : L" ");
+	wchar_t *aumid = calloc((size_t)(end - p) + 1, sizeof(wchar_t));
+	wcsncpy(aumid, p, (size_t)(end - p));
+	const wchar_t *args = *end ? end + 1 : end;
+	while (*args == L' ') {
+		++args;
+	}
+
+	IApplicationActivationManager *manager = NULL;
+	DWORD pid = 0;
+	HRESULT hr = CoCreateInstance(&clsid_activation_manager, NULL,
+		CLSCTX_LOCAL_SERVER, &iid_activation_manager, (void **)&manager);
+	if (SUCCEEDED(hr)) {
+		hr = IApplicationActivationManager_ActivateApplication(manager, aumid,
+			*args ? args : NULL, AO_NONE, &pid);
+		IApplicationActivationManager_Release(manager);
+	}
+	if (SUCCEEDED(hr)) {
+		swine_log(SWINE_DEBUG, "Started Store app '%s' (pid %lu)", utf8, pid);
+	} else {
+		char *msg = win32_error_string((DWORD)hr);
+		swine_log(SWINE_ERROR, "Unable to start Store app '%s': %s (0x%08lx)",
+			utf8, msg, (unsigned long)hr);
+		free(msg);
+	}
+	free(aumid);
+	return true;
+}
 
 // sway runs exec commands through "sh -c". Here the command line goes to
 // CreateProcess, which searches PATH and App Paths aliases (wt.exe, ...).
@@ -23,6 +79,10 @@ bool platform_spawn(const char *cmdline) {
 		wide = malloc(sizeof(wchar_t) * n);
 		ExpandEnvironmentStringsW(raw, wide, n);
 		free(raw);
+	}
+	if (activate_store_app(wide, cmdline)) {
+		free(wide);
+		return true;
 	}
 	STARTUPINFOW si = { .cb = sizeof(si) };
 	PROCESS_INFORMATION pi = {0};

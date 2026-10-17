@@ -108,6 +108,16 @@ static void test_errors_and_defer(void) {
 	CHECK_INT(fake.spawn_calls, 2);
 	CHECK_STR(fake.last_spawn, "calc.exe");
 	CHECK_STR(seat_get_focused_workspace()->name, "3");
+
+	// Store apps: the backslash and "!" of shell:AppsFolder\<AUMID> reach
+	// the platform unchanged, from the config and at runtime.
+	CHECK(read_inactive("exec shell:AppsFolder\\AnthropicPBC.Claude_fnn82j28hfe8t!Claude\n"));
+	config_run_deferred();
+	CHECK_STR(fake.last_spawn,
+		"shell:AppsFolder\\AnthropicPBC.Claude_fnn82j28hfe8t!Claude");
+	CHECK(run("exec shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App"));
+	CHECK_STR(fake.last_spawn,
+		"shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App");
 	fake_teardown();
 }
 
