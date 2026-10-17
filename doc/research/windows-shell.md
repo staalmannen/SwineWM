@@ -24,13 +24,13 @@ Status column: ✅ implemented in SwineWM, 🔜 planned, ❌ not planned.
 | Set as login shell | Installer writes the Winlogon `Shell` value | ✅ `swinewm --set-shell` / `--unset-shell` (HKCU, per user) |
 | `TaskbarButtonCreated` | As the shell, send the registered message to each new window so `ITaskbarList3` users (progress bars, thumbnail buttons) initialise (`TasksService.addWindow`) | 🔜 needed with a taskbar-like module |
 | `SetTaskmanWindow` | Claims the task-manager window role (`TasksService`) | ❌ not needed |
-| Shell service objects | As the shell, loads the SSOs (e.g. `stobject.dll`) that provide the volume/network/battery tray icons (`ShellServiceObject.cs`) | 🔜 with the tray |
+| Shell service objects | As the shell, loads the SSOs (e.g. `stobject.dll`) that provide the volume/network/battery tray icons (`ShellServiceObject.cs`) | ✅ loaded as the shell to provide the Windows tray icons |
 
 ## Next to Explorer
 
 | Topic | How Cairo/ManagedShell does it | SwineWM |
 | --- | --- | --- |
-| Reserving space | Register each bar as an AppBar: `SHAppBarMessage(ABM_NEW / ABM_QUERYPOS / ABM_SETPOS)`, react to `ABN_POSCHANGED`, call `ABM_ACTIVATE` on `WM_ACTIVATE` and `ABM_WINDOWPOSCHANGED` (`AppBarManager.cs`, `AppBarWindow.cs`) | 🔜 For now the bar's space is reserved inside swinewm's layout only; unmanaged maximized windows can overlap it |
+| Reserving space | Register each bar as an AppBar: `SHAppBarMessage(ABM_NEW / ABM_QUERYPOS / ABM_SETPOS)`, react to `ABN_POSCHANGED`, call `ABM_ACTIVATE` on `WM_ACTIVATE` and `ABM_WINDOWPOSCHANGED` (`AppBarManager.cs`, `AppBarWindow.cs`) | 🔜 SwineWM reserves bar space inside its own layout and answers selected taskbar queries as the shell; it does not register bars as AppBars, so unmanaged maximized windows can overlap them |
 | Hiding Explorer's taskbar | Save the taskbar state, `ABM_SETSTATE(ABS_AUTOHIDE)`, hide `Shell_TrayWnd` and every `Shell_SecondaryTrayWnd` with `SetWindowPos(SWP_HIDEWINDOW)`, re-hide every 100 ms because Explorer shows it again; restore on exit (`ExplorerHelper.cs`) | ✅ `explorer_taskbar autohide` (re-hidden every second; original state saved for `--recover`) |
 | Desktop windows | Explorer's desktop is `Progman`/`WorkerW` at the bottom of the Z order | ✅ the wallpaper window stays just above them |
 
@@ -71,11 +71,13 @@ in [`../architecture.md`](../architecture.md):
    not sent yet. ✅ / 🟡
 5. `dwData` 3 (`Shell_NotifyIconGetRect`) is answered with the icon's
    rectangle. ✅
-6. Messages not handled (AppBar messages, `dwData` 0, and anything from
-   `WM_USER` up) are forwarded to Explorer's taskbar. ✅ As the shell
-   there is no Explorer to forward to, so AppBar messages
-   (`ABM_GETTASKBARPOS`, `ABM_QUERYPOS/SETPOS`, `ABM_GETSTATE`,
-   `ABM_GETAUTOHIDEBAR`; `AppBarManager.appBarMessageDelegate`) get 0. ❌
+6. Messages not handled (including Explorer's private messages and anything
+   from `WM_USER` up) are forwarded to Explorer's taskbar. ✅ As the shell,
+   SwineWM answers `ABM_GETTASKBARPOS`, `ABM_GETSTATE`,
+   `ABM_GETAUTOHIDEBAR`, `ABM_GETAUTOHIDEBAREX`, `ABM_ACTIVATE` and
+   `ABM_WINDOWPOSCHANGED`. It does not register AppBars or implement
+   `ABM_NEW`/`ABM_QUERYPOS`/`ABM_SETPOS`; unmanaged maximized windows can
+   therefore overlap the bar while running next to Explorer. 🔜
 7. As the shell, the volume/network/power icons come from the SysTray shell
    service object (`CLSID 35CEC8A3-2BE6-11D2-8773-92E220524153`,
    `IOleCommandTarget::Exec(CGID_ShellServiceObject, OLECMDID_NEW)`). ✅

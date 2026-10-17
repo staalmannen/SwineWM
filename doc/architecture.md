@@ -241,7 +241,8 @@ that window (`win32/tray.c`, after ManagedShell's `TrayService`):
   before Explorer's. It then broadcasts the registered `TaskbarCreated`
   message, and running programs add their icons again, now to swinewm.
 - The window runs on its own thread: `Shell_NotifyIcon` waits for the
-  answer, and messages swinewm does not handle (AppBar messages, Explorer's
+  answer, selected AppBar queries are handled directly when SwineWM is the
+  shell, and other messages swinewm does not handle (including Explorer's
   private ones) are passed on to Explorer's taskbar with
   `SendMessageTimeout`. Neither can block the main thread. The icon table
   (window, id or GUID, callback message, version, a copy of the icon,
@@ -355,16 +356,14 @@ after a crash and with `--recover`.
 
 The approach follows Cairo Desktop's ManagedShell library; see
 [`research/windows-shell.md`](research/windows-shell.md) for the details
-and what remains (tray icons, AppBar registration).
+and what remains (notably registering bars as AppBars while running next to
+Explorer).
 
-## Things deliberately left for later
+## Known gaps
 
-- Title bars for tabbed/stacked containers and focus borders: Windows draws
-  its own frames, so these will be small layered windows owned by swinewm.
-  Until then a tabbed/stacked container just shows its active child.
-- Mouse: focus follows mouse, `floating_modifier` drag/resize, tiling drag.
-- Marks, `swap`, `sticky` (criteria, `for_window` and `assign` are done:
-  `swinewm/criteria.c`, ported from sway, with `common/regex.c` instead of
-  PCRE2).
-- `output` configuration (resolution/position/scale) and workspace-to-output
-  assignment.
+The feature-by-feature status lives in
+[`compatibility.md`](compatibility.md). The larger remaining areas include
+mouse interaction and decorations, IPC subscriptions/events, script-driven
+Waybar modules, Windows toast notifications and registering bars as AppBars
+when running beside Explorer. These are separate projects with different
+Windows dependencies; do not infer support from the upstream format alone.

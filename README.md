@@ -34,25 +34,23 @@ program it replaces.
 | Path | What |
 | --- | --- |
 | [`swinewm/`](swinewm/) | `swinewm` (window manager, bar, notifications) and `swinemsg`, in C11 ([README](swinewm/README.md)) |
-| [`doc/`](doc/) | [Windows for Linux users](doc/linux-users.md), [project summary and roadmap](doc/project_summary.md), [architecture](doc/architecture.md), [Sway compatibility](doc/compatibility.md), [packaging](doc/packaging.md) |
+| [`doc/`](doc/) | [Windows for Linux users](doc/linux-users.md), [project summary and roadmap](doc/project_summary.md), [design strategy](doc/design_strategy.md), [architecture](doc/architecture.md), [Sway compatibility](doc/compatibility.md), [packaging](doc/packaging.md) |
 | `sway/`, `waybar/`, `mako/` | Upstream sources (submodules), used as reference |
 
 Clone with `git clone --recurse-submodules` to get the reference sources.
 
 ## Status
 
-`swinewm` implements Sway's layout tree, focus model and most everyday
-commands (focus, move, split, layout, workspaces, floating, fullscreen,
-scratchpad, resize, gaps, modes, exec), loads Sway config files and answers
-i3/Sway IPC requests over a named pipe. It draws a Waybar-style bar from a
-Waybar config and style sheet, and Mako-style notifications from a mako
-config, hosts the Windows tray, takes screenshots like grim, and can
-replace Explorer as the Windows shell. Version 0.1.0 is in daily use on
-Windows 11 as the shell. Not yet done: window rules (criteria), title bars
-and borders, mouse bindings, output configuration, IPC events,
-script-driven bar modules, Windows toast notifications. See
-[`doc/compatibility.md`](doc/compatibility.md) and the roadmap in
-[`doc/project_summary.md`](doc/project_summary.md).
+`swinewm` implements Sway's layout tree, focus model and many everyday
+commands, loads Sway config files and answers i3/Sway IPC requests over a
+named pipe. It draws a Waybar-style bar from a Waybar config and style sheet,
+and Mako-style notifications from a mako config, hosts the Windows tray,
+takes screenshots like grim, and can replace Explorer as the Windows shell.
+It is a work in progress and is used as a shell on Windows 11. Current
+support and known gaps are listed in [`doc/compatibility.md`](doc/compatibility.md);
+the roadmap and design priorities are in
+[`doc/project_summary.md`](doc/project_summary.md) and
+[`doc/design_strategy.md`](doc/design_strategy.md).
 
 To try it, install the MSI from
 [Releases](https://github.com/staalmannen/SwineWM/releases) and see
