@@ -35,6 +35,9 @@ the MSI and zip with the matching section below as release notes.
 
 ### Fixed
 
+- Floating dialogs that were only partly on-screen could keep their bad
+  position; new dialogs are now centered unless the whole window fits on a
+  monitor.
 - As the shell, swinewm now answers programs that ask where the taskbar
   is (`SHAppBarMessage(ABM_GETTASKBARPOS)`, which went unanswered without
   Explorer); dialogs that place themselves next to the taskbar, such as
