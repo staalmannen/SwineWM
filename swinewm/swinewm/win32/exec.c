@@ -98,6 +98,27 @@ bool platform_spawn(const char *cmdline) {
 	}
 	DWORD error = GetLastError();
 
+	// The whole command line may be one path with spaces: sway removes the
+	// quotes of `exec "C:\Start Menu\App.lnk"` (one quoted argument), and
+	// swinemenu's Start menu entries are such paths. Shortcuts and documents
+	// are opened by ShellExecute.
+	DWORD attributes = GetFileAttributesW(wide);
+	if (attributes != INVALID_FILE_ATTRIBUTES) {
+		SHELLEXECUTEINFOW sei = { .cbSize = sizeof(sei) };
+		sei.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+		sei.lpVerb = (attributes & FILE_ATTRIBUTE_DIRECTORY) ? NULL : L"open";
+		sei.lpFile = wide;
+		sei.nShow = SW_SHOWNORMAL;
+		ok = ShellExecuteExW(&sei);
+		if (!ok) {
+			char *msg = win32_error_string(GetLastError());
+			swine_log(SWINE_ERROR, "Unable to open '%s': %s", cmdline, msg);
+			free(msg);
+		}
+		free(wide);
+		return ok != FALSE;
+	}
+
 	// Split off the first (possibly quoted) token for ShellExecute.
 	wchar_t *file = wide;
 	wchar_t *params = NULL;

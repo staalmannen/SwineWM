@@ -115,6 +115,11 @@ static void test_errors_and_defer(void) {
 	config_run_deferred();
 	CHECK_STR(fake.last_spawn,
 		"shell:AppsFolder\\AnthropicPBC.Claude_fnn82j28hfe8t!Claude");
+	// As in sway, one quoted argument loses its quotes: the platform gets
+	// the bare path (with spaces) and must open it as a whole.
+	CHECK(run("exec \"C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Firefox.lnk\""));
+	CHECK_STR(fake.last_spawn,
+		"C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Firefox.lnk");
 	CHECK(run("exec shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App"));
 	CHECK_STR(fake.last_spawn,
 		"shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App");

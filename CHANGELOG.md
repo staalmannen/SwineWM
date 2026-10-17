@@ -53,6 +53,10 @@ the MSI and zip with the matching section below as release notes.
 
 ### Fixed
 
+- `exec "C:\path with spaces\App.lnk"` failed: sway's rule removes the
+  quotes of a single quoted argument, and the path was then split at its
+  first space. A command line that names an existing file is now opened as
+  a whole (this also made swinemenu's Start menu entries do nothing).
 - Floating dialogs that were only partly on-screen could keep their bad
   position; new dialogs are now centered unless the whole window fits on a
   monitor.
