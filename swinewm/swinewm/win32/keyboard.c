@@ -52,6 +52,19 @@ static uint32_t current_modifiers(void) {
 	return mods;
 }
 
+uint32_t win32_keyboard_modifiers(void) {
+	return current_modifiers();
+}
+
+void win32_keyboard_used_modifiers(uint32_t mods) {
+	if (mods & SWINE_MOD_LOGO) {
+		suppress_logo_menu = true;
+	}
+	if (mods & SWINE_MOD_ALT) {
+		suppress_alt_menu = true;
+	}
+}
+
 static void send_dummy_key(void) {
 	INPUT inputs[2] = {0};
 	inputs[0].type = INPUT_KEYBOARD;

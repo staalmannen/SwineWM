@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include "log.h"
+#include "swinewm/input/cursor.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/output.h"
@@ -218,6 +219,9 @@ void seat_node_destroyed(struct swine_node *node) {
 	if (!seat) {
 		return;
 	}
+	if (node->type == N_CONTAINER) {
+		cursor_container_destroyed(node->container);
+	}
 	bool was_focused = seat_get_focus() == node;
 	int index = list_find(seat->focus_stack, node);
 	if (index != -1) {
@@ -263,4 +267,8 @@ void seat_node_destroyed(struct swine_node *node) {
 			return;
 		}
 	}
+}
+
+void seat_consider_warp_to_focus(void) {
+	cursor_request_warp(false);
 }

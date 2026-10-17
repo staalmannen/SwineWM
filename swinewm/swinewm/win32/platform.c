@@ -15,6 +15,7 @@
 
 HWND win32_shell_hwnd = NULL;
 static bool keyboard_ok = false;
+static bool mouse_ok = false;
 static UINT shell_hook_message = 0;
 
 // Timers on the shell window: a 1 s tick for the bar (clock, cpu, ...) and
@@ -23,6 +24,7 @@ static UINT shell_hook_message = 0;
 #define TIMER_NOTIFY 2
 
 void win32_run_command(const char *command) {
+	win32_busy++;
 	char *copy = swine_strdup(command);
 	list_t *res_list = execute_command(copy, NULL);
 	free(copy);
@@ -35,9 +37,10 @@ void win32_run_command(const char *command) {
 	}
 	free_cmd_results_list(res_list);
 	transaction_commit_dirty();
+	win32_busy--;
 }
 
-static LRESULT CALLBACK shell_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+static LRESULT handle_shell_message(HWND hwnd, UINT msg, WPARAM wparam,
 		LPARAM lparam) {
 	switch (msg) {
 	case WM_SWINE_BINDING: {
@@ -62,6 +65,9 @@ static LRESULT CALLBACK shell_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 	case WM_SWINE_TRAY:
 		win32_tray_handle_message(wparam, lparam);
 		return 0;
+	case WM_SWINE_MOTION:
+		win32_mouse_handle_motion();
+		return 0;
 	case WM_DISPLAYCHANGE:
 		win32_shell_resize_desktop();
 		win32_outputs_update();
@@ -85,6 +91,14 @@ static LRESULT CALLBACK shell_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 		}
 		return DefWindowProcW(hwnd, msg, wparam, lparam);
 	}
+}
+
+static LRESULT CALLBACK shell_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+		LPARAM lparam) {
+	win32_busy++;
+	LRESULT result = handle_shell_message(hwnd, msg, wparam, lparam);
+	win32_busy--;
+	return result;
 }
 
 static BOOL WINAPI console_handler(DWORD type) {
@@ -150,6 +164,7 @@ bool platform_init(void) {
 		return false;
 	}
 	keyboard_ok = win32_keyboard_init();
+	mouse_ok = win32_mouse_init();
 	// Shell hook messages: urgency (HSHELL_FLASH) and fullscreen changes.
 	shell_hook_message = RegisterWindowMessageW(L"SHELLHOOK");
 	if (!RegisterShellHookWindow(win32_shell_hwnd)) {
@@ -240,6 +255,9 @@ static void respawn(void) {
 void platform_finish(void) {
 	if (keyboard_ok) {
 		win32_keyboard_finish();
+	}
+	if (mouse_ok) {
+		win32_mouse_finish();
 	}
 	if (shell_hook_message) {
 		DeregisterShellHookWindow(win32_shell_hwnd);

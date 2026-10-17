@@ -8,6 +8,20 @@ the MSI and zip with the matching section below as release notes.
 
 ## [Unreleased]
 
+### Added
+
+- Mouse support, ported from sway: `focus_follows_mouse yes|no|always`,
+  `floating_modifier <mod> [normal|inverse]` ($mod + left button moves a
+  floating window or drags a tiled one to another place, $mod + right
+  button resizes either), `tiling_drag`, `tiling_drag_threshold`,
+  `mouse_warping output|container|none`, and mouse bindings
+  (`bindsym --whole-window $mod+button4 workspace prev`).
+
+### Fixed
+
+- A floating window dragged by its title bar onto another monitor now
+  joins the workspace shown there, as in sway.
+
 ## [0.2.0] - 2026-10-17
 
 Sway configs that real people have: criteria and window rules, marks,

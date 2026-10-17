@@ -351,6 +351,67 @@ void container_floating_move_to_center(struct swine_container *con) {
 	con->floating_box.y = area.y + (area.height - con->floating_box.height) / 2;
 }
 
+// The output under the centre of a floating container, else the closest one.
+struct swine_output *container_floating_find_output(
+		struct swine_container *con) {
+	double center_x = con->floating_box.x + con->floating_box.width / 2.0;
+	double center_y = con->floating_box.y + con->floating_box.height / 2.0;
+	struct swine_output *closest_output = NULL;
+	double closest_distance = 0;
+	for (int i = 0; i < root->outputs->length; ++i) {
+		struct swine_output *output = root->outputs->items[i];
+		const struct swine_box *b = &output->box;
+		double closest_x = center_x < b->x ? b->x :
+			center_x > b->x + b->width ? b->x + b->width : center_x;
+		double closest_y = center_y < b->y ? b->y :
+			center_y > b->y + b->height ? b->y + b->height : center_y;
+		if (center_x == closest_x && center_y == closest_y) {
+			return output;
+		}
+		double x_dist = closest_x - center_x;
+		double y_dist = closest_y - center_y;
+		double distance = x_dist * x_dist + y_dist * y_dist;
+		if (!closest_output || distance < closest_distance) {
+			closest_output = output;
+			closest_distance = distance;
+		}
+	}
+	return closest_output;
+}
+
+void container_floating_move_to(struct swine_container *con, int x, int y) {
+	if (!container_is_floating(con)) {
+		return;
+	}
+	con->floating_box.x = x;
+	con->floating_box.y = y;
+	if (container_is_scratchpad_hidden(con)) {
+		return;
+	}
+	// Like sway: a window moved onto another output joins the workspace
+	// shown there.
+	struct swine_workspace *old_workspace = con->workspace;
+	struct swine_output *new_output = container_floating_find_output(con);
+	struct swine_workspace *new_workspace = new_output ?
+		output_get_active_workspace(new_output) : NULL;
+	if (new_workspace && old_workspace != new_workspace) {
+		workspace_add_floating(new_workspace, con);
+		if (old_workspace) {
+			workspace_detect_urgent(old_workspace);
+		}
+		workspace_detect_urgent(new_workspace);
+	}
+}
+
+void container_raise_floating(struct swine_container *con) {
+	// Bring the container to the front by putting it at the end of the
+	// floating list.
+	struct swine_container *floater = container_toplevel_ancestor(con);
+	if (container_is_floating(floater) && floater->workspace) {
+		list_move_to_end(floater->workspace->floating, floater);
+	}
+}
+
 static void container_init_floating_box(struct swine_container *con) {
 	struct swine_box area = workspace_output_area(con->workspace);
 	int width = con->box.width, height = con->box.height;

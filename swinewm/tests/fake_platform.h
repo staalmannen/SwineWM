@@ -34,6 +34,11 @@ struct fake_platform_state {
 	bool battery_charging;
 	int cpu_usage;
 	int memory_percentage;
+	// pointer
+	int cursor_x, cursor_y;
+	int warp_calls;
+	bool drop_indicator_shown;
+	struct swine_box drop_indicator;
 };
 
 extern struct fake_platform_state fake;

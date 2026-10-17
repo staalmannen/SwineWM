@@ -575,6 +575,7 @@ static struct cmd_results *cmd_move_workspace(int argc, char **argv) {
 
 	struct swine_node *focus = seat_get_focus_inactive(&workspace->node);
 	seat_set_focus(focus ? focus : &workspace->node);
+	seat_consider_warp_to_focus();
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 

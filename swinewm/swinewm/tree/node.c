@@ -92,3 +92,8 @@ bool box_equal(const struct swine_box *a, const struct swine_box *b) {
 	return a->x == b->x && a->y == b->y &&
 		a->width == b->width && a->height == b->height;
 }
+
+bool box_contains_point(const struct swine_box *box, int x, int y) {
+	return x >= box->x && x < box->x + box->width &&
+		y >= box->y && y < box->y + box->height;
+}

@@ -1,6 +1,7 @@
 #include "log.h"
 #include "swinewm/bar/bar.h"
 #include "swinewm/desktop/transaction.h"
+#include "swinewm/input/cursor.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/platform.h"
 #include "swinewm/server.h"
@@ -82,6 +83,7 @@ void transaction_commit_dirty(void) {
 	} else if (!view) {
 		last_activated = NULL;
 	}
+	cursor_apply_warp();
 	platform_ui_refresh();
 }
 

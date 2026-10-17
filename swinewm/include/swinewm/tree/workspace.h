@@ -52,6 +52,7 @@ struct swine_output *workspace_output_get_highest_available(
 void workspace_move_to_output(struct swine_workspace *ws,
 		struct swine_output *output);
 size_t workspace_num_sticky_containers(struct swine_workspace *ws);
+size_t workspace_num_tiling_views(struct swine_workspace *ws);
 int workspace_number(const char *name); // -1 if the name is not numbered
 
 struct swine_workspace *workspace_output_next(struct swine_workspace *current);

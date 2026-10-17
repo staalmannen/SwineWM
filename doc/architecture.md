@@ -180,7 +180,20 @@ Key names are xkb keysym names mapped to virtual-key codes; punctuation
 follows the US layout for now (layout-aware lookup with `VkKeyScanEx` is a
 to-do).
 
-### exec
+### Mouse
+
+A `WH_MOUSE_LL` hook (`win32/mouse.c`) passes pointer input to the core
+(`input/cursor.c`, a port of sway's `seatop_*` files). Motion is only
+recorded in the hook and handled from a posted message, at most one pending
+at a time. A press is handed to the core inside the hook, because the hook
+has to answer at once whether the application gets it; the core starts a
+move or resize there, and posts the commands of mouse bindings instead of
+running them. A swallowed press has its release swallowed too. What is under
+the pointer is `WindowFromPoint`, so menus and other windows swinewm does
+not manage are seen as such. While swinewm code runs on the main thread
+(`win32_busy`), the hook leaves input alone: a COM call that pumps messages
+must not re-enter the core.
+
 
 `exec` uses `CreateProcessW`, which searches `PATH` and app aliases such as
 `wt.exe`; if that fails the command is handed to `ShellExecuteExW`, which
@@ -365,7 +378,7 @@ Explorer).
 
 The feature-by-feature status lives in
 [`compatibility.md`](compatibility.md). The larger remaining areas include
-mouse interaction and decorations, IPC subscriptions/events, script-driven
+decorations, IPC subscriptions/events, script-driven
 Waybar modules, Windows toast notifications and registering bars as AppBars
 when running beside Explorer. These are separate projects with different
 Windows dependencies; do not infer support from the upstream format alone.

@@ -605,8 +605,11 @@ static void handle_event(DWORD event, HWND hwnd) {
 		if (view && view->container) {
 			update_insets(view);
 			if (container_is_floating(view->container)) {
-				view->container->floating_box = visible_rect(hwnd);
-				view->current.box = view->container->floating_box;
+				struct swine_box box = visible_rect(hwnd);
+				view->container->floating_box = box;
+				view->current.box = box;
+				// Dragged onto another monitor: join its workspace.
+				container_floating_move_to(view->container, box.x, box.y);
 			} else {
 				// A tiled window was dragged: snap it back into place.
 				view->current.valid = false;
