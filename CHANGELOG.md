@@ -8,6 +8,16 @@ the MSI and zip with the matching section below as release notes.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-17
+
+Sway configs that real people have: criteria and window rules, marks,
+swap, sticky, resize, outputs, `include` and config error notifications,
+plus the `swinemenu` launcher (see the roadmap in
+[`doc/project_summary.md`](doc/project_summary.md)). The multi-monitor
+features (`output … mode|position|transform`, `workspace … output`,
+`move workspace to output`, hot-plug) are covered by unit tests but not
+yet tested on a real multi-monitor setup; reports are welcome.
+
 ### Added
 
 - `swinemenu`, a small launcher in the spirit of wofi/wmenu and the new
@@ -53,6 +63,14 @@ the MSI and zip with the matching section below as release notes.
 
 ### Fixed
 
+- `exec "C:\path with spaces\App.lnk"` failed: sway's rule removes the
+  quotes of a single quoted argument, and the path was then split at its
+  first space. A command line that names an existing file is now opened as
+  a whole (this also made swinemenu's Start menu entries do nothing).
+- Store apps did not start from swinemenu: the activation manager is now
+  created with `CLSCTX_ALL` (as PowerShell does) instead of only as a local
+  server, a failed Store app `exec` reports failure (with the AppUserModelID
+  in the log), and swinemenu then tries to start the app itself.
 - Floating dialogs that were only partly on-screen could keep their bad
   position; new dialogs are now centered unless the whole window fits on a
   monitor.
@@ -129,6 +147,7 @@ built-in Waybar (config.jsonc, CSS subset, common modules) and Mako
 (config, criteria, modes, `notify-send`, `makoctl`), wallpapers,
 running as the Windows shell (`--set-shell`), and an MSI installer.
 
-[Unreleased]: https://github.com/staalmannen/SwineWM/compare/0.1.0...HEAD
+[Unreleased]: https://github.com/staalmannen/SwineWM/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.2.0
 [0.1.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.1.0
 [0.0.1]: https://github.com/staalmannen/SwineWM/releases/tag/0.0.1

@@ -324,27 +324,27 @@ static char *normalize_path(const char *path) {
 	size_t len = strlen(path);
 	char *out = malloc(len + 1);
 	size_t n = 0;
-	size_t root = 0;   // never remove "C:" or a leading separator
+	size_t keep = 0;   // never remove "C:" or a leading separator
 	if (len >= 2 && path[1] == ':') {
-		root = 2;
+		keep = 2;
 	}
-	while (root < len && (path[root] == '/' || path[root] == '\\')) {
-		++root;
+	while (keep < len && (path[keep] == '/' || path[keep] == '\\')) {
+		++keep;
 	}
-	memcpy(out, path, root);
-	n = root;
-	const char *p = path + root;
+	memcpy(out, path, keep);
+	n = keep;
+	const char *p = path + keep;
 	while (*p) {
 		const char *end = p + strcspn(p, "/\\");
 		size_t seg = (size_t)(end - p);
 		if (seg == 1 && p[0] == '.') {
 			// skip
-		} else if (seg == 2 && p[0] == '.' && p[1] == '.' && n > root) {
+		} else if (seg == 2 && p[0] == '.' && p[1] == '.' && n > keep) {
 			// drop the previous segment (and its separator)
 			if (out[n - 1] == '/' || out[n - 1] == '\\') {
 				--n;
 			}
-			while (n > root && out[n - 1] != '/' && out[n - 1] != '\\') {
+			while (n > keep && out[n - 1] != '/' && out[n - 1] != '\\') {
 				--n;
 			}
 		} else if (seg > 0) {
@@ -357,7 +357,7 @@ static char *normalize_path(const char *path) {
 		p = *end ? end + 1 : end;
 	}
 	// "a/b/" after removing a trailing "." or ".."
-	if (n > root && (out[n - 1] == '/' || out[n - 1] == '\\')) {
+	if (n > keep && (out[n - 1] == '/' || out[n - 1] == '\\')) {
 		--n;
 	}
 	out[n] = '\0';

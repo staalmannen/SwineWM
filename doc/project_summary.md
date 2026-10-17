@@ -125,7 +125,7 @@ Make what exists dependable before adding more.
 - A `swinewm.log` that is useful by default (warnings and lifecycle
   events), and `-d` for the shell via an environment variable or config.
 
-### 0.2.0 — sway configs that real people have (implemented, being tested)
+### 0.2.0 — sway configs that real people have (released)
 
 What an existing sway config needs to load and behave.
 

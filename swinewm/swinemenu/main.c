@@ -15,6 +15,8 @@
 #include <windowsx.h>
 #include <shellapi.h>
 #include <shlobj.h>
+#include <shobjidl.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -166,13 +168,48 @@ static char *history_path(void) {
 
 // --- launching -------------------------------------------------------------
 
-// Asks swinewm to run command; starts it directly if swinewm is not there.
+// Starts a Store app entry ("shell:AppsFolder\<AppUserModelID>") with the
+// documented IApplicationActivationManager, as swinewm's exec does. Used when
+// swinewm could not start it, so the menu does not fail silently.
+static const CLSID clsid_activation_manager = {0x45ba127d, 0x10a8, 0x46ea,
+	{0x8a, 0xb7, 0x56, 0xea, 0x90, 0x78, 0x94, 0x3c}};
+static const IID iid_activation_manager = {0x2e941141, 0x7f97, 0x4756,
+	{0xba, 0x1d, 0x9d, 0xec, 0xde, 0x89, 0x4a, 0x3d}};
+
+static bool activate_store_app(const char *command) {
+	static const char prefix[] = "shell:AppsFolder\\";
+	if (_strnicmp(command, prefix, sizeof(prefix) - 1) != 0) {
+		return false;
+	}
+	wchar_t *aumid = swinemenu_utf8_to_utf16(command + sizeof(prefix) - 1);
+	if (!aumid) {
+		return false;
+	}
+	IApplicationActivationManager *manager = NULL;
+	DWORD pid = 0;
+	HRESULT hr = CoCreateInstance(&clsid_activation_manager, NULL, CLSCTX_ALL,
+		&iid_activation_manager, (void **)&manager);
+	if (SUCCEEDED(hr)) {
+		hr = IApplicationActivationManager_ActivateApplication(manager, aumid,
+			NULL, AO_NONE, &pid);
+		IApplicationActivationManager_Release(manager);
+	}
+	free(aumid);
+	return SUCCEEDED(hr);
+}
+
+// Asks swinewm to run command; starts it directly if swinewm is not there
+// or could not start it.
 static void launch(const char *command) {
 	char *payload = format_str("exec %s", command);
 	char *reply = ipc_request(NULL, IPC_COMMAND, payload, NULL);
 	free(payload);
-	if (reply) {
-		free(reply);
+	bool done = reply && !strstr(reply, "\"success\":false");
+	free(reply);
+	if (done) {
+		return;
+	}
+	if (activate_store_app(command)) {
 		return;
 	}
 	wchar_t *w = swinemenu_utf8_to_utf16(command);
