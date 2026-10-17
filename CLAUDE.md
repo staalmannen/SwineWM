@@ -51,6 +51,9 @@ status changes.
 - `sway/`, `waybar/`, `mako/` — upstream reference submodules. **Never edit
   files inside submodules.** Fetch them with
   `git submodule update --init --depth 1 sway waybar mako`.
+- `tools/` — helper scripts for Windows bug reports
+  (`list-windows.bat`: every visible window with class, styles, owner and
+  cloaking, for windows swinewm handles badly).
 - `doc/archive/` — notes from the abandoned port strategy.
 - `doc/research/windows-shell.md` — how Cairo Desktop / ManagedShell solve
   shell problems (being the shell, AppBars, tray, task tracking,
