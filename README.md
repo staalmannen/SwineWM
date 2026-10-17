@@ -1,5 +1,5 @@
 # SwineWM
-
+## "Putting lipstick on a pig"
 SwineWM is an [alternative shell](https://en.wikipedia.org/wiki/List_of_alternative_shells_for_Windows) 
 for Microsoft Windows that works like a [Sway](https://swaywm.org/) desktop:
 a keyboard-driven tiling window manager with workspaces, a [Waybar](https://github.com/Alexays/Waybar)
