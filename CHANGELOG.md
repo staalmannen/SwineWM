@@ -10,6 +10,10 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- `swinewm --set-autostart` / `--unset-autostart`: start swinewm at logon
+  next to Explorer, which stays the shell behind it (Windows' own dialogs,
+  search and Store apps keep working). Now the recommended setup; the
+  default config hides Explorer's taskbar (`explorer_taskbar autohide`).
 - Criteria: `[app_id=… class=… title=… …] <commands>`, `for_window`,
   `assign` and `no_focus`, as in sway, with a built-in regular-expression
   engine. On Windows `app_id` is the executable's file name (matched
@@ -51,7 +55,8 @@ the MSI and zip with the matching section below as release notes.
   program. The "Open with" dialog still shows no app list as the shell
   (see `doc/compatibility.md`).
 - `tools/list-windows.bat` and `tools/move-foreground.bat`: scripts for
-  reporting windows that swinewm handles badly.
+  reporting windows that swinewm handles badly; `tools/launch-store-app.bat`
+  tests ways of starting Store apps.
 - A two-part version tag (`0.1`) was not recognised, so its build was
   versioned after the previous tag; it now means `0.1.0`.
 - The release job failed when the release had already been created on

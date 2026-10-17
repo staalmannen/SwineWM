@@ -66,13 +66,21 @@ logon); as the shell the log is `%LOCALAPPDATA%\swinewm\swinewm.log`,
 the previous session's `swinewm.old.log`. Existing windows are tiled on
 workspace 1.
 
-To use it instead of Explorer, run `swinewm --set-shell` once and log off
-and on again (`swinewm --unset-shell` brings Explorer back). As the shell it
-starts your Windows startup programs, logs to
-`%LOCALAPPDATA%\swinewm\swinewm.log`, and `exit` (Win+Shift+e) logs you off.
+There are two ways to make it your desktop:
+
+- **Next to Explorer (recommended):** run `swinewm --set-autostart` once
+  (`--unset-autostart` undoes it). swinewm starts at logon and hides
+  Explorer's taskbar; Explorer keeps running behind it as the shell, so
+  Windows' own dialogs, search and Store apps work as usual.
+- **Instead of Explorer:** run `swinewm --set-shell` once and log off and on
+  again (`swinewm --unset-shell` brings Explorer back). As the shell it
+  starts your Windows startup programs, logs to
+  `%LOCALAPPDATA%\swinewm\swinewm.log`, and `exit` (Win+Shift+e) logs you
+  off. Some Windows 11 dialogs, such as "Open with", do not work without
+  Explorer.
+
 Tray icons appear in the bar's `tray` module (on by default), in either
-mode. Running next to Explorer, `explorer_taskbar autohide` in the config
-hides Explorer's taskbar while swinewm runs.
+mode.
 
 With the default config:
 

@@ -215,6 +215,10 @@ static void run_registry_key(HKEY hive, const wchar_t *path,
 		if (startup_disabled(hive, approved_key, name)) {
 			continue;
 		}
+		// Our own autostart entry (swinewm --set-autostart): we are running.
+		if (!run_once && wcscmp(name, L"SwineWM") == 0) {
+			continue;
+		}
 		char *cmd = utf16_to_utf8(value);
 		swine_log(SWINE_INFO, "Startup program: %s", cmd);
 		platform_spawn(cmd);
@@ -499,40 +503,83 @@ void win32_shell_rescue(void) {
 
 #define WINLOGON_KEY L"Software\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon"
 
-int platform_set_login_shell(bool enable) {
+#define RUN_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+#define RUN_VALUE L"SwineWM"
+
+// Writes (or with value NULL deletes) a value under HKCU. Returns a Win32
+// error code; deleting a value that is not there is not an error.
+static LONG set_user_value(const wchar_t *subkey, const wchar_t *name,
+		const wchar_t *value) {
 	HKEY key;
-	if (RegCreateKeyExW(HKEY_CURRENT_USER, WINLOGON_KEY, 0, NULL, 0,
-			KEY_SET_VALUE, NULL, &key, NULL) != ERROR_SUCCESS) {
-		fprintf(stderr, "Unable to open HKCU\\%ls\n", WINLOGON_KEY);
-		return 1;
+	LONG r = RegCreateKeyExW(HKEY_CURRENT_USER, subkey, 0, NULL, 0,
+		KEY_SET_VALUE, NULL, &key, NULL);
+	if (r != ERROR_SUCCESS) {
+		return r;
 	}
-	LONG r;
-	if (enable) {
-		wchar_t exe[MAX_PATH];
-		DWORD n = GetModuleFileNameW(NULL, exe, MAX_PATH);
-		wchar_t value[MAX_PATH + 2];
-		swprintf(value, MAX_PATH + 2, L"\"%.*ls\"", (int)n, exe);
-		r = RegSetValueExW(key, L"Shell", 0, REG_SZ, (const BYTE *)value,
+	if (value) {
+		r = RegSetValueExW(key, name, 0, REG_SZ, (const BYTE *)value,
 			(DWORD)((wcslen(value) + 1) * sizeof(wchar_t)));
 	} else {
-		r = RegDeleteValueW(key, L"Shell");
+		r = RegDeleteValueW(key, name);
 		if (r == ERROR_FILE_NOT_FOUND) {
 			r = ERROR_SUCCESS;
 		}
 	}
 	RegCloseKey(key);
+	return r;
+}
+
+static void own_command_line(wchar_t *value, size_t size) {
+	wchar_t exe[MAX_PATH];
+	DWORD n = GetModuleFileNameW(NULL, exe, MAX_PATH);
+	swprintf(value, size, L"\"%.*ls\"", (int)n, exe);
+}
+
+static int report_registry_error(LONG r, const char *what) {
+	char *msg = win32_error_string((DWORD)r);
+	fprintf(stderr, "Unable to change %s: %s\n", what, msg);
+	free(msg);
+	return 1;
+}
+
+// "--set-shell": swinewm replaces Explorer as the shell. The two ways of
+// starting swinewm at logon exclude each other, so this also removes the
+// autostart entry (as the shell swinewm runs the Run entries itself and
+// would start itself a second time).
+int platform_set_login_shell(bool enable) {
+	wchar_t value[MAX_PATH + 2];
+	own_command_line(value, MAX_PATH + 2);
+	LONG r = set_user_value(WINLOGON_KEY, L"Shell", enable ? value : NULL);
 	if (r != ERROR_SUCCESS) {
-		char *msg = win32_error_string((DWORD)r);
-		fprintf(stderr, "Unable to change the login shell: %s\n", msg);
-		free(msg);
-		return 1;
+		return report_registry_error(r, "the login shell");
 	}
 	if (enable) {
+		set_user_value(RUN_KEY, RUN_VALUE, NULL);
 		printf("swinewm will replace Explorer as your shell from your next "
 			"logon.\nTo undo: swinewm --unset-shell (or press Ctrl+Alt+Del, "
 			"open Task Manager, run explorer.exe, then run that command).\n");
 	} else {
 		printf("Explorer will be your shell again from your next logon.\n");
+	}
+	return 0;
+}
+
+// "--set-autostart": Explorer stays the shell, so Windows' own dialogs,
+// search and Store apps keep working, and swinewm starts at logon as a
+// startup program, hiding Explorer's taskbar ("explorer_taskbar autohide").
+int platform_set_autostart(bool enable) {
+	wchar_t value[MAX_PATH + 2];
+	own_command_line(value, MAX_PATH + 2);
+	LONG r = set_user_value(RUN_KEY, RUN_VALUE, enable ? value : NULL);
+	if (r != ERROR_SUCCESS) {
+		return report_registry_error(r, "the startup programs");
+	}
+	if (enable) {
+		set_user_value(WINLOGON_KEY, L"Shell", NULL);
+		printf("swinewm will start at your next logon, with Explorer as the "
+			"shell behind it.\nTo undo: swinewm --unset-autostart.\n");
+	} else {
+		printf("swinewm will no longer start at logon.\n");
 	}
 	return 0;
 }
