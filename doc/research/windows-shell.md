@@ -113,3 +113,24 @@ that sends the Windows format works.
   modules, but undocumented.
 - UWP/Store apps can be listed and launched through
   `IApplicationActivationManager` (`StoreAppHelper`).
+
+## Windows 11 dialogs without Explorer as the shell
+
+Found while debugging the "Open with" dialog with `tools/list-windows.bat`:
+
+- The dialog is a window of `OpenWith.exe`, class `Open With`, styles
+  caption + tool window + topmost, in **z-order band 4** (`GetWindowBand`,
+  undocumented; 1 is the normal desktop band). Windows in such bands are
+  hidden from `EnumWindows`, from walking `GetWindow(GW_HWNDNEXT)` and from
+  `EnumThreadWindows` in a normal program; `GetForegroundWindow` and
+  WinEvent hooks still see them.
+- Without Explorer as the shell it was 448×61 and centred on 0,0, i.e. on
+  an empty rectangle, and its content had only the buttons, no app list.
+  Explorer's immersive shell services (which also position and size such
+  windows) are presumably what it is missing.
+- Another process may move and resize it: `SetWindowPos` succeeds. Resizing
+  does not bring the app list back.
+- swinewm's off-screen rescue (`win32/window.c`) therefore tests how much of
+  a window is visible rather than where its centre is: this dialog's centre
+  is the screen's first pixel.
+

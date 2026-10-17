@@ -155,6 +155,15 @@ There is no grim on Windows, so it is built in: `grim` is a command, and
 | `exit` ends the Wayland session | As the shell, `exit` logs off; next to Explorer it just quits |
 | `exec` in the config for autostart | Works the same; as the shell, the Windows startup programs (Run keys, Startup folder) are started too, as Explorer would |
 
+Known limitation as the shell: some of Windows 11's own dialogs and
+flyouts rely on parts of Explorer that only run when Explorer is the shell.
+The "Open with" dialog (`OpenWith.exe`) then centres itself on the
+screen's top-left corner and shows only its buttons, without the app list.
+swinewm moves it on screen (Esc closes it) but cannot fill it in; choose
+apps in Settings → Apps → Default apps, or open files from a terminal with
+the program you want. Win+S (search) and Win+W (widgets) likely have the
+same cause.
+
 ## Keys
 
 - Modifiers: `Shift`, `Control`/`Ctrl`, `Mod1`/`Alt`, `Mod4`/`Super`/`Logo`
