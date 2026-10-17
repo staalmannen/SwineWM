@@ -8,10 +8,12 @@ and mako's config formats and speaks Sway's IPC protocol. See
 [`../doc/architecture.md`](../doc/architecture.md) for how it works and
 [`../doc/compatibility.md`](../doc/compatibility.md) for what is supported.
 
-**Status: early draft.** The core (tree, commands, config) is unit-tested
-and the Windows build runs, but it has not yet been used on real hardware.
-Expect rough edges and keep a way out: `Win+Shift+e` (exit), Ctrl+C in its
-console window, or `swinewm --recover` if windows were left hidden.
+**Status: work in progress.** SwineWM has been used as the shell on Windows
+11, but Windows integration and daily-use workflows remain under active
+development. Keep a recovery route available: `Win+Shift+e` (exit), Ctrl+C
+from a console when available, or `swinewm --recover` if windows were left
+hidden. See [`../doc/design_strategy.md`](../doc/design_strategy.md) for
+the recommended reliability and validation priorities.
 
 ## Installing
 

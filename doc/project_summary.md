@@ -48,6 +48,13 @@ Fidelity goals, in priority order:
 4. **Look and feel** of the bar and notifications, configured with Waybar's
    JSON + CSS and Mako's ini-style config.
 
+The next strategic emphasis should be reliability and Windows-boundary
+validation before broadening feature parity. A shell must be recoverable
+after a bad start or crash, and each Windows integration needs a repeatable
+native smoke scenario in addition to portable core tests. See
+[`design_strategy.md`](design_strategy.md) for proposed release gates,
+compatibility rules and diagnostics priorities.
+
 ## Components
 
 On Linux these are separate programs talking over IPC and D-Bus. SwineWM
@@ -88,7 +95,9 @@ Win32 renderer.
 
 Where things stand: the core, the Win32 layer, the bar, notifications,
 the tray, grim and shell mode work as drafts and have been used on a real
-Windows 11 machine as the shell. The milestones below lead to a 1.0 that
+Windows 11 machine as the shell. `compatibility.md` is the current feature
+matrix; roadmap items are goals, not a promise that every upstream detail is
+implemented. The milestones below lead to a 1.0 that
 can be maintained as a long-term release; each milestone is a usable
 release with an (unsigned) MSI on GitHub Releases. Versions always have
 three parts (`0.2.0`, tagged `0.2.0`); fixes in between are patch
@@ -145,7 +154,7 @@ What an existing sway config needs to load and behave.
   `power-profiles-daemon` → Windows power mode.
 - Tooltips, `:hover`, real transparency (layered windows), multiple bars,
   `left`/`right` positions, `rotate`.
-- Tray: tooltips, hover messages, scrolling, AppBar answers as the shell.
+- Tray: tooltips, hover messages and scrolling.
 
 ### 0.6.0 — Mako, grim and the rest of the desktop
 
