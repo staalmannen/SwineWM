@@ -195,11 +195,12 @@ bindsym $mod+r mode "resize"
 #
 # Explorer's taskbar:
 #
-# When swinewm runs next to Explorer, Explorer's taskbar can be kept
-# auto-hidden while swinewm runs (the original setting comes back on exit).
+# When swinewm runs next to Explorer (swinewm --set-autostart, the
+# recommended way), Explorer's taskbar is hidden while swinewm runs; the
+# original setting comes back on exit. "explorer_taskbar show" keeps it.
 # Has no effect when swinewm is the Windows shell (swinewm --set-shell).
-#
-#   explorer_taskbar autohide
+
+explorer_taskbar autohide
 #
 # Status Bar:
 #

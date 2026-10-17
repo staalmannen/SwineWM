@@ -22,6 +22,9 @@ bool platform_is_shell(void);
 // Makes swinewm (or Explorer again) the login shell of the current user.
 // Returns a process exit status.
 int platform_set_login_shell(bool enable);
+// Starts swinewm at logon as a startup program, with Explorer as the shell
+// (or stops doing so). Returns the process exit status.
+int platform_set_autostart(bool enable);
 bool platform_init(void);
 // Runs the event loop until platform_quit() is called. Returns exit status.
 int platform_run(void);

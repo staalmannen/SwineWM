@@ -361,12 +361,34 @@ void win32_windows_shell_hook(WPARAM code, LPARAM lparam) {
 
 // Windows that put themselves (mostly) off every monitor: dialogs that
 // position themselves relative to a taskbar or a shell window that is not
-// there when swinewm is the shell ("Open with" on Windows 11), or that move
-// after they appeared. Their centre must be on some monitor.
-static bool center_on_a_monitor(const RECT *r) {
-	POINT c = {r->left + (r->right - r->left) / 2,
-		r->top + (r->bottom - r->top) / 2};
-	return MonitorFromPoint(c, MONITOR_DEFAULTTONULL) != NULL;
+// there when swinewm is the shell, or that move after they appeared.
+// Windows 11's "Open with" (OpenWith.exe, class "Open With", in z-order
+// band 4) centres itself on 0,0 without Explorer as the shell: its centre
+// is on screen, but three quarters of it are not. So the test is how much
+// of the window is visible, not where its centre is.
+struct visible_area {
+	RECT window;
+	long long area;
+};
+
+static BOOL CALLBACK add_visible_area(HMONITOR monitor, HDC dc, LPRECT rect,
+		LPARAM data) {
+	(void)monitor;
+	(void)dc;
+	struct visible_area *v = (struct visible_area *)data;
+	RECT overlap;
+	if (IntersectRect(&overlap, &v->window, rect)) {
+		v->area += (long long)(overlap.right - overlap.left) *
+			(overlap.bottom - overlap.top);
+	}
+	return TRUE;
+}
+
+static bool mostly_on_screen(const RECT *r) {
+	struct visible_area v = { *r, 0 };
+	EnumDisplayMonitors(NULL, NULL, add_visible_area, (LPARAM)&v);
+	long long total = (long long)(r->right - r->left) * (r->bottom - r->top);
+	return total <= 0 || v.area * 2 >= total;
 }
 
 static HWND moving_hwnd;   // in a mouse move/resize loop (user drags it)
@@ -381,7 +403,7 @@ static bool is_lost_window(HWND hwnd) {
 	RECT r;
 	if (!GetWindowRect(hwnd, &r) || r.right - r.left < 50 ||
 			r.bottom - r.top < 50 || r.left <= -30000 || r.top <= -30000 ||
-			center_on_a_monitor(&r)) {
+			mostly_on_screen(&r)) {
 		return false;
 	}
 	LONG style = GetWindowLongW(hwnd, GWL_STYLE);
@@ -448,7 +470,7 @@ static void rescue_window(HWND hwnd) {
 static void rescue_floating_view(struct swine_view *view, HWND hwnd) {
 	RECT r;
 	if (hwnd == moving_hwnd || !GetWindowRect(hwnd, &r) ||
-			center_on_a_monitor(&r)) {
+			mostly_on_screen(&r)) {
 		return;
 	}
 	swine_log(SWINE_INFO, "'%s' (%s, %s) moved itself off screen; centring it",

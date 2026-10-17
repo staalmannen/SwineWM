@@ -22,6 +22,9 @@ static const char usage[] =
 	"      --recover          Show windows a crashed swinewm left hidden, then exit.\n"
 	"      --shell            Act as the Windows shell (not while Explorer runs).\n"
 	"      --no-shell         Never act as the Windows shell.\n"
+	"      --set-autostart    Start swinewm at logon, with Explorer as the shell\n"
+	"                         behind it (recommended).\n"
+	"      --unset-autostart  Do not start swinewm at logon.\n"
 	"      --set-shell        Start swinewm instead of Explorer at logon.\n"
 	"      --unset-shell      Start Explorer again at logon.\n"
 	"\n";
@@ -64,6 +67,10 @@ int main(int argc, char **argv) {
 			return platform_set_login_shell(true);
 		} else if (strcmp(arg, "--unset-shell") == 0) {
 			return platform_set_login_shell(false);
+		} else if (strcmp(arg, "--set-autostart") == 0) {
+			return platform_set_autostart(true);
+		} else if (strcmp(arg, "--unset-autostart") == 0) {
+			return platform_set_autostart(false);
 		} else {
 			fprintf(stderr, "%s", usage);
 			return EXIT_FAILURE;
