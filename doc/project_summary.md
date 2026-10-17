@@ -93,12 +93,14 @@ Win32 renderer.
 
 ## Roadmap
 
-Two ways of running SwineWM are supported: next to Explorer, which stays
-the shell behind it with its taskbar hidden (`--set-autostart`,
-recommended, because Windows' own dialogs, search and Store apps rely on
-Explorer's shell services), and as the shell itself (`--set-shell`). The
-first uses only documented interfaces to coexist with Explorer instead of
-reimplementing its undocumented parts.
+SwineWM runs as the Windows shell (`--set-shell`). Some of Windows 11's
+own dialogs, search and Store app launching rely on Explorer's
+undocumented shell services, which only run when Explorer is the shell.
+Rather than reimplementing those, SwineWM fills the gaps one operation at a
+time with documented APIs (for example `IApplicationActivationManager` for
+Store apps) and accepts the rest as known limitations. Running next to a
+hidden Explorer (`--set-autostart`) was tried and is experimental: Explorer
+kept many key combinations and the combination broke easily.
 
 Where things stand: the core, the Win32 layer, the bar, notifications,
 the tray, grim and shell mode work as drafts and have been used on a real
@@ -181,9 +183,9 @@ What an existing sway config needs to load and behave.
   `grim -` once `exec` supports pipes.
 - Store apps as the shell: `IApplicationActivationManager` for
   `shell:AppsFolder` launches (`tools/launch-store-app.bat` tests it).
-- Next to Explorer (`--set-autostart`, the recommended mode): register the
-  bar as an AppBar so that Explorer reserves its space for every window,
-  and offer autostart in the installer.
+- Next to Explorer (`--set-autostart`, experimental): register the bar as an
+  AppBar so that Explorer reserves its space for every window, and find out
+  which keys Explorer still takes.
 
 ### 1.0.0 — long-term release
 

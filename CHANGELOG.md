@@ -10,10 +10,11 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
-- `swinewm --set-autostart` / `--unset-autostart`: start swinewm at logon
-  next to Explorer, which stays the shell behind it (Windows' own dialogs,
-  search and Store apps keep working). Now the recommended setup; the
-  default config hides Explorer's taskbar (`explorer_taskbar autohide`).
+- `swinewm --set-autostart` / `--unset-autostart` (experimental): start
+  swinewm at logon next to Explorer, which stays the shell behind it with
+  its taskbar hidden (`explorer_taskbar autohide`, now in the default
+  config; no effect as the shell). In first tests Explorer still took many
+  key combinations; `--set-shell` remains the supported mode.
 - Criteria: `[app_id=… class=… title=… …] <commands>`, `for_window`,
   `assign` and `no_focus`, as in sway, with a built-in regular-expression
   engine. On Windows `app_id` is the executable's file name (matched

@@ -7,11 +7,8 @@ unless they say otherwise.
 
 ## The most important thing: getting unstuck
 
-swinewm can start in two ways: next to Explorer (`swinewm
---set-autostart`, recommended), where Explorer keeps running behind it and
-Ctrl+Esc still opens the Start menu, or as your shell (`swinewm
---set-shell`). As the shell there is no Explorer, no taskbar and no Start
-menu. If something goes wrong:
+When swinewm is your shell (`swinewm --set-shell`) there is no Explorer,
+no taskbar and no Start menu. If something goes wrong:
 
 1. Press **Ctrl+Alt+Del** and choose **Task Manager**. This always works:
    Windows handles that key combination itself, not the shell.

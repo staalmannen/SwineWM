@@ -122,17 +122,16 @@ PATH entry in [`swinewm/cmake/wix-patch.xml`](../swinewm/cmake/wix-patch.xml).
 - **Starting at login.** The installer does not make SwineWM start
   automatically or replace Explorer. Users choose (per user, no admin
   rights; each command removes the other setting):
-  - next to Explorer, recommended: `swinewm --set-autostart` adds SwineWM
-    to the startup programs (`HKCU\...\Run`, value `SwineWM`;
-    `--unset-autostart` removes it). Explorer stays the shell behind it, so
-    Windows' own dialogs ("Open with"), search and Store apps keep
-    working; the default config hides Explorer's taskbar
-    (`explorer_taskbar autohide`).
-  - instead of Explorer: `swinewm --set-shell` (`swinewm --unset-shell`
-    undoes it). If SwineWM is the shell and crashes, it starts Explorer so
+  - instead of Explorer (the supported mode): `swinewm --set-shell`
+    (`swinewm --unset-shell` undoes it). If SwineWM is the shell and crashes, it starts Explorer so
     the session stays usable; Ctrl+Alt+Del → Task Manager → Run
     `explorer.exe` always works too. Some Windows 11 dialogs do not work
     without Explorer as the shell (see `compatibility.md`).
+  - next to Explorer (experimental): `swinewm --set-autostart` adds SwineWM
+    to the startup programs (`HKCU\...\Run`, value `SwineWM`;
+    `--unset-autostart` removes it), with Explorer as the shell behind it
+    and its taskbar hidden. In first tests Explorer still took many key
+    combinations and swinewm broke easily.
 
 ## Making a release
 

@@ -151,7 +151,7 @@ There is no grim on Windows, so it is built in: `grim` is a command, and
 
 | sway | swinewm |
 | --- | --- |
-| Started by a display manager or a TTY | `swinewm --set-autostart` starts it at logon next to Explorer, which stays the shell behind it with its taskbar hidden (recommended; `--unset-autostart` undoes it). `swinewm --set-shell` makes it the Windows logon shell instead (`--unset-shell` undoes it) |
+| Started by a display manager or a TTY | `swinewm --set-shell` makes it the Windows logon shell for the current user (`--unset-shell` undoes it). 🧪 `swinewm --set-autostart` starts it at logon next to Explorer instead, with Explorer's taskbar hidden; in first tests Explorer still took many key combinations, so this is experimental |
 | `exit` ends the Wayland session | As the shell, `exit` logs off; next to Explorer it just quits |
 | `exec` in the config for autostart | Works the same; as the shell, the Windows startup programs (Run keys, Startup folder) are started too, as Explorer would |
 
@@ -160,7 +160,8 @@ of Windows 11's own dialogs and flyouts rely on parts of Explorer that only
 run when Explorer is the shell.
 The "Open with" dialog (`OpenWith.exe`) then centres itself on the
 screen's top-left corner and shows only its buttons, without the app list.
-swinewm moves it on screen (Esc closes it) but cannot fill it in; choose
+swinewm moves it to the middle of the screen, but it stays empty and does
+not react to clicks (Esc closes it); choose
 apps in Settings → Apps → Default apps, or open files from a terminal with
 the program you want. Win+S (search) and Win+W (widgets) likely have the
 same cause.

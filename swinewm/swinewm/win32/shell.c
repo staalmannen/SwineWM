@@ -564,9 +564,10 @@ int platform_set_login_shell(bool enable) {
 	return 0;
 }
 
-// "--set-autostart": Explorer stays the shell, so Windows' own dialogs,
-// search and Store apps keep working, and swinewm starts at logon as a
-// startup program, hiding Explorer's taskbar ("explorer_taskbar autohide").
+// "--set-autostart" (experimental): Explorer stays the shell, so Windows'
+// own dialogs, search and Store apps keep working, and swinewm starts at
+// logon as a startup program, hiding Explorer's taskbar ("explorer_taskbar
+// autohide"). In first tests Explorer still took many key combinations.
 int platform_set_autostart(bool enable) {
 	wchar_t value[MAX_PATH + 2];
 	own_command_line(value, MAX_PATH + 2);

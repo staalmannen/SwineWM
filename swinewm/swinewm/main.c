@@ -23,7 +23,7 @@ static const char usage[] =
 	"      --shell            Act as the Windows shell (not while Explorer runs).\n"
 	"      --no-shell         Never act as the Windows shell.\n"
 	"      --set-autostart    Start swinewm at logon, with Explorer as the shell\n"
-	"                         behind it (recommended).\n"
+	"                         behind it (experimental).\n"
 	"      --unset-autostart  Do not start swinewm at logon.\n"
 	"      --set-shell        Start swinewm instead of Explorer at logon.\n"
 	"      --unset-shell      Start Explorer again at logon.\n"
