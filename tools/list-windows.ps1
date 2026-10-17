@@ -30,6 +30,8 @@ public class SwineWindows {
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
   [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr c);
   [DllImport("user32.dll")] public static extern IntPtr GetDesktopWindow();
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint flags);
   // Undocumented but exported since Windows 8: the z-order band (1 = desktop).
   [DllImport("user32.dll")] public static extern bool GetWindowBand(IntPtr h, out uint band);
   [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int a, out int v, int s);
@@ -91,7 +93,23 @@ function Describe-Window([IntPtr]$h, [string]$indent) {
     $style, $exstyle, [int64]$owner, ($flags -join " ")))
 }
 
-$lines.Add(("list-windows v3, {0}" -f (Get-Date -Format s)))
+$lines.Add(("list-windows v4, {0}" -f (Get-Date -Format s)))
+# The window that has the keyboard focus (the one Esc would close).
+$fg = [SwineWindows]::GetForegroundWindow()
+$lines.Add("== Foreground window (and its root and owner chain) ==")
+if ($fg -ne [IntPtr]::Zero) {
+  Describe-Window $fg ""
+  $root = [SwineWindows]::GetAncestor($fg, 2)   # GA_ROOT
+  if ($root -ne $fg -and $root -ne [IntPtr]::Zero) { Describe-Window $root "  root " }
+  $o = [SwineWindows]::GetWindow($fg, 4)        # GW_OWNER
+  while ($o -ne [IntPtr]::Zero) {
+    Describe-Window $o "  owner "
+    $o = [SwineWindows]::GetWindow($o, 4)
+  }
+} else {
+  $lines.Add("(none)")
+}
+$lines.Add("")
 $lines.Add("== Visible top-level windows, top of the z-order first ==")
 # EnumWindows only returns windows of desktop apps (see its documentation);
 # walking the desktop's children with GetWindow also finds the "immersive"
