@@ -7,11 +7,8 @@ unless they say otherwise.
 
 ## The most important thing: getting unstuck
 
-swinewm can start in two ways: next to Explorer (`swinewm
---set-autostart`, recommended), where Explorer keeps running behind it and
-Ctrl+Esc still opens the Start menu, or as your shell (`swinewm
---set-shell`). As the shell there is no Explorer, no taskbar and no Start
-menu. If something goes wrong:
+When swinewm is your shell (`swinewm --set-shell`) there is no Explorer,
+no taskbar and no Start menu. If something goes wrong:
 
 1. Press **Ctrl+Alt+Del** and choose **Task Manager**. This always works:
    Windows handles that key combination itself, not the shell.
@@ -74,12 +71,13 @@ editor: run `rundll32 sysdm.cpl,EditEnvironmentVariables`.
 | | **Scoop** (`scoop install alacritty`): installs into `~\scoop` without administrator rights, closest to a home-directory package manager |
 | Flatpak/Snap | The Microsoft Store |
 
-As the shell, avoid **Store versions** of programs you start from a
-launcher: Store ("packaged") apps start through a part of Explorer, so
-launchers like Flow Launcher cannot open them without Explorer. The
-winget/Chocolatey/Scoop versions are normal programs and work everywhere.
-A Store app can still be started by its command name (`firefox.exe`)
-from a terminal or a swinewm binding.
+Store ("packaged") apps normally start through a part of Explorer.
+swinewm starts them itself, so as the shell they open from swinemenu (the
+default launcher, Win+d) and from bindings such as
+`exec shell:AppsFolder\<AppUserModelID>` (PowerShell's `Get-StartApps`
+lists the IDs), but third-party launchers like Flow Launcher cannot open
+them without Explorer. The winget/Chocolatey/Scoop versions are normal
+programs and work everywhere.
 
 ## Shells and terminals
 

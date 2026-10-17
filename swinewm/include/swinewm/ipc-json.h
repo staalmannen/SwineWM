@@ -9,5 +9,7 @@ char *ipc_json_get_binding_modes(void);
 char *ipc_json_get_binding_state(void);
 char *ipc_json_get_config(void);
 char *ipc_json_get_marks(void);
+// NULL or "" lists the bar ids; otherwise the bar's config (sway format).
+char *ipc_json_get_bar_config(const char *id);
 
 #endif

@@ -42,7 +42,12 @@ char *ipc_handle_request(uint32_t type, const char *payload, uint32_t length,
 		return ipc_json_get_config();
 	case IPC_GET_MARKS:
 		return ipc_json_get_marks();
-	case IPC_GET_BAR_CONFIG:
+	case IPC_GET_BAR_CONFIG: {
+		char *id = swine_strndup(payload, length);
+		char *json = ipc_json_get_bar_config(id);
+		free(id);
+		return json;
+	}
 	case IPC_GET_INPUTS:
 	case IPC_GET_SEATS:
 		return swine_strdup("[]");

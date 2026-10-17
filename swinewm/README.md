@@ -51,9 +51,8 @@ cmake --build build/swinewm
 
 Copy [`config.in`](config.in) to `%USERPROFILE%\.swinewm\config` and edit it
 (or rely on the copy placed next to the executable). The default config
-starts [Alacritty](https://alacritty.org) and
-[Flow Launcher](https://www.flowlauncher.com); install them or change `$term`
-and `$menu`. Start a few applications, then run from a terminal:
+starts [Alacritty](https://alacritty.org) as the terminal (install it or
+change `$term`) and swinemenu, swinewm's own launcher, as `$menu`. Start a few applications, then run from a terminal:
 
 ```powershell
 .\build\swinewm\Debug\swinewm.exe -V
@@ -66,18 +65,16 @@ logon); as the shell the log is `%LOCALAPPDATA%\swinewm\swinewm.log`,
 the previous session's `swinewm.old.log`. Existing windows are tiled on
 workspace 1.
 
-There are two ways to make it your desktop:
+To make it your desktop, run `swinewm --set-shell` once and log off and on
+again (`swinewm --unset-shell` brings Explorer back). As the shell it
+starts your Windows startup programs, logs to
+`%LOCALAPPDATA%\swinewm\swinewm.log`, and `exit` (Win+Shift+e) logs you off.
+Some Windows 11 dialogs, such as "Open with", do not work without Explorer
+as the shell (see `doc/compatibility.md`).
 
-- **Next to Explorer (recommended):** run `swinewm --set-autostart` once
-  (`--unset-autostart` undoes it). swinewm starts at logon and hides
-  Explorer's taskbar; Explorer keeps running behind it as the shell, so
-  Windows' own dialogs, search and Store apps work as usual.
-- **Instead of Explorer:** run `swinewm --set-shell` once and log off and on
-  again (`swinewm --unset-shell` brings Explorer back). As the shell it
-  starts your Windows startup programs, logs to
-  `%LOCALAPPDATA%\swinewm\swinewm.log`, and `exit` (Win+Shift+e) logs you
-  off. Some Windows 11 dialogs, such as "Open with", do not work without
-  Explorer.
+Experimental: `swinewm --set-autostart` starts swinewm at logon next to
+Explorer instead, hiding Explorer's taskbar. In first tests Explorer still
+took many key combinations and swinewm broke easily; use the shell mode.
 
 Tray icons appear in the bar's `tray` module (on by default), in either
 mode.
@@ -87,7 +84,7 @@ With the default config:
 | Keys | Action |
 | --- | --- |
 | Win+Enter | Terminal ([Alacritty](https://alacritty.org)) |
-| Win+d | Launcher ([Flow Launcher](https://www.flowlauncher.com)) |
+| Win+d | Launcher (swinemenu; press again to close) |
 | Win+h/j/k/l, Win+arrows | Focus (Win+l locks Windows; use the arrows or change `$mod`) |
 | Win+Shift+h/j/k/l, Win+Shift+arrows | Move window |
 | Win+1…0 | Switch workspace |

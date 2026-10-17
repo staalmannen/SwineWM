@@ -232,6 +232,25 @@ bool bar_has_tray(void) {
 	return false;
 }
 
+void bar_get_theme(struct bar_theme *out) {
+	ensure_loaded();
+	struct css_element window_el = {"window", "waybar", NULL, NULL};
+	css_compute(bar.css, &window_el, NULL, &out->window);
+	struct swine_style box;
+	struct css_element box_el = {"box", "workspaces", NULL, &window_el};
+	css_compute(bar.css, &box_el, &out->window, &box);
+	static const char *const normal[] = {"current_output", NULL};
+	static const char *const focused[] = {"focused", "visible",
+		"current_output", NULL};
+	static const char *const urgent[] = {"urgent", "current_output", NULL};
+	struct css_element el = {"button", NULL, normal, &box_el};
+	css_compute(bar.css, &el, &box, &out->workspace);
+	el.classes = focused;
+	css_compute(bar.css, &el, &box, &out->focused);
+	el.classes = urgent;
+	css_compute(bar.css, &el, &box, &out->urgent);
+}
+
 bool bar_enabled(void) {
 	return config && config->bar_enabled && !config->bar_invisible;
 }

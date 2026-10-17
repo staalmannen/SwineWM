@@ -23,10 +23,16 @@ set $up k
 set $right l
 # Your preferred terminal emulator (https://alacritty.org)
 set $term alacritty.exe
-# Your preferred application launcher (https://www.flowlauncher.com).
-# Starting it again while it runs in the background opens its search box.
-# %VAR% references are expanded in exec commands.
-set $menu %LOCALAPPDATA%\FlowLauncher\Flow.Launcher.exe
+# Your preferred application launcher. swinemenu comes with swinewm: it
+# lists the Start menu's apps and Store apps, follows the bar's colours and
+# font, and asks swinewm to start the choice (so Store apps work as the
+# shell). "swinemenu --show run" lists programs on PATH instead. Any other
+# launcher works too, for example Flow Launcher
+# (https://www.flowlauncher.com), which cannot start Store apps without
+# Explorer as the shell (%VAR% references are expanded in exec commands):
+#
+#   set $menu %LOCALAPPDATA%\FlowLauncher\Flow.Launcher.exe
+set $menu swinemenu
 
 ### Output configuration
 #
@@ -195,8 +201,8 @@ bindsym $mod+r mode "resize"
 #
 # Explorer's taskbar:
 #
-# When swinewm runs next to Explorer (swinewm --set-autostart, the
-# recommended way), Explorer's taskbar is hidden while swinewm runs; the
+# When swinewm runs next to Explorer (for example swinewm --set-autostart,
+# experimental), Explorer's taskbar is hidden while swinewm runs; the
 # original setting comes back on exit. "explorer_taskbar show" keeps it.
 # Has no effect when swinewm is the Windows shell (swinewm --set-shell).
 

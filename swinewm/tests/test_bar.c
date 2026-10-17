@@ -7,6 +7,7 @@
 #include "swinewm/bar/format.h"
 #include "swinewm/bar/tray.h"
 #include "swinewm/config.h"
+#include "swinewm/ipc-json.h"
 #include "swinewm/tree/root.h"
 #include "test.h"
 
@@ -345,7 +346,38 @@ static void test_tray(void) {
 	fake_teardown();
 }
 
+static void test_bar_config_ipc(void) {
+	fake_setup();
+	config->bar_enabled = true;
+	bar_load_from_strings("{ \"position\": \"bottom\" }",
+		"* { font-family: \"Fira Sans\"; font-size: 16px; }\n"
+		"window#waybar { background-color: #102030; color: #e0e0e0; }\n"
+		"#workspaces button.focused { background-color: #405060;\n"
+		"    box-shadow: inset 0 -3px #ffcc00; }\n"
+		"#workspaces button.urgent { background-color: #eb4d4b; }\n");
+	char *ids = ipc_json_get_bar_config(NULL);
+	CHECK_STR(ids, "[\"bar-0\"]");
+	free(ids);
+	char *json = ipc_json_get_bar_config("bar-0");
+	CHECK(strstr(json, "\"position\":\"bottom\"") != NULL);
+	CHECK(strstr(json, "\"mode\":\"dock\"") != NULL);
+	CHECK(strstr(json, "\"font\":\"pango:Fira Sans 12\"") != NULL);   // 16px = 12pt
+	CHECK(strstr(json, "\"background\":\"#102030ff\"") != NULL);
+	CHECK(strstr(json, "\"statusline\":\"#e0e0e0ff\"") != NULL);
+	CHECK(strstr(json, "\"focused_workspace_bg\":\"#405060ff\"") != NULL);
+	CHECK(strstr(json, "\"focused_workspace_border\":\"#ffcc00ff\"") != NULL);
+	// A transparent button shows the bar's background.
+	CHECK(strstr(json, "\"inactive_workspace_bg\":\"#102030ff\"") != NULL);
+	CHECK(strstr(json, "\"urgent_workspace_bg\":\"#eb4d4bff\"") != NULL);
+	free(json);
+	json = ipc_json_get_bar_config("bar-9");
+	CHECK(strstr(json, "\"success\":false") != NULL);
+	free(json);
+	fake_teardown();
+}
+
 void test_bar_all(void) {
+	test_bar_config_ipc();
 	test_json_parse();
 	test_css();
 	test_format();

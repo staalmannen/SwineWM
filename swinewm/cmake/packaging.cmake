@@ -2,7 +2,7 @@
 #
 # Everything goes into one directory (C:\Program Files\SwineWM by default):
 #
-#   swinewm.exe, swinemsg.exe
+#   swinewm.exe, swinemsg.exe, swinemenu.exe
 #   config                    default sway config
 #   waybar\config.jsonc       default bar config
 #   waybar\style.css          default bar style
@@ -13,7 +13,7 @@
 # swinewm looks for its config files next to the executable after the
 # user's own directories, so these act as the defaults. See doc/packaging.md.
 
-install(TARGETS swinewm swinemsg RUNTIME DESTINATION .)
+install(TARGETS swinewm swinemsg swinemenu RUNTIME DESTINATION .)
 install(FILES config.in DESTINATION . RENAME config)
 install(DIRECTORY resources/waybar resources/mako DESTINATION .)
 install(FILES resources/wallpapers/swinewm-default.png DESTINATION wallpapers)

@@ -32,7 +32,7 @@ ignored · ❌ not implemented (error)
 | `bindcode`, `bindswitch`, `bindgesture` | ⚪ | |
 | `mode <name>`, `mode <name> { … }` | ✅ | `--pango_markup` accepted |
 | `set` | ✅ | |
-| `exec`, `exec_always` | ✅ | See architecture: CreateProcess, then ShellExecute; `%VAR%` expanded; no implicit shell. `waybar`, `mako`, `makoctl`, `notify-send`, `grim` run the built-in versions; `a && b` chains of those run like `sh` would |
+| `exec`, `exec_always` | ✅ | See architecture: CreateProcess, then ShellExecute; `%VAR%` expanded; no implicit shell. `waybar`, `mako`, `makoctl`, `notify-send`, `grim` run the built-in versions; `a && b` chains of those run like `sh` would. Store apps: `exec shell:AppsFolder\<AppUserModelID> [args]` starts them through `IApplicationActivationManager`, also as the shell (PowerShell's `Get-StartApps` lists the IDs) |
 | `exit` | ✅ | Shows all hidden windows and quits |
 | `reload` | ✅ | |
 | `restart` | ✅ | i3's command (sway has none): exits cleanly without logging off and starts `swinewm.exe` again with the same arguments; hidden workspaces are shown and re-tiled. For updating a running swinewm |
@@ -147,11 +147,27 @@ There is no grim on Windows, so it is built in: `grim` is a command, and
 | `-c`, `-q`, `-l`, `-s` | ⚪ | Accepted; the cursor is never captured |
 | `grim -` (stdout), `-T`, `slurp` | ❌ | No pipes yet; no interactive area selection |
 
+## Launcher (wofi / wmenu)
+
+`swinemenu.exe` is the default `$menu`. It is a separate program, as wofi
+is; any other launcher can be set in the config instead.
+
+| Feature | Status | Notes |
+| --- | --- | --- |
+| `--show drun` (default) | ✅ | Start menu shortcuts (all users and current user; uninstallers and document shortcuts left out) and Store apps |
+| `--show run` | ✅ | Programs on PATH (`.exe`, `.bat`, `.cmd`, `.com`) |
+| `--show dmenu`, `-d`/`--dmenu` | ✅ | Choices from standard input, the chosen (or typed) line on standard output, exit status 1 if cancelled |
+| `-p`/`--prompt`, `-L`/`--lines`, `-W`/`--width` | ✅ | |
+| Matching | ✅ | Every typed word must appear, ignoring case; often chosen entries first (history in `%LOCALAPPDATA%\swinewm\swinemenu-*.txt`) |
+| Keys | ✅ | Type to filter, Up/Down, Tab, Ctrl+n/p/j/k, Page Up/Down, Enter, Esc, Ctrl+u, Ctrl+w/Ctrl+Backspace; a click starts an entry; clicking elsewhere closes it; starting it again closes it |
+| Starting the choice | ✅ | Sent to swinewm as `exec` over IPC, so Store apps start as the shell too; without swinewm it opens the choice itself |
+| Theme | 🟡 | Colours and font from the bar (`get_bar_config`); wofi's own `config`/`style.css` and icons are not read yet |
+
 ## Session
 
 | sway | swinewm |
 | --- | --- |
-| Started by a display manager or a TTY | `swinewm --set-autostart` starts it at logon next to Explorer, which stays the shell behind it with its taskbar hidden (recommended; `--unset-autostart` undoes it). `swinewm --set-shell` makes it the Windows logon shell instead (`--unset-shell` undoes it) |
+| Started by a display manager or a TTY | `swinewm --set-shell` makes it the Windows logon shell for the current user (`--unset-shell` undoes it). 🧪 `swinewm --set-autostart` starts it at logon next to Explorer instead, with Explorer's taskbar hidden; in first tests Explorer still took many key combinations, so this is experimental |
 | `exit` ends the Wayland session | As the shell, `exit` logs off; next to Explorer it just quits |
 | `exec` in the config for autostart | Works the same; as the shell, the Windows startup programs (Run keys, Startup folder) are started too, as Explorer would |
 
@@ -160,7 +176,8 @@ of Windows 11's own dialogs and flyouts rely on parts of Explorer that only
 run when Explorer is the shell.
 The "Open with" dialog (`OpenWith.exe`) then centres itself on the
 screen's top-left corner and shows only its buttons, without the app list.
-swinewm moves it on screen (Esc closes it) but cannot fill it in; choose
+swinewm moves it to the middle of the screen, but it stays empty and does
+not react to clicks (Esc closes it); choose
 apps in Settings → Apps → Default apps, or open files from a terminal with
 the program you want. Win+S (search) and Win+W (widgets) likely have the
 same cause.
@@ -182,7 +199,8 @@ same cause.
 | `GET_WORKSPACES`, `GET_OUTPUTS`, `GET_TREE`, `GET_VERSION` | ✅ (subset of sway's fields) |
 | `GET_BINDING_MODES`, `GET_BINDING_STATE`, `GET_CONFIG` | ✅ |
 | `GET_MARKS` | ✅ |
-| `GET_BAR_CONFIG`, `GET_INPUTS`, `GET_SEATS` | Empty lists |
+| `GET_BAR_CONFIG` | ✅ one bar, `bar-0`: position, height, and `colors`/`font` computed from the Waybar `style.css` (window, workspace buttons) |
+| `GET_INPUTS`, `GET_SEATS` | Empty lists |
 | `GET_NOTIFICATIONS` (1000), `GET_NOTIFICATION_HISTORY` (1001) | ✅ swinewm extensions |
 | `SEND_TICK` | 🟡 replies success, no event |
 | `SUBSCRIBE` and events | ❌ next on the list (needed by swinebar) |

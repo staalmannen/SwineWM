@@ -10,10 +10,24 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
-- `swinewm --set-autostart` / `--unset-autostart`: start swinewm at logon
-  next to Explorer, which stays the shell behind it (Windows' own dialogs,
-  search and Store apps keep working). Now the recommended setup; the
-  default config hides Explorer's taskbar (`explorer_taskbar autohide`).
+- `swinemenu`, a small launcher in the spirit of wofi/wmenu and the new
+  default `$menu` (Win+d): lists the Start menu's apps and Store apps
+  (`--show drun`), programs on PATH (`--show run`) or lines from standard
+  input (`--dmenu`), remembers what you pick, and takes the bar's colours
+  and font. swinewm starts the choice, so Store apps work as the shell.
+  Flow Launcher or any other launcher can still be set as `$menu`.
+- IPC `get_bar_config`, as in sway: the bar's position, height, font and
+  colours, computed from the Waybar `style.css`.
+- Store apps start as the shell: `exec shell:AppsFolder\<AppUserModelID>`
+  uses the documented `IApplicationActivationManager` instead of the shell
+  namespace, which fails with "Class not registered" without Explorer.
+  `Get-StartApps` in PowerShell lists the IDs, e.g.
+  `bindsym $mod+c exec shell:AppsFolder\AnthropicPBC.Claude_fnn82j28hfe8t!Claude`.
+- `swinewm --set-autostart` / `--unset-autostart` (experimental): start
+  swinewm at logon next to Explorer, which stays the shell behind it with
+  its taskbar hidden (`explorer_taskbar autohide`, now in the default
+  config; no effect as the shell). In first tests Explorer still took many
+  key combinations; `--set-shell` remains the supported mode.
 - Criteria: `[app_id=… class=… title=… …] <commands>`, `for_window`,
   `assign` and `no_focus`, as in sway, with a built-in regular-expression
   engine. On Windows `app_id` is the executable's file name (matched

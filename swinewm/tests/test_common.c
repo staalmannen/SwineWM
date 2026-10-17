@@ -5,6 +5,7 @@
 #include "regex.h"
 #include "stringop.h"
 #include "swinewm/input/keyboard.h"
+#include "menu.h"
 #include "test.h"
 
 static void test_list(void) {
@@ -188,7 +189,58 @@ static void test_keys(void) {
 	CHECK_INT(get_modifier_mask_by_name("q"), 0);
 }
 
+static void test_menu(void) {
+	CHECK(menu_match_score("Firefox", "") == 0);
+	CHECK(menu_match_score("Firefox", "fire") > 0);
+	CHECK(menu_match_score("Firefox", "FIRE") > 0);       // case
+	CHECK(menu_match_score("Firefox", "fox") > 0);
+	CHECK(menu_match_score("Firefox", "chrome") < 0);
+	// every word must match, in any order
+	CHECK(menu_match_score("Visual Studio Code", "code vis") > 0);
+	CHECK(menu_match_score("Visual Studio Code", "code vim") < 0);
+	// prefix beats word start beats inside a word
+	CHECK(menu_match_score("Terminal", "term") > menu_match_score("Windows Terminal", "term"));
+	CHECK(menu_match_score("Windows Terminal", "term") > menu_match_score("Determined", "term"));
+
+	list_t *entries = create_list();
+	list_add(entries, menu_entry_create("Windows Terminal", "wt.exe"));
+	list_add(entries, menu_entry_create("Terminal Server Client", NULL));
+	list_add(entries, menu_entry_create("Notepad", "notepad.exe"));
+	list_add(entries, menu_entry_create("Terminal", "alacritty.exe"));
+	list_t *found = menu_filter(entries, "term");
+	CHECK_INT(found->length, 3);
+	// prefix matches first, the shorter name first among them
+	CHECK((size_t)found->items[0] == 3);
+	CHECK((size_t)found->items[1] == 1);
+	CHECK((size_t)found->items[2] == 0);
+	list_free(found);
+
+	// History: chosen entries move up.
+	const char *path = "swinemenu-test-history.txt";
+	remove(path);
+	menu_history_record(path, "Windows Terminal");
+	menu_history_record(path, "Windows Terminal");
+	menu_history_record(path, "Notepad");
+	menu_history_load(entries, path);
+	CHECK_INT(((struct menu_entry *)entries->items[0])->uses, 2);
+	CHECK_INT(((struct menu_entry *)entries->items[2])->uses, 1);
+	found = menu_filter(entries, "term");
+	CHECK((size_t)found->items[0] == 0);
+	list_free(found);
+	found = menu_filter(entries, "");
+	CHECK_INT(found->length, 4);
+	CHECK((size_t)found->items[0] == 0);
+	CHECK((size_t)found->items[1] == 2);
+	list_free(found);
+	remove(path);
+	for (int i = 0; i < entries->length; ++i) {
+		menu_entry_free(entries->items[i]);
+	}
+	list_free(entries);
+}
+
 void test_common_all(void) {
+	test_menu();
 	test_list();
 	test_split_args();
 	test_argsep();
