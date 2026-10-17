@@ -33,6 +33,8 @@ swinewm/
                         wallpaper, icon (also compiled in as fallbacks)
   cmake/                packaging (CPack/WiX MSI) and build helpers
   swinemsg/             IPC client (swaymsg)
+  swinemenu/            launcher (wofi/wmenu): lists apps, asks swinewm
+                        to exec the choice, themed by get_bar_config
   tests/                unit tests with a fake platform
 ```
 

@@ -51,6 +51,16 @@ struct bar_model {
 	list_t *modules;             // struct bar_module_view *
 };
 
+// The bar's look, for other tools (get_bar_config, swinemenu): the computed
+// styles of window#waybar and of workspace buttons in each state.
+struct bar_theme {
+	struct swine_style window;
+	struct swine_style workspace;   // #workspaces button
+	struct swine_style focused;     // #workspaces button.focused
+	struct swine_style urgent;      // #workspaces button.urgent
+};
+void bar_get_theme(struct bar_theme *out);
+
 // (Re)reads the Waybar config and style sheet. Safe to call repeatedly.
 void bar_load(void);
 // Same, from text (NULL selects the built-in default). For tests.

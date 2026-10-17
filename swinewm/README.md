@@ -51,9 +51,8 @@ cmake --build build/swinewm
 
 Copy [`config.in`](config.in) to `%USERPROFILE%\.swinewm\config` and edit it
 (or rely on the copy placed next to the executable). The default config
-starts [Alacritty](https://alacritty.org) and
-[Flow Launcher](https://www.flowlauncher.com); install them or change `$term`
-and `$menu`. Start a few applications, then run from a terminal:
+starts [Alacritty](https://alacritty.org) as the terminal (install it or
+change `$term`) and swinemenu, swinewm's own launcher, as `$menu`. Start a few applications, then run from a terminal:
 
 ```powershell
 .\build\swinewm\Debug\swinewm.exe -V
@@ -85,7 +84,7 @@ With the default config:
 | Keys | Action |
 | --- | --- |
 | Win+Enter | Terminal ([Alacritty](https://alacritty.org)) |
-| Win+d | Launcher ([Flow Launcher](https://www.flowlauncher.com)) |
+| Win+d | Launcher (swinemenu; press again to close) |
 | Win+h/j/k/l, Win+arrows | Focus (Win+l locks Windows; use the arrows or change `$mod`) |
 | Win+Shift+h/j/k/l, Win+Shift+arrows | Move window |
 | Win+1…0 | Switch workspace |

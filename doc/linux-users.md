@@ -71,12 +71,13 @@ editor: run `rundll32 sysdm.cpl,EditEnvironmentVariables`.
 | | **Scoop** (`scoop install alacritty`): installs into `~\scoop` without administrator rights, closest to a home-directory package manager |
 | Flatpak/Snap | The Microsoft Store |
 
-As the shell, avoid **Store versions** of programs you start from a
-launcher: Store ("packaged") apps start through a part of Explorer, so
-launchers like Flow Launcher cannot open them without Explorer. The
-winget/Chocolatey/Scoop versions are normal programs and work everywhere.
-A Store app can still be started by its command name (`firefox.exe`)
-from a terminal or a swinewm binding.
+Store ("packaged") apps normally start through a part of Explorer.
+swinewm starts them itself, so as the shell they open from swinemenu (the
+default launcher, Win+d) and from bindings such as
+`exec shell:AppsFolder\<AppUserModelID>` (PowerShell's `Get-StartApps`
+lists the IDs), but third-party launchers like Flow Launcher cannot open
+them without Explorer. The winget/Chocolatey/Scoop versions are normal
+programs and work everywhere.
 
 ## Shells and terminals
 

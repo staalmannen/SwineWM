@@ -42,38 +42,6 @@ static const struct type_name types[] = {
 	{ "get_notification_history", SWINE_IPC_GET_NOTIFICATION_HISTORY },
 };
 
-static bool io_exact(HANDLE pipe, void *buf, DWORD len, bool write) {
-	char *p = buf;
-	while (len > 0) {
-		DWORD n = 0;
-		BOOL ok = write ? WriteFile(pipe, p, len, &n, NULL) :
-			ReadFile(pipe, p, len, &n, NULL);
-		if (!ok || n == 0) {
-			return false;
-		}
-		p += n;
-		len -= n;
-	}
-	return true;
-}
-
-static HANDLE connect_pipe(const char *name) {
-	int n = MultiByteToWideChar(CP_UTF8, 0, name, -1, NULL, 0);
-	wchar_t *wide = malloc(sizeof(wchar_t) * (size_t)n);
-	MultiByteToWideChar(CP_UTF8, 0, name, -1, wide, n);
-	HANDLE pipe = INVALID_HANDLE_VALUE;
-	for (int attempt = 0; attempt < 5; ++attempt) {
-		pipe = CreateFileW(wide, GENERIC_READ | GENERIC_WRITE, 0, NULL,
-			OPEN_EXISTING, 0, NULL);
-		if (pipe != INVALID_HANDLE_VALUE || GetLastError() != ERROR_PIPE_BUSY) {
-			break;
-		}
-		WaitNamedPipeW(wide, 2000);
-	}
-	free(wide);
-	return pipe;
-}
-
 static char *quote_args(char **args, int count) {
 	size_t len = 1;
 	for (int k = 0; k < count; ++k) {
@@ -155,39 +123,13 @@ int main(int argc, char **argv) {
 	// arguments with spaces so that `swinemsg notify-send "Hello there"`
 	// keeps its meaning when swinewm splits the command again.
 	char *payload = quote_args(argv + i, argc - i);
-	if (!pipe_name) {
-		pipe_name = get_ipc_pipe_name();
-	}
-	HANDLE pipe = connect_pipe(pipe_name);
-	if (pipe == INVALID_HANDLE_VALUE) {
-		fprintf(stderr, "Unable to connect to %s (is swinewm running?)\n",
-			pipe_name);
+	char *error = NULL;
+	char *reply = ipc_request(pipe_name, type, payload, &error);
+	if (!reply) {
+		fprintf(stderr, "%s\n", error);
+		free(error);
 		return 1;
 	}
-
-	char header[IPC_HEADER_SIZE];
-	uint32_t len = (uint32_t)strlen(payload);
-	memcpy(header, IPC_MAGIC, IPC_MAGIC_LEN);
-	memcpy(header + IPC_MAGIC_LEN, &len, 4);
-	memcpy(header + IPC_MAGIC_LEN + 4, &type, 4);
-	if (!io_exact(pipe, header, IPC_HEADER_SIZE, true) ||
-			!io_exact(pipe, payload, len, true)) {
-		fprintf(stderr, "Unable to send IPC message\n");
-		return 1;
-	}
-	uint32_t reply_len = 0;
-	if (!io_exact(pipe, header, IPC_HEADER_SIZE, false)) {
-		fprintf(stderr, "Unable to receive IPC response\n");
-		return 1;
-	}
-	memcpy(&reply_len, header + IPC_MAGIC_LEN, 4);
-	char *reply = malloc((size_t)reply_len + 1);
-	if (!reply || (reply_len && !io_exact(pipe, reply, reply_len, false))) {
-		fprintf(stderr, "Unable to receive IPC response\n");
-		return 1;
-	}
-	reply[reply_len] = '\0';
-	CloseHandle(pipe);
 
 	int status = 0;
 	if ((type == IPC_COMMAND || type == IPC_SUBSCRIBE) &&

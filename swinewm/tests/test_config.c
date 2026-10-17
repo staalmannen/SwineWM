@@ -153,8 +153,7 @@ static void test_default_config(void) {
 	struct swine_binding *term = keyboard_find_binding(SWINE_MOD_LOGO, 0x0D, false);
 	CHECK(term && strcmp(term->command, "exec alacritty.exe") == 0);
 	struct swine_binding *menu = keyboard_find_binding(SWINE_MOD_LOGO, 'D', false);
-	CHECK(menu && strcmp(menu->command,
-		"exec %LOCALAPPDATA%\\FlowLauncher\\Flow.Launcher.exe") == 0);
+	CHECK(menu && strcmp(menu->command, "exec swinemenu") == 0);
 	CHECK(config->bar_enabled);
 	fake_teardown();
 }

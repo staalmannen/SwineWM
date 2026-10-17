@@ -1,5 +1,8 @@
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include "json.h"
+#include "swinewm/bar/bar.h"
 #include "swinewm/config.h"
 #include "swinewm/input/keyboard.h"
 #include "swinewm/input/seat.h"
@@ -337,5 +340,102 @@ char *ipc_json_get_marks(void) {
 	json_begin_array(&w);
 	root_for_each_container(collect_marks, &w);
 	json_end_array(&w);
+	return json_finish(&w);
+}
+
+// get_bar_config, as in sway-ipc(7). swinewm has one bar, "bar-0", drawn
+// from the Waybar config; its colours and font come from style.css so that
+// tools that theme themselves after the bar (swinemenu) match it.
+static void write_color(struct json_writer *w, const char *key,
+		struct swine_color c) {
+	char text[16];
+	snprintf(text, sizeof(text), "#%02x%02x%02x%02x", c.r, c.g, c.b, c.a);
+	json_key(w, key);
+	json_string(w, text);
+}
+
+// What a button looks like: transparent backgrounds show the bar's.
+static void write_button_colors(struct json_writer *w, const char *prefix,
+		const struct swine_style *button, const struct swine_style *window) {
+	struct swine_color bg = button->background.a ?
+		color_blend(button->background, window->background) :
+		window->background;
+	struct swine_color border = button->inset_bottom || button->inset_top ?
+		button->inset_color : button->border_bottom.width ?
+		button->border_bottom.color : bg;
+	char key[64];
+	snprintf(key, sizeof(key), "%s_border", prefix);
+	write_color(w, key, border);
+	snprintf(key, sizeof(key), "%s_bg", prefix);
+	write_color(w, key, bg);
+	snprintf(key, sizeof(key), "%s_text", prefix);
+	write_color(w, key, button->color);
+}
+
+char *ipc_json_get_bar_config(const char *id) {
+	struct json_writer w;
+	json_init(&w);
+	if (!id || !*id) {
+		json_begin_array(&w);
+		json_string(&w, "bar-0");
+		json_end_array(&w);
+		return json_finish(&w);
+	}
+	if (strcmp(id, "bar-0") != 0) {
+		json_begin_object(&w);
+		json_key(&w, "success");
+		json_bool(&w, false);
+		json_key(&w, "error");
+		json_string(&w, "No bar with that ID");
+		json_end_object(&w);
+		return json_finish(&w);
+	}
+	struct bar_theme theme;
+	bar_get_theme(&theme);
+	struct swine_color window_bg = theme.window.background;
+	window_bg.a = window_bg.a ? window_bg.a : 255;
+	theme.window.background = window_bg;
+
+	json_begin_object(&w);
+	json_key(&w, "id");
+	json_string(&w, "bar-0");
+	json_key(&w, "mode");
+	json_string(&w, !bar_enabled() ? "invisible" : "dock");
+	json_key(&w, "hidden_state");
+	json_string(&w, "hide");
+	json_key(&w, "position");
+	json_string(&w, bar_at_top() ? "top" : "bottom");
+	json_key(&w, "status_command");
+	json_null(&w);
+	// sway gives Pango font descriptions: family and size in points.
+	char font[200];
+	snprintf(font, sizeof(font), "pango:%s %g", theme.window.font_family,
+		theme.window.font_size * 0.75);
+	json_key(&w, "font");
+	json_string(&w, font);
+	json_key(&w, "bar_height");
+	json_int(&w, bar_height());
+	json_key(&w, "workspace_buttons");
+	json_bool(&w, true);
+	json_key(&w, "binding_mode_indicator");
+	json_bool(&w, true);
+	json_key(&w, "pango_markup");
+	json_bool(&w, false);
+	json_key(&w, "colors");
+	json_begin_object(&w);
+	write_color(&w, "background", window_bg);
+	write_color(&w, "statusline", theme.window.color);
+	write_color(&w, "separator", theme.window.color);
+	write_color(&w, "focused_background", window_bg);
+	write_color(&w, "focused_statusline", theme.window.color);
+	write_color(&w, "focused_separator", theme.window.color);
+	write_button_colors(&w, "focused_workspace", &theme.focused, &theme.window);
+	write_button_colors(&w, "active_workspace", &theme.workspace, &theme.window);
+	write_button_colors(&w, "inactive_workspace", &theme.workspace,
+		&theme.window);
+	write_button_colors(&w, "urgent_workspace", &theme.urgent, &theme.window);
+	write_button_colors(&w, "binding_mode", &theme.urgent, &theme.window);
+	json_end_object(&w);
+	json_end_object(&w);
 	return json_finish(&w);
 }

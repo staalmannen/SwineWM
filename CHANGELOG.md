@@ -10,6 +10,14 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- `swinemenu`, a small launcher in the spirit of wofi/wmenu and the new
+  default `$menu` (Win+d): lists the Start menu's apps and Store apps
+  (`--show drun`), programs on PATH (`--show run`) or lines from standard
+  input (`--dmenu`), remembers what you pick, and takes the bar's colours
+  and font. swinewm starts the choice, so Store apps work as the shell.
+  Flow Launcher or any other launcher can still be set as `$menu`.
+- IPC `get_bar_config`, as in sway: the bar's position, height, font and
+  colours, computed from the Waybar `style.css`.
 - Store apps start as the shell: `exec shell:AppsFolder\<AppUserModelID>`
   uses the documented `IApplicationActivationManager` instead of the shell
   namespace, which fails with "Class not registered" without Explorer.

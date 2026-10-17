@@ -73,7 +73,7 @@ follows the Linux programs, so existing files keep working:
 | `notify-send`, `makoctl` | swinewm commands (also via `exec` and `swinemsg`) | — | Draft working |
 | `swaymsg` | `swinemsg.exe` | — | Draft working |
 | `swaynag` | — | — | Later, likely built in as well |
-| `wmenu`/`fuzzel` | — | — | Not planned for now: the default config uses [Flow Launcher](https://www.flowlauncher.com) |
+| `wofi`/`wmenu` | `swinemenu.exe`, a separate small program, the default `$menu` | — (colours and font from the bar, over `get_bar_config`) | Draft working: drun (Start menu and Store apps), run (PATH) and dmenu modes; the choice is started by swinewm over IPC |
 
 The code still keeps the parts apart: [`../swinewm/swinewm/bar/`](../swinewm/swinewm/bar/)
 and [`../swinewm/swinewm/notify/`](../swinewm/swinewm/notify/) are separate
@@ -182,8 +182,10 @@ What an existing sway config needs to load and behave.
 - grim: `slurp` (drag an area), clipboard output (the `wl-copy` habit),
   `grim -` once `exec` supports pipes.
 - Store apps as the shell: done for `exec shell:AppsFolder\<AUMID>`
-  (`IApplicationActivationManager`); still open for launchers such as Flow
-  Launcher, which start them their own way.
+  (`IApplicationActivationManager`) and swinemenu; still open for launchers
+  such as Flow Launcher, which start them their own way.
+- swinemenu: icons, wofi's `config` and `style.css`, more modes (windows,
+  like `rofi -show window`).
 - Next to Explorer (`--set-autostart`, experimental): register the bar as an
   AppBar so that Explorer reserves its space for every window, and find out
   which keys Explorer still takes.

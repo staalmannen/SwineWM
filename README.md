@@ -60,8 +60,10 @@ Start with [`doc/linux-users.md`](doc/linux-users.md).
 
 ## Default config
 
-`swinewm` use [Alacritty](https://alacritty.org/) as default terminal ($mod+Enter) and 
-[Flow Launcher](https://www.flowlauncher.com/) as default application launcher ($mod+d).
+`swinewm` uses [Alacritty](https://alacritty.org/) as default terminal ($mod+Enter) and
+its own `swinemenu` as application launcher ($mod+d): a small wofi-like menu
+that follows the bar's theme. Other launchers, such as
+[Flow Launcher](https://www.flowlauncher.com/), can be set as `$menu`.
 Config files are compatible with upstream Sway, Waybar and Mako. Your Waybar, mako and sway config files go in `%USERPROFILE%\.swinewm\` under the same names as on Linux (`waybar\config.jsonc`, `waybar\style.css`, `mako\config`, `config`). 
 
 
