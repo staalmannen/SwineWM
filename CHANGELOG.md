@@ -57,6 +57,10 @@ the MSI and zip with the matching section below as release notes.
   quotes of a single quoted argument, and the path was then split at its
   first space. A command line that names an existing file is now opened as
   a whole (this also made swinemenu's Start menu entries do nothing).
+- Store apps did not start from swinemenu: the activation manager is now
+  created with `CLSCTX_ALL` (as PowerShell does) instead of only as a local
+  server, a failed Store app `exec` reports failure (with the AppUserModelID
+  in the log), and swinemenu then tries to start the app itself.
 - Floating dialogs that were only partly on-screen could keep their bad
   position; new dialogs are now centered unless the whole window fits on a
   monitor.

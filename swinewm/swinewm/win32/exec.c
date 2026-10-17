@@ -20,8 +20,9 @@ static const CLSID clsid_activation_manager = {0x45ba127d, 0x10a8, 0x46ea,
 static const IID iid_activation_manager = {0x2e941141, 0x7f97, 0x4756,
 	{0xba, 0x1d, 0x9d, 0xec, 0xde, 0x89, 0x4a, 0x3d}};
 
-// Returns true if cmdline named a Store app (whether or not it started).
-static bool activate_store_app(const wchar_t *cmdline, const char *utf8) {
+// Returns true if cmdline named a Store app; *started says whether it started.
+static bool activate_store_app(const wchar_t *cmdline, const char *utf8,
+		bool *started) {
 	const wchar_t *p = cmdline;
 	bool quoted = *p == L'"';
 	if (quoted) {
@@ -40,24 +41,35 @@ static bool activate_store_app(const wchar_t *cmdline, const char *utf8) {
 		++args;
 	}
 
+	// Startup programs are spawned from another thread, so make sure COM is
+	// initialized here (S_FALSE or RPC_E_CHANGED_MODE if it already is).
+	HRESULT init = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 	IApplicationActivationManager *manager = NULL;
 	DWORD pid = 0;
+	// CLSCTX_ALL, as PowerShell uses (which started Store apps in testing
+	// when CLSCTX_LOCAL_SERVER alone did not).
 	HRESULT hr = CoCreateInstance(&clsid_activation_manager, NULL,
-		CLSCTX_LOCAL_SERVER, &iid_activation_manager, (void **)&manager);
+		CLSCTX_ALL, &iid_activation_manager, (void **)&manager);
 	if (SUCCEEDED(hr)) {
 		hr = IApplicationActivationManager_ActivateApplication(manager, aumid,
 			*args ? args : NULL, AO_NONE, &pid);
 		IApplicationActivationManager_Release(manager);
 	}
+	if (SUCCEEDED(init)) {
+		CoUninitialize();
+	}
 	if (SUCCEEDED(hr)) {
 		swine_log(SWINE_DEBUG, "Started Store app '%s' (pid %lu)", utf8, pid);
 	} else {
 		char *msg = win32_error_string((DWORD)hr);
-		swine_log(SWINE_ERROR, "Unable to start Store app '%s': %s (0x%08lx)",
-			utf8, msg, (unsigned long)hr);
+		char *id = utf16_to_utf8(aumid);
+		swine_log(SWINE_ERROR, "Unable to start Store app '%s' (AUMID '%s'): "
+			"%s (0x%08lx)", utf8, id ? id : "", msg, (unsigned long)hr);
+		free(id);
 		free(msg);
 	}
 	free(aumid);
+	*started = SUCCEEDED(hr);
 	return true;
 }
 
@@ -80,9 +92,10 @@ bool platform_spawn(const char *cmdline) {
 		ExpandEnvironmentStringsW(raw, wide, n);
 		free(raw);
 	}
-	if (activate_store_app(wide, cmdline)) {
+	bool started = false;
+	if (activate_store_app(wide, cmdline, &started)) {
 		free(wide);
-		return true;
+		return started;
 	}
 	STARTUPINFOW si = { .cb = sizeof(si) };
 	PROCESS_INFORMATION pi = {0};
