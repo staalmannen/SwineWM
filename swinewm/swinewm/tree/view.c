@@ -94,13 +94,15 @@ static struct swine_workspace *view_target_workspace(void) {
 	return ws;
 }
 
-// Whether the middle of the box is on some output.
+// Whether the whole box is on some output. Checking only the midpoint lets
+// dialogs that are mostly off-screen (but whose center still intersects a
+// monitor) keep the bad position they chose.
 static bool box_on_an_output(const struct swine_box *box) {
-	int cx = box->x + box->width / 2, cy = box->y + box->height / 2;
 	for (int i = 0; i < root->outputs->length; ++i) {
 		struct swine_output *o = root->outputs->items[i];
-		if (cx >= o->box.x && cx < o->box.x + o->box.width &&
-				cy >= o->box.y && cy < o->box.y + o->box.height) {
+		if (box->x >= o->box.x && box->y >= o->box.y &&
+				box->x + box->width <= o->box.x + o->box.width &&
+				box->y + box->height <= o->box.y + o->box.height) {
 			return true;
 		}
 	}
