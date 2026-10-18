@@ -393,11 +393,13 @@ static void test_requested_fullscreen(void) {
 	CHECK(a->pending.visible);
 	CHECK(!b->pending.visible);
 	CHECK_INT(a->pending.box.width, 1000);
+	CHECK(!a->pending.deco.titlebar);
 	view_request_fullscreen(a, false);
 	transaction_commit_dirty();
 	CHECK_INT(a->container->fullscreen_mode, FULLSCREEN_NONE);
 	CHECK(b->pending.visible);
 	CHECK_INT(a->pending.box.width, 500);
+	CHECK(a->pending.deco.titlebar);
 	fake_teardown();
 }
 

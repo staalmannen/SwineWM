@@ -324,7 +324,7 @@ void view_update_decoration(struct swine_view *view) {
 	bool floating = container_is_floating_or_child(con);
 	if (fullscreen) {
 		d.square_corners = true;
-		d.titlebar = con->border == B_NORMAL;
+		d.titlebar = false;
 		view->pending.deco = d;
 		return;
 	}
