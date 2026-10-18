@@ -197,7 +197,8 @@ static void test_gap_bounds(void) {
 
 	struct swine_workspace *first = a->container->workspace;
 	CHECK(run("workspace 2"));
-	struct swine_workspace *second = config->handler_context.workspace;
+	struct swine_view *b = fake_map_view("b");
+	struct swine_workspace *second = b->container->workspace;
 	snprintf(command, sizeof(command), "gaps inner current set %d", max_gap);
 	CHECK(run(command));
 	CHECK(run("workspace 1"));
