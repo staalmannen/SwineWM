@@ -120,6 +120,11 @@ static void test_errors_and_defer(void) {
 	CHECK(run("exec \"C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Firefox.lnk\""));
 	CHECK_STR(fake.last_spawn,
 		"C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Firefox.lnk");
+	// Several quoted arguments keep their quotes (swinemenu --open-with
+	// sends "<program>" "<file>").
+	CHECK(run("exec \"C:\\Program Files\\App\\app.exe\" \"C:\\My Files\\a b.txt\""));
+	CHECK_STR(fake.last_spawn,
+		"\"C:\\Program Files\\App\\app.exe\" \"C:\\My Files\\a b.txt\"");
 	CHECK(run("exec shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App"));
 	CHECK_STR(fake.last_spawn,
 		"shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App");

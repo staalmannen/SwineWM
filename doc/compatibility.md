@@ -174,6 +174,8 @@ is; any other launcher can be set in the config instead.
 | Keys | ✅ | Type to filter, Up/Down, Tab, Ctrl+n/p/j/k, Page Up/Down, Enter, Esc, Ctrl+u, Ctrl+w/Ctrl+Backspace; a click starts an entry; clicking elsewhere closes it; starting it again closes it |
 | Starting the choice | ✅ | Sent to swinewm as `exec` over IPC, so Store apps start as the shell too; without swinewm it opens the choice itself |
 | Theme | 🟡 | Colours and font from the bar (`get_bar_config`); wofi's own `config`/`style.css` and icons are not read yet |
+| `--open-with <file>` (swinewm extension) | ✅ | Replaces Windows' "Open with" dialog: the programs registered for the file's type (`SHAssocEnumHandlers`, else the type's ProgIDs, `OpenWithProgids` and `OpenWithList` in the registry), the default marked; Enter opens the file with the choice, a typed program name opens it with that |
+| `--install-open-with`, `--uninstall-open-with` | ✅ | Adds (or removes) "Open with swinemenu" in every file's context menu and makes swinemenu the program Windows asks for files that have none (`HKCU\Software\Classes`, the `Unknown` type's `openas` verb) |
 
 ## Session
 
@@ -189,9 +191,10 @@ run when Explorer is the shell.
 The "Open with" dialog (`OpenWith.exe`) then centres itself on the
 screen's top-left corner and shows only its buttons, without the app list.
 swinewm moves it to the middle of the screen, but it stays empty and does
-not react to clicks (Esc closes it); choose
-apps in Settings → Apps → Default apps, or open files from a terminal with
-the program you want. Win+S (search) and Win+W (widgets) likely have the
+not react to clicks (Esc closes it). Use `swinemenu --open-with <file>`
+instead; `swinemenu --install-open-with` puts it in file managers' context
+menus. Defaults per file type are still changed in Settings → Apps →
+Default apps (Windows protects them from other programs). Win+S (search) and Win+W (widgets) likely have the
 same cause.
 
 ## Keys

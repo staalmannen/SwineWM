@@ -7,9 +7,13 @@
 //
 //   swinemenu [--show drun|run|dmenu] [--dmenu] [--prompt text]
 //             [--lines n] [--width px]
+//   swinemenu --open-with <file>
+//   swinemenu --install-open-with | --uninstall-open-with
 //
 // drun lists the Start menu's apps and Store apps, run lists programs on
 // PATH, dmenu reads choices from standard input and prints the chosen one.
+// --open-with lists the programs registered for a file and opens it with
+// the chosen one (Windows' own "Open with" dialog needs Explorer).
 #define COBJMACROS
 #include <windows.h>
 #include <windowsx.h>
@@ -29,7 +33,7 @@
 #include "swinemenu.h"
 #include "swinewm_version.h"
 
-enum mode { MODE_DRUN, MODE_RUN, MODE_DMENU };
+enum mode { MODE_DRUN, MODE_RUN, MODE_DMENU, MODE_OPENWITH };
 
 struct theme {
 	COLORREF background, text, selected_bg, selected_text, border;
@@ -54,6 +58,7 @@ static struct {
 	HWND hwnd;
 	bool done;
 	char *history_path;
+	wchar_t *file;           // --open-with
 } menu;
 
 static const wchar_t window_class[] = L"swinemenu";
@@ -160,7 +165,8 @@ static char *history_path(void) {
 	CreateDirectoryW(wdir, NULL);
 	free(wdir);
 	char *path = format_str("%s\\swinemenu-%s.txt", dir,
-		menu.mode == MODE_RUN ? "run" : "drun");
+		menu.mode == MODE_RUN ? "run" :
+		menu.mode == MODE_OPENWITH ? "openwith" : "drun");
 	free(dir);
 	free(base8);
 	return path;
@@ -245,6 +251,26 @@ static void accept(void) {
 		// dmenu prints the typed text when nothing matches.
 		write_stdout(entry ? entry->name : typed);
 		exit_status = 0;
+	} else if (menu.mode == MODE_OPENWITH) {
+		char *file = swinemenu_utf16_to_utf8(menu.file);
+		if (entry) {
+			menu_history_record(menu.history_path, entry->name);
+			if (!swinemenu_openwith_invoke(entry->command, menu.file)) {
+				char *line = swinemenu_openwith_fallback(entry->command, menu.file);
+				if (line) {
+					launch(line);
+					free(line);
+				}
+			}
+			exit_status = 0;
+		} else if (*typed) {
+			// A program typed by hand: "<program> "<file>"
+			char *line = format_str("%s \"%s\"", typed, file);
+			launch(line);
+			free(line);
+			exit_status = 0;
+		}
+		free(file);
 	} else if (entry) {
 		menu_history_record(menu.history_path, entry->name);
 		launch(entry->command ? entry->command : entry->name);
@@ -481,6 +507,10 @@ static const char usage[] =
 	"  -S, --show <mode>   drun (apps, the default), run (programs on PATH)\n"
 	"                      or dmenu (choices from standard input)\n"
 	"  -d, --dmenu         Same as --show dmenu: print the chosen line\n"
+	"  --open-with <file>  Pick a program to open file with\n"
+	"  --install-open-with Add \"Open with swinemenu\" to every file's menu\n"
+	"                      and use it for files no program is set for\n"
+	"  --uninstall-open-with  Undo --install-open-with\n"
 	"  -p, --prompt <text> Text in front of the input\n"
 	"  -L, --lines <n>     Number of rows (default 10)\n"
 	"  -W, --width <px>    Width (default 40% of the screen)\n"
@@ -521,6 +551,16 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev, LPSTR cmd, int show) {
 				!wcscmp(next, L"dmenu") ? MODE_DMENU : MODE_DRUN;
 		} else if (!wcscmp(a, L"-d") || !wcscmp(a, L"--dmenu")) {
 			menu.mode = MODE_DMENU;
+		} else if (!wcscmp(a, L"--open-with") && next) {
+			++i;
+			menu.mode = MODE_OPENWITH;
+			menu.file = _wcsdup(next);
+		} else if (!wcscmp(a, L"--install-open-with") ||
+				!wcscmp(a, L"--uninstall-open-with")) {
+			int status = swinemenu_install_open_with(
+				!wcscmp(a, L"--install-open-with"));
+			LocalFree(argv);
+			return status;
 		} else if ((!wcscmp(a, L"-p") || !wcscmp(a, L"--prompt")) && next) {
 			++i;
 			wcsncpy(menu.prompt, next, 63);
@@ -547,7 +587,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev, LPSTR cmd, int show) {
 	LocalFree(argv);
 	if (!prompt_given) {
 		wcscpy(menu.prompt, menu.mode == MODE_RUN ? L"run" :
-			menu.mode == MODE_DMENU ? L">" : L"drun");
+			menu.mode == MODE_DMENU ? L">" :
+			menu.mode == MODE_OPENWITH ? L"open with" : L"drun");
 	}
 
 	// A second "swinemenu" closes the open one, so the key toggles it.
@@ -559,6 +600,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev, LPSTR cmd, int show) {
 
 	menu.entries = menu.mode == MODE_RUN ? swinemenu_run_entries() :
 		menu.mode == MODE_DMENU ? swinemenu_dmenu_entries() :
+		menu.mode == MODE_OPENWITH ? swinemenu_openwith_entries(menu.file) :
 		swinemenu_drun_entries();
 	if (menu.mode != MODE_DMENU) {
 		menu.history_path = history_path();

@@ -148,11 +148,12 @@ if(WIN32)
   target_link_libraries(swinewm PRIVATE swinewm_core user32 gdi32 dwmapi shell32
     shcore advapi32 ole32 windowscodecs msimg32 uuid)
 
-  add_executable(swinemenu WIN32 swinemenu/main.c swinemenu/apps.c)
+  add_executable(swinemenu WIN32 swinemenu/main.c swinemenu/apps.c
+    swinemenu/openwith.c)
   target_compile_definitions(swinemenu PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN
     WINVER=0x0A00 _WIN32_WINNT=0x0A00)
   target_link_libraries(swinemenu PRIVATE swine_common user32 gdi32 shell32 ole32
-    uuid)
+    shlwapi uuid)
   target_include_directories(swinemenu PRIVATE ${SWINEWM_GENERATED_DIR})
 
   add_executable(swinemsg swinemsg/main.c)

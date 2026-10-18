@@ -29,6 +29,12 @@ the MSI and zip with the matching section below as release notes.
   on them. `title_format` sets the tab titles.
 - The drop zone of a dragged tiled window uses `client.focused`'s
   indicator colour.
+- `swinemenu --open-with <file>`, a replacement for Windows' "Open with"
+  dialog (which stays empty without Explorer): it lists the programs
+  registered for the file's type and opens the file with the chosen one.
+  `swinemenu --install-open-with` adds "Open with swinemenu" to every
+  file's context menu and uses swinemenu for files no program is set for;
+  `--uninstall-open-with` removes both.
 
 ### Added
 
