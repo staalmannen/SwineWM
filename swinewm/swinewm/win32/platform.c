@@ -22,6 +22,25 @@ static UINT shell_hook_message = 0;
 // a one-shot timer for the next notification expiry.
 #define TIMER_TICK 1
 #define TIMER_NOTIFY 2
+#define TIMER_DISPLAY 3
+
+// Display settings can produce a burst of notifications while Windows and
+// the display driver settle on the final monitor geometry and DPI.
+#define DISPLAY_REFRESH_DELAY 150
+
+static void refresh_display_state(void) {
+	win32_shell_resize_desktop();
+	win32_outputs_update();
+	transaction_commit_dirty();
+}
+
+static void schedule_display_refresh(void) {
+	if (!SetTimer(win32_shell_hwnd, TIMER_DISPLAY, DISPLAY_REFRESH_DELAY, NULL)) {
+		swine_log(SWINE_ERROR, "Unable to schedule display refresh (error %lu)",
+			GetLastError());
+		refresh_display_state();
+	}
+}
 
 void win32_run_command(const char *command) {
 	win32_busy++;
@@ -49,10 +68,6 @@ static LRESULT handle_shell_message(HWND hwnd, UINT msg, WPARAM wparam,
 		free(command);
 		return 0;
 	}
-	case WM_TIMER:
-		notify_tick(platform_now_ms());
-		platform_ui_refresh();
-		return 0;
 	case WM_SWINE_IPC:
 		win32_ipc_handle((struct win32_ipc_request *)lparam);
 		return 0;
@@ -65,20 +80,30 @@ static LRESULT handle_shell_message(HWND hwnd, UINT msg, WPARAM wparam,
 	case WM_SWINE_TRAY:
 		win32_tray_handle_message(wparam, lparam);
 		return 0;
+	case WM_SWINE_DISPLAY_REFRESH:
+		schedule_display_refresh();
+		return 0;
 	case WM_SWINE_MOTION:
 		win32_mouse_handle_motion();
 		return 0;
 	case WM_DISPLAYCHANGE:
-		win32_shell_resize_desktop();
-		win32_outputs_update();
-		transaction_commit_dirty();
+	case WM_DPICHANGED:
+		schedule_display_refresh();
 		return 0;
 	case WM_SETTINGCHANGE:
 		if (wparam == SPI_SETWORKAREA && !win32_shell_mode) {
 			// The taskbar or an app bar changed size. As the shell we set
 			// the work area ourselves and do not follow it.
-			win32_outputs_update();
-			transaction_commit_dirty();
+			schedule_display_refresh();
+		}
+		return 0;
+	case WM_TIMER:
+		if (wparam == TIMER_DISPLAY) {
+			KillTimer(hwnd, TIMER_DISPLAY);
+			refresh_display_state();
+		} else if (wparam == TIMER_TICK || wparam == TIMER_NOTIFY) {
+			notify_tick(platform_now_ms());
+			platform_ui_refresh();
 		}
 		return 0;
 	case WM_CLOSE:
