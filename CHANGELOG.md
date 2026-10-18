@@ -8,8 +8,22 @@ the MSI and zip with the matching section below as release notes.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-18
+
+Mouse and decorations (see the roadmap in
+[`doc/project_summary.md`](doc/project_summary.md)): focus follows mouse,
+moving and resizing windows with the mouse, window borders and title bars
+in the `client.*` colours, tabbed and stacked title bars, plus a
+replacement for the "Open with" dialog in swinemenu.
+
 ### Added
 
+- Mouse support, ported from sway: `focus_follows_mouse yes|no|always`,
+  `floating_modifier <mod> [normal|inverse]` ($mod + left button moves a
+  floating window or drags a tiled one to another place, $mod + right
+  button resizes either), `tiling_drag`, `tiling_drag_threshold`,
+  `mouse_warping output|container|none`, and mouse bindings
+  (`bindsym --whole-window $mod+button4 workspace prev`).
 - Window decorations, as in sway: `border none|normal|pixel|toggle`,
   `default_border`, `default_floating_border`, `client.focused`,
   `client.focused_inactive`, `client.unfocused`, `client.urgent`,
@@ -40,15 +54,6 @@ the MSI and zip with the matching section below as release notes.
   `swinemenu --install-open-with` adds "Open with swinemenu" to every
   file's context menu and uses swinemenu for files no program is set for;
   `--uninstall-open-with` removes both.
-
-### Added
-
-- Mouse support, ported from sway: `focus_follows_mouse yes|no|always`,
-  `floating_modifier <mod> [normal|inverse]` ($mod + left button moves a
-  floating window or drags a tiled one to another place, $mod + right
-  button resizes either), `tiling_drag`, `tiling_drag_threshold`,
-  `mouse_warping output|container|none`, and mouse bindings
-  (`bindsym --whole-window $mod+button4 workspace prev`).
 
 ### Fixed
 
@@ -194,7 +199,8 @@ built-in Waybar (config.jsonc, CSS subset, common modules) and Mako
 (config, criteria, modes, `notify-send`, `makoctl`), wallpapers,
 running as the Windows shell (`--set-shell`), and an MSI installer.
 
-[Unreleased]: https://github.com/staalmannen/SwineWM/compare/0.2.0...HEAD
+[Unreleased]: https://github.com/staalmannen/SwineWM/compare/0.3.0...HEAD
+[0.3.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.3.0
 [0.2.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.2.0
 [0.1.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.1.0
 [0.0.1]: https://github.com/staalmannen/SwineWM/releases/tag/0.0.1
