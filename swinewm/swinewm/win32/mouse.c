@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include "log.h"
 #include "stringop.h"
+#include "swinewm/config.h"
 #include "swinewm/input/cursor.h"
 #include "swinewm/platform.h"
 #include "swinewm/tree/view.h"
@@ -23,6 +24,7 @@ static POINT motion_point;
 static bool motion_posted = false;
 static bool swallowed[5];   // per button: its press was kept from the app
 static HWND indicator = NULL;
+static COLORREF indicator_color = RGB(0x2e, 0x9e, 0xf4);
 
 static const wchar_t indicator_class[] = L"SwineWMDropIndicator";
 
@@ -191,6 +193,12 @@ static LRESULT CALLBACK indicator_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 	if (msg == WM_NCHITTEST) {
 		return HTTRANSPARENT;
 	}
+	if (msg == WM_ERASEBKGND) {
+		RECT rect;
+		GetClientRect(hwnd, &rect);
+		win32_fill((HDC)wparam, &rect, indicator_color);
+		return 1;
+	}
 	return DefWindowProcW(hwnd, msg, wparam, lparam);
 }
 
@@ -200,9 +208,6 @@ bool win32_mouse_init(void) {
 	wc.lpfnWndProc = indicator_wndproc;
 	wc.hInstance = instance;
 	wc.lpszClassName = indicator_class;
-	// sway draws the drop zone in client.focused's indicator colour
-	// (#2e9ef4 by default) at half opacity.
-	wc.hbrBackground = CreateSolidBrush(RGB(0x2e, 0x9e, 0xf4));
 	RegisterClassExW(&wc);
 
 	hook = SetWindowsHookExW(WH_MOUSE_LL, mouse_proc, instance, 0);
@@ -264,8 +269,14 @@ void platform_drop_indicator(const struct swine_box *box) {
 		if (!indicator) {
 			return;
 		}
-		SetLayeredWindowAttributes(indicator, 0, 128, LWA_ALPHA);
 	}
+	// sway draws the drop zone in client.focused's indicator colour at half
+	// its opacity.
+	uint32_t rgba = config ? config->border_colors.focused.indicator : 0x2E9EF4FF;
+	indicator_color = RGB((rgba >> 24) & 0xFF, (rgba >> 16) & 0xFF,
+		(rgba >> 8) & 0xFF);
+	SetLayeredWindowAttributes(indicator, 0, (BYTE)((rgba & 0xFF) / 2), LWA_ALPHA);
+	InvalidateRect(indicator, NULL, TRUE);
 	SetWindowPos(indicator, HWND_TOPMOST, box->x, box->y, box->width,
 		box->height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
 }

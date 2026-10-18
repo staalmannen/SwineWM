@@ -64,6 +64,7 @@ add_library(swinewm_core STATIC
   swinewm/commands.c
   swinewm/commands/assign.c
   swinewm/commands/bar.c
+  swinewm/commands/border.c
   swinewm/commands/bind.c
   swinewm/commands/exec.c
   swinewm/commands/floating.c
@@ -123,6 +124,7 @@ if(WIN32)
     swinewm/main.c
     swinewm/win32/exec.c
     swinewm/win32/bar.c
+    swinewm/win32/decor.c
     swinewm/win32/draw.c
     swinewm/win32/ipc.c
     swinewm/win32/keyboard.c
@@ -185,6 +187,7 @@ if(SWINEWM_BUILD_TESTS)
     tests/test_marks.c
     tests/test_outputs.c
     tests/test_cursor.c
+    tests/test_decorations.c
     tests/test_tree.c
     tests/test_bar.c
     tests/test_notify.c

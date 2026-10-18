@@ -16,6 +16,13 @@ enum swine_container_layout {
 	L_TABBED,
 };
 
+enum swine_container_border {
+	B_NONE,
+	B_PIXEL,
+	B_NORMAL,
+	B_CSD,
+};
+
 enum swine_fullscreen_mode {
 	FULLSCREEN_NONE,
 	FULLSCREEN_WORKSPACE,
@@ -40,6 +47,9 @@ struct swine_container {
 	struct swine_box floating_box;    // geometry while floating
 	bool scratchpad;
 	bool is_sticky;                   // shown on every workspace (floating)
+	enum swine_container_border border;
+	int border_thickness;
+	float alpha;                      // "opacity", 0..1
 	list_t *marks;                    // char *, as sway's con->marks
 };
 

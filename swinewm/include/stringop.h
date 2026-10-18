@@ -2,6 +2,7 @@
 #define _SWINE_STRINGOP_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <stddef.h>
 #include "list.h"
 
@@ -35,6 +36,8 @@ char *format_str(const char *fmt, ...);
 
 // Parses yes/no/true/false/enable/disable/on/off/toggle.
 bool parse_boolean(const char *boolean, bool current);
+// "#RRGGBB" or "#RRGGBBAA" (the '#' is optional) into 0xRRGGBBAA, as sway.
+bool parse_color(const char *color, uint32_t *result);
 // Shell-style wildcard match (*, ?, [abc], [a-z], [!x]), ignoring ASCII
 // case as Windows file names do.
 bool glob_match(const char *pattern, const char *name);

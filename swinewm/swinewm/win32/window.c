@@ -233,6 +233,7 @@ static void map_view(struct swine_view *view) {
 }
 
 static void destroy_view(struct swine_view *view) {
+	win32_decor_forget(view->handle);
 	free(view->platform);
 	view->platform = NULL;
 	view_destroy(view);

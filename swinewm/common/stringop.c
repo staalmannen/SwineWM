@@ -259,6 +259,24 @@ bool parse_boolean(const char *boolean, bool current) {
 	return false;
 }
 
+bool parse_color(const char *color, uint32_t *result) {
+	if (color[0] == '#') {
+		++color;
+	}
+	size_t len = strlen(color);
+	if ((len != 6 && len != 8) || !isxdigit((unsigned char)color[0]) ||
+			!isxdigit((unsigned char)color[1])) {
+		return false;
+	}
+	char *ptr;
+	unsigned long parsed = strtoul(color, &ptr, 16);
+	if (*ptr != '\0') {
+		return false;
+	}
+	*result = len == 6 ? (((uint32_t)parsed << 8) | 0xFF) : (uint32_t)parsed;
+	return true;
+}
+
 static bool class_matches(const char **pattern, char c) {
 	const char *p = *pattern + 1;   // after '['
 	bool negate = *p == '!' || *p == '^';

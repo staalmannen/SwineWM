@@ -52,6 +52,13 @@ void platform_view_set_visible(struct swine_view *view, bool visible) {
 	fake.visibility_calls++;
 }
 
+void platform_view_set_decoration(struct swine_view *view,
+		const struct view_decoration *deco) {
+	(void)view;
+	(void)deco;
+	fake.decoration_calls++;
+}
+
 bool platform_view_activate(struct swine_view *view) {
 	fake.activate_calls++;
 	fake.last_activated = view;

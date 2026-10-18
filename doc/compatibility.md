@@ -67,8 +67,13 @@ ignored · ❌ not implemented (error)
 | `floating_modifier <mod> [normal\|inverse]` | ✅ | $mod + left button moves floating windows and drags tiled ones (`tiling_drag`), $mod + right button resizes either, from the nearest corner; Shift keeps the aspect ratio of a floating window. A click with the modifier never reaches the window, and Win released after it does not open the Start menu |
 | `tiling_drag enable\|disable\|toggle`, `tiling_drag_threshold <px>` | ✅ | Drop zones as in sway, shown with a translucent rectangle; dropped on a window's middle the two swap. Dragging by title bar waits for the threshold |
 | `mouse_warping output\|container\|none` | ✅ | After `focus` commands and `move workspace to output`, as in sway |
-| `smart_gaps`, `smart_borders`, `hide_edge_borders` | ⚪ | |
-| `border`, `default_border`, `default_floating_border`, `client.*`, `font`, `title_align`, `titlebar_*`, `show_marks` | ⚪ | Decorations not drawn yet |
+| `border none\|normal\|pixel [<n>]\|toggle`, `default_border`, `default_floating_border` | 🟡 | The border is the window's own DWM border (Windows 11), always 1 px whatever `<n>` says. `normal` keeps the window's own title bar; `pixel` and `none` remove it (for windows that have a standard one). `csd` is refused |
+| `client.focused\|focused_inactive\|unfocused\|urgent <border> <background> <text> [<indicator> [<child_border>]]` | 🟡 | `child_border` colours the window border; with `border normal`, `background` and `text` colour the window's own title bar (standard title bars only, Windows 11). `indicator` colours the drop zone of `tiling_drag`. `client.placeholder` and `client.background` are accepted and ignored, as in sway |
+| `smart_borders on\|off\|no_gaps`, `hide_edge_borders smart\|smart_no_gaps` | ✅ | |
+| `hide_edge_borders none\|vertical\|horizontal\|both` | 🟡 | Stored; a DWM border cannot hide single edges |
+| `smart_gaps` | ⚪ | |
+| `font`, `title_align`, `titlebar_padding`, `titlebar_border_thickness`, `client.focused_tab_title` | 🟡 | Stored for the title bars swinewm will draw for tabbed and stacked containers |
+| `show_marks` | ⚪ | |
 | `for_window`, `assign` (`workspace`, `number`, `output`, `→`), `no_focus` | ✅ | As in sway: rules run when a window appears and again when its title changes (once per rule and window); `assign` picks the workspace, `no_focus` keeps the focus where it was |
 | Criteria `[…] <commands>` | ✅ | All tokens; what they match on Windows is listed under "Criteria" below. Regular expressions use a built-in PCRE-like engine (no look-around or back-references) |
 | `output <name\|*> bg <file> <stretch\|fill\|fit\|center\|tile> [<#color>]`, `output … bg <#color> solid_color` | ✅ | swaybg's options; PNG, JPEG, BMP, GIF, TIFF (anything the Windows Imaging Component reads). `~`, `%VAR%` and paths relative to the config file |
@@ -83,7 +88,8 @@ ignored · ❌ not implemented (error)
 | `swap container with id\|con_id\|mark <arg>` | ✅ | `id` is the window handle |
 | `sticky enable\|disable\|toggle` | ✅ | Floating windows follow workspace switches |
 | `rename workspace [<old>\|number <n>] to <new>` | ✅ | |
-| `title_format`, `opacity`, `create_output` | ❌ | |
+| `opacity [set\|plus\|minus] <0..1>` | ✅ | Makes the window layered (`WS_EX_LAYERED`); undone on exit, after a crash and by `--recover` |
+| `title_format`, `create_output` | ❌ | |
 | `explorer_taskbar autohide\|show\|toggle` | ✅ | swinewm extension: while running next to Explorer, keep Explorer's taskbar auto-hidden (restored on exit) |
 
 ## Criteria

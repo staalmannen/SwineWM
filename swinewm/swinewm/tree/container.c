@@ -16,6 +16,9 @@ struct swine_container *container_create(struct swine_view *view) {
 	con->layout = L_NONE;
 	con->prev_split_layout = L_NONE;
 	con->marks = create_list();
+	con->alpha = 1.0f;
+	con->border = B_NORMAL;
+	con->border_thickness = 2;
 	if (view) {
 		view->container = con;
 	} else {

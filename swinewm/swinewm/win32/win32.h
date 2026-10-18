@@ -5,6 +5,7 @@
 // outside swinewm/win32/ includes this or <windows.h>.
 
 #include <windows.h>
+#include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include "swinewm/bar/css.h"
@@ -104,6 +105,20 @@ void win32_windows_manage_existing(void);
 void win32_windows_show_all(void);
 // A message from RegisterShellHookWindow (HSHELL_* code, window).
 void win32_windows_shell_hook(WPARAM code, LPARAM lparam);
+
+// decor.c: borders, title bars, corners and opacity (worker thread)
+#define DECOR_DWM 1u        // DWM attributes were set
+#define DECOR_CAPTION 2u    // WS_DLGFRAME was taken away
+#define DECOR_LAYERED 4u    // WS_EX_LAYERED was added
+// The window is no longer managed: undo its decorations.
+void win32_decor_forget(HWND hwnd);
+// Undoes decorations recorded in the recovery file (by a previous run).
+void win32_decor_restore(HWND hwnd, DWORD pid, unsigned flags);
+// Undoes every decoration and waits for the worker (exit, crash).
+void win32_decor_restore_all(DWORD timeout_ms);
+void win32_decor_wait(DWORD timeout_ms);
+// Writes one recovery line per decorated window.
+void win32_decor_save(FILE *f);
 
 // keyboard.c
 bool win32_keyboard_init(void);

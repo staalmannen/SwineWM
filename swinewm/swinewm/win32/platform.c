@@ -116,6 +116,7 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *info) {
 	// Best effort: never leave the user with invisible applications, a
 	// hidden taskbar, or (as the shell) no shell at all.
 	win32_windows_show_all();
+	win32_decor_restore_all(1000);
 	win32_shell_restore_taskbar();
 	win32_outputs_restore_settings();
 	win32_tray_crash();
@@ -265,6 +266,7 @@ void platform_finish(void) {
 	win32_shell_finish();
 	win32_windows_finish();
 	win32_windows_show_all();
+	win32_decor_restore_all(2000);
 	win32_tray_finish();
 	win32_bar_finish();
 	win32_notify_finish();

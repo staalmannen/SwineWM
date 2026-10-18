@@ -5,7 +5,8 @@
 // taskbar). The handles of currently hidden windows are therefore written to
 // %LOCALAPPDATA%\swinewm\hidden-windows.txt (handle and process id);
 // "swinewm --recover" and the next
-// start of swinewm show them again.
+// start of swinewm show them again. Lines "<handle> <pid> d <flags>" record
+// decorations (decor.c) to undo in the same way.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -72,6 +73,7 @@ void win32_recover_save(void) {
 				view->pid);
 		}
 	}
+	win32_decor_save(f);
 	fclose(f);
 }
 
@@ -153,20 +155,38 @@ int platform_recover_windows(void) {
 		return 0;
 	}
 	int restored = 0;
-	unsigned long long value;
-	unsigned long pid;
-	while (fscanf(f, "%llx %lu", &value, &pid) == 2) {
+	bool decorations = false;
+	char line[128];
+	while (fgets(line, sizeof(line), f)) {
+		unsigned long long value;
+		unsigned long pid;
+		char kind[8] = "";
+		unsigned flags = 0;
+		int fields = sscanf(line, "%llx %lu %7s %x", &value, &pid, kind, &flags);
+		if (fields < 2) {
+			continue;
+		}
 		HWND hwnd = (HWND)(size_t)value;
 		// Window handles are recycled: only touch the window if it still
 		// belongs to the same process.
 		DWORD owner = 0;
-		if (IsWindow(hwnd) && GetWindowThreadProcessId(hwnd, &owner) &&
-				owner == pid && !IsWindowVisible(hwnd)) {
+		if (!IsWindow(hwnd) || !GetWindowThreadProcessId(hwnd, &owner) ||
+				owner != pid) {
+			continue;
+		}
+		if (fields == 4 && strcmp(kind, "d") == 0) {
+			// Decorations (border colour, title bar, opacity)
+			win32_decor_restore(hwnd, (DWORD)pid, flags);
+			decorations = true;
+		} else if (fields == 2 && !IsWindowVisible(hwnd)) {
 			ShowWindowAsync(hwnd, SW_SHOWNA);
 			restored++;
 		}
 	}
 	fclose(f);
+	if (decorations) {
+		win32_decor_wait(2000);
+	}
 	win32_recover_clear();
 	return restored;
 }

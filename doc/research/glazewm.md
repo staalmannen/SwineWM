@@ -78,14 +78,16 @@ APIs, Windows 11 for the DWM attributes:
 
 | Feature | API | Maps to (sway) | SwineWM |
 | --- | --- | --- | --- |
-| Border colour | `DwmSetWindowAttribute(DWMWA_BORDER_COLOR)`; `DWMWA_COLOR_NONE` to remove, default colour to reset | `client.focused` / `client.unfocused` … border colour | 🔜 0.3.0, instead of the planned layered border windows. The border stays 1 px, so `default_border pixel <n>` cannot be honoured exactly |
-| Corner style | `DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE)`: default, square, rounded, small rounded | none in sway; square corners for tiled windows look like sway | 🔜 0.3.0 |
-| Title bar | Clear or set `WS_DLGFRAME`, then `SetWindowPos(SWP_FRAMECHANGED …)` | `border none`, `border pixel`, `default_border` | 🔜 0.3.0 |
-| Transparency | Add `WS_EX_LAYERED`, `SetLayeredWindowAttributes(LWA_ALPHA)` | `opacity <value>` | 🔜 0.3.0 |
+| Border colour | `DwmSetWindowAttribute(DWMWA_BORDER_COLOR)`; `DWMWA_COLOR_NONE` to remove, default colour to reset | `client.focused` / `client.unfocused` … border colour | ✅ `win32/decor.c`, the `child_border` colour. The border stays 1 px, so `default_border pixel <n>` cannot be honoured exactly |
+| Corner style | `DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE)`: default, square, rounded, small rounded | none in sway; square corners for tiled windows look like sway | ✅ tiled windows |
+| Title bar | Clear or set `WS_DLGFRAME`, then `SetWindowPos(SWP_FRAMECHANGED …)` | `border none`, `border pixel`, `default_border` | ✅ on a worker thread, since changing another program's styles waits for it; `border normal` also colours the title bar (`DWMWA_CAPTION_COLOR`, `DWMWA_TEXT_COLOR`) |
+| Transparency | Add `WS_EX_LAYERED`, `SetLayeredWindowAttributes(LWA_ALPHA)` | `opacity <value>` | ✅ |
 | Fullscreen hint | `ITaskbarList2::MarkFullscreenWindow` | `fullscreen` | — swinewm draws its own bar; useful only for Explorer's taskbar next to Explorer |
 
 Anything changed here must be undone on exit, crash and `--recover`
 (GlazeWM's watcher resets border colour and opacity for that reason).
+swinewm records what it changed per window in the recovery file
+(`hidden-windows.txt`, lines `<handle> <pid> d <flags>`).
 
 ## Which windows are managed
 

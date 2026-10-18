@@ -7,6 +7,7 @@
 
 struct swine_output;
 struct swine_view;
+struct view_decoration;
 
 // Boundary between the portable window-manager core and the OS. The Win32
 // implementation lives in swinewm/win32/; tests link a fake implementation.
@@ -40,6 +41,11 @@ void platform_finish(void);
 void platform_view_set_geometry(struct swine_view *view,
 		const struct swine_box *box);
 void platform_view_set_visible(struct swine_view *view, bool visible);
+// Border colour, title bar, corners and opacity (struct view_decoration).
+// Changing a window's styles may block on its application, so this may
+// happen later; it is undone on exit, after a crash and by --recover.
+void platform_view_set_decoration(struct swine_view *view,
+		const struct view_decoration *deco);
 // Requests foreground activation. Windows may refuse; the result says so.
 bool platform_view_activate(struct swine_view *view);
 void platform_view_close(struct swine_view *view);
