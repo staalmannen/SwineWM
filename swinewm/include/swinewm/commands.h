@@ -130,6 +130,7 @@ swine_cmd cmd_unbindsym;
 swine_cmd cmd_unmark;
 swine_cmd cmd_urgent;
 swine_cmd cmd_workspace;
+swine_cmd cmd_windows_theme;
 swine_cmd cmd_workspace_layout;
 swine_cmd cmd_ws_auto_back_and_forth;
 

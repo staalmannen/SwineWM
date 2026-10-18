@@ -96,6 +96,9 @@ struct output_display_config {
 // --recover). Returns false if they could not be applied.
 bool platform_output_configure(struct swine_output *output,
 		const struct output_display_config *cfg);
+// windows_theme: 0 light, 1 dark for Windows' app and system mode, -1 the
+// user's own setting again. Undone on exit, after a crash and by --recover.
+void platform_set_windows_theme(int mode);
 // Called after the config changed so the platform can re-register hooks.
 void platform_config_changed(void);
 // The bar or notifications need repainting (called after every commit).

@@ -156,6 +156,24 @@ static void test_settings(void) {
 	fake_teardown();
 }
 
+static void test_windows_theme(void) {
+	fake_setup();
+	fake.windows_theme = 99;
+	// Not set: the user's own mode (-1).
+	CHECK(load_main_config(SWINEWM_SOURCE_DIR "/config.in", false, false));
+	CHECK_INT(fake.windows_theme, -1);
+	// auto: the default Waybar style has a dark background.
+	CHECK(load_main_config(SWINEWM_SOURCE_DIR "/tests/data/theme/config",
+		false, false));
+	CHECK_INT(config->windows_theme, 2);
+	CHECK_INT(fake.windows_theme, 1);
+	CHECK(load_main_config(SWINEWM_SOURCE_DIR "/tests/data/theme/light",
+		true, false));
+	CHECK_INT(fake.windows_theme, 0);
+	CHECK(!run("windows_theme dark"));   // config only
+	fake_teardown();
+}
+
 static void test_default_config(void) {
 	fake_setup();
 	bool ok = load_main_config(SWINEWM_SOURCE_DIR "/config.in", false, true);
@@ -303,4 +321,5 @@ void test_config_all(void) {
 	test_errors_and_defer();
 	test_settings();
 	test_default_config();
+	test_windows_theme();
 }

@@ -38,6 +38,7 @@ struct fake_platform_state {
 	int decoration_calls;
 	int titlebar_updates;
 	int titlebar_count;
+	int windows_theme;
 	// pointer
 	int cursor_x, cursor_y;
 	int warp_calls;

@@ -156,8 +156,7 @@ static int find_entry(HWND hwnd) {
 
 static DWORD WINAPI worker(LPVOID param) {
 	(void)param;
-	for (;;) {
-		WaitForSingleObject(wake, INFINITE);
+	while (WaitForSingleObject(wake, INFINITE) == WAIT_OBJECT_0) {
 		for (;;) {
 			EnterCriticalSection(&lock);
 			if (job_count == 0) {

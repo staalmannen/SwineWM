@@ -64,6 +64,10 @@ void platform_titlebars_update(list_t *titlebars) {
 	fake.titlebar_count = titlebars->length;
 }
 
+void platform_set_windows_theme(int mode) {
+	fake.windows_theme = mode;
+}
+
 int platform_font_height(const char *font) {
 	(void)font;
 	return 15;

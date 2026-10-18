@@ -61,6 +61,7 @@ struct swine_config *config_create(void) {
 	c->default_orientation = L_NONE;
 	c->default_layout = L_NONE;
 	c->focus_wrapping = WRAP_YES;
+	c->windows_theme = -1;
 	c->focus_follows_mouse = FOLLOWS_YES;
 	c->mouse_warping = WARP_OUTPUT;
 	c->tiling_drag = true;
@@ -468,6 +469,19 @@ static void apply_config_to_workspace(struct swine_workspace *ws, void *data) {
 	ws->gaps_outer = config->gaps_outer;
 }
 
+// windows_theme auto: dark if the bar's background is dark.
+static void apply_windows_theme(void) {
+	int mode = config->windows_theme;
+	if (mode == 2) {
+		struct bar_theme theme;
+		bar_get_theme(&theme);
+		struct swine_color c = theme.window.background;
+		double luminance = (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255.0;
+		mode = luminance < 0.5 ? 1 : 0;
+	}
+	platform_set_windows_theme(mode);
+}
+
 bool load_main_config(const char *path, bool is_active, bool validating) {
 	char *text = path ? read_file(path) : NULL;
 	if (path && !text) {
@@ -510,6 +524,7 @@ bool load_main_config(const char *path, bool is_active, bool validating) {
 		// sway "reload" reloads them too.
 		bar_load();
 		notify_load_config();
+		apply_windows_theme();
 	}
 	return success;
 }

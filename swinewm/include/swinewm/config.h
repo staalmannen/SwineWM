@@ -113,6 +113,7 @@ struct swine_config {
 	// Integrated Waybar-compatible bar, enabled by a sway "bar { }" block or
 	// by "exec waybar". Everything else comes from the Waybar config.
 	bool explorer_taskbar_autohide;  // swinewm extension, see settings.c
+	int windows_theme;           // swinewm extension: -1 none, 0 light, 1 dark, 2 auto
 	bool bar_enabled;
 	bool bar_invisible;          // "bar mode invisible"
 	int bar_position;            // 0 = unset, 1 = top, 2 = bottom

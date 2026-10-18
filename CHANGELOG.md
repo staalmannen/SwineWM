@@ -29,6 +29,11 @@ the MSI and zip with the matching section below as release notes.
   on them. `title_format` sets the tab titles.
 - The drop zone of a dragged tiled window uses `client.focused`'s
   indicator colour.
+- `windows_theme dark|light|auto` (swinewm extension, off by default):
+  switches Windows' light/dark mode, which Windows' dialogs and most
+  applications follow, while swinewm runs; `auto` follows the brightness
+  of the bar's background. Your own setting comes back on exit, after a
+  crash and with `swinewm --recover`.
 - `swinemenu --open-with <file>`, a replacement for Windows' "Open with"
   dialog (which stays empty without Explorer): it lists the programs
   registered for the file's type and opens the file with the chosen one.

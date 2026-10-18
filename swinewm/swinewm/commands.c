@@ -104,6 +104,7 @@ static const struct cmd_handler handlers[] = {
 	{ "unbindsym", cmd_unbindsym, 0 },
 	{ "unmark", cmd_unmark, CMD_RUNTIME_ONLY },
 	{ "urgent", cmd_urgent, CMD_RUNTIME_ONLY },
+	{ "windows_theme", cmd_windows_theme, CMD_CONFIG_ONLY },
 	{ "workspace", cmd_workspace, 0 },
 	{ "workspace_auto_back_and_forth", cmd_ws_auto_back_and_forth, 0 },
 	{ "workspace_layout", cmd_workspace_layout, CMD_CONFIG_ONLY },

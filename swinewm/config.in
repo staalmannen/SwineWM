@@ -211,6 +211,14 @@ bindsym $mod+r mode "resize"
 
 explorer_taskbar autohide
 #
+# Windows' light/dark mode:
+#
+# Applications follow Windows' own light/dark mode. "windows_theme auto"
+# switches it to match the bar (dark bar: dark mode), "dark" or "light"
+# force one; your own setting comes back when swinewm exits.
+#
+# windows_theme auto
+#
 # Status Bar:
 #
 # swinewm draws a Waybar-compatible bar itself. Its modules and look come

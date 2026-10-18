@@ -93,6 +93,7 @@ ignored · ❌ not implemented (error)
 | `opacity [set\|plus\|minus] <0..1>` | ✅ | Makes the window layered (`WS_EX_LAYERED`); undone on exit, after a crash and by `--recover` |
 | `create_output` | ❌ | |
 | `explorer_taskbar autohide\|show\|toggle` | ✅ | swinewm extension: while running next to Explorer, keep Explorer's taskbar auto-hidden (restored on exit) |
+| `windows_theme dark\|light\|auto\|none` | ✅ | swinewm extension (config only): sets Windows' light/dark mode for apps and the system while swinewm runs; `auto` picks dark if the bar's background is dark. The user's own mode comes back on exit, after a crash and with `--recover`. Default `none`: Windows' setting is left alone |
 
 ## Criteria
 

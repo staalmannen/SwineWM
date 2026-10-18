@@ -48,6 +48,21 @@ static char *state_file(bool create_dir) {
 	return file;
 }
 
+char *win32_state_path(const char *name, bool create_dir) {
+	char *dir = state_dir();
+	if (!dir) {
+		return NULL;
+	}
+	if (create_dir) {
+		wchar_t *wdir = utf8_to_utf16(dir);
+		CreateDirectoryW(wdir, NULL);
+		free(wdir);
+	}
+	char *path = format_str("%s\\%s", dir, name);
+	free(dir);
+	return path;
+}
+
 void win32_recover_schedule_save(void) {
 	if (!save_pending) {
 		save_pending = true;
@@ -140,6 +155,7 @@ void win32_recover_display_done(void) {
 
 int platform_recover_windows(void) {
 	recover_display_settings();
+	win32_theme_recover();
 	if (win32_shell_recover_taskbar()) {
 		swine_log(SWINE_INFO, "Restored Explorer's taskbar setting");
 	}

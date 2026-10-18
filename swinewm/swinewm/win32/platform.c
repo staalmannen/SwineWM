@@ -117,6 +117,7 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *info) {
 	// hidden taskbar, or (as the shell) no shell at all.
 	win32_windows_show_all();
 	win32_decor_restore_all(1000);
+	win32_theme_restore();
 	win32_shell_restore_taskbar();
 	win32_outputs_restore_settings();
 	win32_tray_crash();
@@ -174,6 +175,7 @@ bool platform_init(void) {
 	win32_windows_manage_existing();
 	SetTimer(win32_shell_hwnd, TIMER_TICK, 1000, NULL);
 	win32_shell_start();
+	win32_theme_init();   // after the crash recovery above
 	return true;
 }
 
@@ -267,6 +269,7 @@ void platform_finish(void) {
 	win32_windows_finish();
 	win32_windows_show_all();
 	win32_decor_restore_all(2000);
+	win32_theme_restore();
 	win32_tray_finish();
 	win32_titlebars_finish();
 	win32_bar_finish();

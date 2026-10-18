@@ -156,7 +156,14 @@ struct win32_ipc_request {
 bool win32_ipc_init(void);
 void win32_ipc_handle(struct win32_ipc_request *request);
 
+// theme.c: windows_theme (Windows' light/dark mode)
+void win32_theme_init(void);
+void win32_theme_restore(void);
+void win32_theme_recover(void);
+
 // recover.c
+// %LOCALAPPDATA%\swinewm\<name>. Caller frees.
+char *win32_state_path(const char *name, bool create_dir);
 void win32_recover_schedule_save(void);
 void win32_recover_save(void);
 void win32_recover_clear(void);
