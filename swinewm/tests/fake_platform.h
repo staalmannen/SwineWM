@@ -36,6 +36,8 @@ struct fake_platform_state {
 	int memory_percentage;
 	// decorations
 	int decoration_calls;
+	int titlebar_updates;
+	int titlebar_count;
 	// pointer
 	int cursor_x, cursor_y;
 	int warp_calls;

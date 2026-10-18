@@ -21,8 +21,12 @@ the MSI and zip with the matching section below as release notes.
   `swinewm --recover`. sway's defaults apply, so title bars now follow the
   `client.*` colours (dark blue for the focused window) unless the config
   sets other colours.
-- `font`, `title_align`, `titlebar_padding`, `titlebar_border_thickness` and
-  `client.focused_tab_title` are read (for tabbed and stacked title bars).
+- Tabbed and stacked containers get title bars, as in sway: one row of
+  tabs, or one row per child, in the `client.*` colours with `font`,
+  `title_align`, `titlebar_padding`, `titlebar_border_thickness` and
+  `client.focused_tab_title`. A click on a tab focuses it, the wheel
+  switches tabs, and title bar mouse bindings (`bindsym button2 kill`) work
+  on them. `title_format` sets the tab titles.
 - The drop zone of a dragged tiled window uses `client.focused`'s
   indicator colour.
 

@@ -11,6 +11,7 @@
 #include "swinewm/bar/css.h"
 
 struct swine_view;
+struct swine_container;
 struct swine_output;
 
 // Messages posted to the shell's own (hidden) window. Everything that
@@ -32,9 +33,16 @@ void win32_run_command(const char *command);
 // Picks the first installed family from a CSS/Pango family list.
 HFONT win32_font(const char *families, int px, bool bold, bool italic);
 void win32_fonts_clear(void);
+// A sway "font" description ("pango:DejaVu Sans Mono 10") at a scale.
+HFONT win32_sway_font(const char *desc, double scale);
 COLORREF win32_blend(struct swine_color color, COLORREF under);
 void win32_fill(HDC dc, const RECT *rect, COLORREF color);
 double win32_output_scale(struct swine_output *output);
+
+// titlebar.c: tabs of tabbed and stacked containers
+// True if hwnd is a tab bar; *con is the child under the point.
+bool win32_titlebar_hit(HWND hwnd, POINT pt, struct swine_container **con);
+void win32_titlebars_finish(void);
 
 // bar.c
 void win32_bar_refresh(void);

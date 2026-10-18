@@ -41,6 +41,11 @@ void platform_finish(void);
 void platform_view_set_geometry(struct swine_view *view,
 		const struct swine_box *box);
 void platform_view_set_visible(struct swine_view *view, bool visible);
+// Draws the tabs of tabbed and stacked containers (struct swine_titlebar *,
+// see tree/titlebar.h); the list is only valid during the call.
+void platform_titlebars_update(list_t *titlebars);
+// Height of a line of text in a sway "font" description, at scale 1.
+int platform_font_height(const char *font);
 // Border colour, title bar, corners and opacity (struct view_decoration).
 // Changing a window's styles may block on its application, so this may
 // happen later; it is undone on exit, after a crash and by --recover.

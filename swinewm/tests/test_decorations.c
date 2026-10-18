@@ -7,10 +7,12 @@
 #include "stringop.h"
 #include "swinewm/config.h"
 #include "swinewm/desktop/transaction.h"
+#include "swinewm/input/cursor.h"
 #include "swinewm/ipc-json.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/output.h"
+#include "swinewm/tree/titlebar.h"
 #include "swinewm/tree/view.h"
 #include "swinewm/tree/workspace.h"
 #include "test.h"
@@ -212,6 +214,88 @@ static void test_font_and_titlebar(void) {
 	fake_teardown();
 }
 
+static void test_titlebars(void) {
+	fake_setup();
+	struct swine_view *a = fake_map_view("a");
+	struct swine_view *b = fake_map_view("b");
+	CHECK_INT(fake.titlebar_count, 0);
+	CHECK(b->current.deco.titlebar);
+	CHECK(run("layout tabbed"));
+	// One row of tabs on top (font height 15 + 2 * titlebar_v_padding 4).
+	CHECK_INT(container_titlebar_height(), 23);
+	CHECK_INT(b->pending.box.y, 23);
+	CHECK_INT(b->pending.box.height, 800 - 23);
+	CHECK_INT(fake.titlebar_count, 1);
+	list_t *bars = titlebars_get();
+	struct swine_titlebar *bar = bars->items[0];
+	CHECK(!bar->stacked);
+	CHECK_INT(bar->box.height, 23);
+	CHECK_INT(bar->box.width, 1000);
+	CHECK_INT(bar->tabs->length, 2);
+	struct swine_tab *ta = bar->tabs->items[0], *tb = bar->tabs->items[1];
+	CHECK_STR(ta->title, "a");
+	CHECK(tb->con == b->container);
+	CHECK_INT(tb->colors.background, 0x285577FF);   // focused
+	CHECK_INT(ta->colors.background, 0x222222FF);   // unfocused
+	// The tab is the title bar: the windows lose their own.
+	CHECK(!b->current.deco.titlebar);
+	// Stacked: one row per child.
+	CHECK(run("layout stacking"));
+	bar = titlebars_get()->items[0];
+	CHECK(bar->stacked);
+	CHECK_INT(bar->box.height, 46);
+	CHECK_INT(bar->tab_height, 23);
+	CHECK_INT(b->pending.box.y, 46);
+	// A split container's tab shows its representation, as in sway.
+	CHECK(run("layout tabbed; split v"));
+	struct swine_view *c = fake_map_view("c");
+	(void)c;
+	bar = titlebars_get()->items[0];
+	CHECK_STR(((struct swine_tab *)bar->tabs->items[1])->title,
+		"V[test.exe test.exe]");
+	// title_format, as in sway (without Pango markup).
+	CHECK(run("[title=\"^a$\"] title_format \"%app_id: %title %shell 100%\""));
+	bar = titlebars_get()->items[0];
+	CHECK_STR(((struct swine_tab *)bar->tabs->items[0])->title,
+		"test.exe: a win32 100%");
+	CHECK(!run("title_format"));
+	// Its children have title bars of their own (vertical split).
+	CHECK(b->current.deco.titlebar);
+	// Clicking a tab focuses its window, scrolling switches tabs.
+	bar = titlebars_get()->items[0];
+	struct swine_box ab = bar->box;
+	CHECK(cursor_button(ab.x + 10, ab.y + 5, HIT_TITLEBAR, a->container,
+		SWINE_BTN_LEFT, true, 0));
+	CHECK(cursor_button(ab.x + 10, ab.y + 5, HIT_TITLEBAR, a->container,
+		SWINE_BTN_LEFT, false, 0));
+	CHECK(seat_get_focused_container() == a->container);
+	CHECK(cursor_axis(ab.x + 10, ab.y + 5, HIT_TITLEBAR, a->container,
+		SWINE_SCROLL_DOWN, 0));
+	CHECK(seat_get_focused_container() != a->container);
+	CHECK(!a->pending.visible);
+	// Other workspaces' tabs are not drawn.
+	CHECK(run("workspace 2"));
+	CHECK_INT(fake.titlebar_count, 0);
+	CHECK(run("workspace 1"));
+	CHECK_INT(fake.titlebar_count, 1);
+	// hide_edge_borders --i3: no tab for a lone child.
+	CHECK(run("hide_edge_borders --i3 none"));
+	fake_teardown();
+
+	fake_setup();
+	CHECK(run("hide_edge_borders --i3 none"));
+	struct swine_view *d = fake_map_view("d");
+	CHECK(run("layout tabbed"));
+	CHECK_INT(fake.titlebar_count, 0);
+	CHECK_INT(d->pending.box.y, 0);
+	CHECK(d->current.deco.titlebar);
+	// font resets the cached height (measured again at the next arrange).
+	config->font_height = 99;
+	CHECK(run("font pango:monospace 12"));
+	CHECK_INT(config->font_height, 15);
+	fake_teardown();
+}
+
 void test_decorations_all(void) {
 	test_border_defaults();
 	test_border_command();
@@ -219,4 +303,5 @@ void test_decorations_all(void) {
 	test_smart_borders();
 	test_opacity();
 	test_font_and_titlebar();
+	test_titlebars();
 }

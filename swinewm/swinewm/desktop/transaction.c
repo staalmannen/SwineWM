@@ -8,6 +8,7 @@
 #include "swinewm/tree/arrange.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/root.h"
+#include "swinewm/tree/titlebar.h"
 #include "swinewm/tree/workspace.h"
 #include "swinewm/tree/view.h"
 
@@ -99,6 +100,7 @@ void transaction_commit_dirty(void) {
 		last_activated = NULL;
 	}
 	cursor_apply_warp();
+	platform_titlebars_update(titlebars_get());
 	platform_ui_refresh();
 }
 

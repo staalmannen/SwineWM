@@ -2,6 +2,7 @@
 #include <string.h>
 #include "log.h"
 #include "stringop.h"
+#include "swinewm/config.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/output.h"
@@ -44,6 +45,7 @@ void container_destroy(struct swine_container *con) {
 	}
 	list_free(con->children);
 	list_free_items_and_destroy(con->marks);
+	free(con->title_format);
 	free(con);
 }
 
@@ -728,4 +730,28 @@ const char *container_layout_to_str(enum swine_container_layout layout) {
 	case L_TABBED: return "tabbed";
 	}
 	return "none";
+}
+
+bool container_has_focused_child(struct swine_container *con) {
+	struct swine_node *focus = seat_get_focus();
+	return focus && focus != &con->node && node_has_ancestor(focus, &con->node);
+}
+
+// sway's container_get_current_colors: which client.* class applies.
+struct border_colors *container_get_colors(struct swine_container *con) {
+	struct swine_node *focus = seat_get_focus();
+	struct swine_node *parent = con->parent ? &con->parent->node :
+		con->workspace ? &con->workspace->node : NULL;
+	struct swine_node *active = parent ? seat_get_active_tiling_child(parent) : NULL;
+	bool urgent = con->view ? con->view->urgent : false;
+	if (urgent) {
+		return &config->border_colors.urgent;
+	} else if (focus == &con->node || (con->parent && focus == &con->parent->node)) {
+		return &config->border_colors.focused;
+	} else if (config->has_focused_tab_title && container_has_focused_child(con)) {
+		return &config->border_colors.focused_tab_title;
+	} else if (active == &con->node) {
+		return &config->border_colors.focused_inactive;
+	}
+	return &config->border_colors.unfocused;
 }

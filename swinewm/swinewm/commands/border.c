@@ -240,6 +240,7 @@ struct cmd_results *cmd_font(int argc, char **argv) {
 	char *font = join_args(argv, argc);
 	free(config->font);
 	config->font = font;
+	config->font_height = 0;
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 
@@ -298,5 +299,20 @@ struct cmd_results *cmd_title_align(int argc, char **argv) {
 		return cmd_results_new(CMD_INVALID,
 			"Expected 'title_align left|center|right'");
 	}
+	return cmd_results_new(CMD_SUCCESS, NULL);
+}
+
+struct cmd_results *cmd_title_format(int argc, char **argv) {
+	struct cmd_results *error = NULL;
+	if ((error = checkarg(argc, "title_format", EXPECTED_AT_LEAST, 1))) {
+		return error;
+	}
+	struct swine_container *container = config->handler_context.container;
+	if (!container) {
+		return cmd_results_new(CMD_INVALID,
+			"Only valid containers can have a title_format");
+	}
+	free(container->title_format);
+	container->title_format = join_args(argv, argc);
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }

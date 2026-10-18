@@ -28,7 +28,7 @@ ignored · ❌ not implemented (error)
 | Command | Status | Notes |
 | --- | --- | --- |
 | `bindsym [--release] [--no-repeat] [--locked] <combo> <command>` | 🟡 | `--to-code`, `--no-warn`, `--inhibited`, … accepted |
-| `bindsym [--whole-window] [--border] [--exclude-titlebar] <mod>+button<n> <command>` | 🟡 | Mouse bindings: `button1`–`button9` (4–7 are the wheel) and `BTN_*` names. Without a flag a binding is for title bars, as in sway; until swinewm draws title bars only `--whole-window` bindings fire on windows (and on the desktop). `--border` never fires: Windows windows have no border swinewm can tell apart. No `bindcode` |
+| `bindsym [--whole-window] [--border] [--exclude-titlebar] <mod>+button<n> <command>` | 🟡 | Mouse bindings: `button1`–`button9` (4–7 are the wheel) and `BTN_*` names. Without a flag a binding is for title bars, as in sway: swinewm draws title bars only for tabbed and stacked containers (a window's own title bar belongs to the window), so elsewhere only `--whole-window` bindings fire on windows (and on the desktop). `--border` never fires: Windows windows have no border swinewm can tell apart. No `bindcode` |
 | `unbindsym` | ✅ | |
 | `bindcode`, `bindswitch`, `bindgesture` | ⚪ | |
 | `mode <name>`, `mode <name> { … }` | ✅ | `--pango_markup` accepted |
@@ -51,7 +51,7 @@ ignored · ❌ not implemented (error)
 | `move [absolute] position center\|<x> <y>` | 🟡 | Floating windows; coordinates relative to the output's work area |
 | `move workspace [to] [output] <name\|direction\|current>` | ✅ | The workspace remembers the output for when monitors come and go |
 | `split h/v/t/none`, `splith`, `splitv`, `splitt` | ✅ | |
-| `layout splith/splitv/stacking/tabbed/default`, `layout toggle [split\|all\|…]` | ✅ | Tabbed/stacked show only the active child; no title bars yet |
+| `layout splith/splitv/stacking/tabbed/default`, `layout toggle [split\|all\|…]` | ✅ | Tabbed and stacked containers get title bars drawn by swinewm (tabs side by side, or one row per child), clickable and scrollable as in sway; the windows in them lose their own title bar (`border normal`) |
 | `workspace [number] <name>`, `next`, `prev`, `next_on_output`, `prev_on_output`, `back_and_forth`, `--no-auto-back-and-forth` | ✅ | |
 | `workspace <name> output <outputs…>`, `workspace <name> gaps <type> <n>` | ✅ | The first connected output in the list; workspaces return to it when the monitor is plugged back in |
 | `workspace_auto_back_and_forth` | ✅ | |
@@ -72,7 +72,9 @@ ignored · ❌ not implemented (error)
 | `smart_borders on\|off\|no_gaps`, `hide_edge_borders smart\|smart_no_gaps` | ✅ | |
 | `hide_edge_borders none\|vertical\|horizontal\|both` | 🟡 | Stored; a DWM border cannot hide single edges |
 | `smart_gaps` | ⚪ | |
-| `font`, `title_align`, `titlebar_padding`, `titlebar_border_thickness`, `client.focused_tab_title` | 🟡 | Stored for the title bars swinewm will draw for tabbed and stacked containers |
+| `font`, `title_align`, `titlebar_padding`, `titlebar_border_thickness`, `client.focused_tab_title` | ✅ | For the tabs of tabbed and stacked containers. `font` takes a Pango description (`pango:DejaVu Sans Mono 10`); generic families map to Segoe UI, Times New Roman and Consolas |
+| `title_format <format>` | 🟡 | Tab titles: `%title`, `%app_id`, `%class`, `%instance` (the class) and `%shell` (`win32`); no Pango markup |
+| `hide_edge_borders --i3` | ✅ | No tab for a lone child |
 | `show_marks` | ⚪ | |
 | `for_window`, `assign` (`workspace`, `number`, `output`, `→`), `no_focus` | ✅ | As in sway: rules run when a window appears and again when its title changes (once per rule and window); `assign` picks the workspace, `no_focus` keeps the focus where it was |
 | Criteria `[…] <commands>` | ✅ | All tokens; what they match on Windows is listed under "Criteria" below. Regular expressions use a built-in PCRE-like engine (no look-around or back-references) |
@@ -89,7 +91,7 @@ ignored · ❌ not implemented (error)
 | `sticky enable\|disable\|toggle` | ✅ | Floating windows follow workspace switches |
 | `rename workspace [<old>\|number <n>] to <new>` | ✅ | |
 | `opacity [set\|plus\|minus] <0..1>` | ✅ | Makes the window layered (`WS_EX_LAYERED`); undone on exit, after a crash and by `--recover` |
-| `title_format`, `create_output` | ❌ | |
+| `create_output` | ❌ | |
 | `explorer_taskbar autohide\|show\|toggle` | ✅ | swinewm extension: while running next to Explorer, keep Explorer's taskbar auto-hidden (restored on exit) |
 
 ## Criteria

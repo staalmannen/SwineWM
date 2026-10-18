@@ -81,6 +81,7 @@ swine_cmd cmd_hide_edge_borders;
 swine_cmd cmd_opacity;
 swine_cmd cmd_smart_borders;
 swine_cmd cmd_title_align;
+swine_cmd cmd_title_format;
 swine_cmd cmd_titlebar_border_thickness;
 swine_cmd cmd_titlebar_padding;
 swine_cmd cmd_default_orientation;

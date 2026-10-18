@@ -21,6 +21,7 @@ struct swine_workspace {
 	int gaps_inner;
 	struct side_gaps gaps_outer;
 	struct swine_box box;     // tiling area after outer gaps (set by arrange)
+	struct swine_box title_box; // tabs, if the workspace is tabbed or stacked
 	bool urgent;
 	// Outputs this workspace prefers, best first (names or identifiers);
 	// it returns to the first one that is connected.

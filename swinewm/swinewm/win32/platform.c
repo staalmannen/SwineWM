@@ -268,6 +268,7 @@ void platform_finish(void) {
 	win32_windows_show_all();
 	win32_decor_restore_all(2000);
 	win32_tray_finish();
+	win32_titlebars_finish();
 	win32_bar_finish();
 	win32_notify_finish();
 	win32_wallpaper_finish();

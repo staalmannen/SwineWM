@@ -59,6 +59,16 @@ void platform_view_set_decoration(struct swine_view *view,
 	fake.decoration_calls++;
 }
 
+void platform_titlebars_update(list_t *titlebars) {
+	fake.titlebar_updates++;
+	fake.titlebar_count = titlebars->length;
+}
+
+int platform_font_height(const char *font) {
+	(void)font;
+	return 15;
+}
+
 bool platform_view_activate(struct swine_view *view) {
 	fake.activate_calls++;
 	fake.last_activated = view;

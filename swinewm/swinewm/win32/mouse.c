@@ -50,6 +50,9 @@ static enum cursor_hit hit_test(POINT pt, struct swine_container **con) {
 	if (!top) {
 		return HIT_NONE;
 	}
+	if (win32_titlebar_hit(top, pt, con)) {
+		return *con ? HIT_TITLEBAR : HIT_NONE;
+	}
 	struct swine_view *view = view_from_handle(top);
 	if (view && view->container) {
 		*con = view->container;

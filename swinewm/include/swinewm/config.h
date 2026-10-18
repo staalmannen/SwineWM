@@ -149,6 +149,7 @@ struct swine_config {
 	} border_colors;
 	bool has_focused_tab_title;
 	char *font;                  // "pango:DejaVu Sans Mono 10", as given
+	int font_height;             // its height in pixels at scale 1; 0: unknown
 	int titlebar_border_thickness;
 	int titlebar_h_padding;
 	int titlebar_v_padding;

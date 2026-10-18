@@ -98,6 +98,7 @@ static const struct cmd_handler handlers[] = {
 	{ "tiling_drag", cmd_tiling_drag, 0 },
 	{ "tiling_drag_threshold", cmd_tiling_drag_threshold, 0 },
 	{ "title_align", cmd_title_align, 0 },
+	{ "title_format", cmd_title_format, CMD_RUNTIME_ONLY },
 	{ "titlebar_border_thickness", cmd_titlebar_border_thickness, 0 },
 	{ "titlebar_padding", cmd_titlebar_padding, 0 },
 	{ "unbindsym", cmd_unbindsym, 0 },

@@ -314,21 +314,6 @@ static bool gaps_to_edge(struct swine_workspace *ws) {
 		g.left + inner > 0;
 }
 
-static struct border_colors *container_get_colors(struct swine_container *con) {
-	struct swine_node *focus = seat_get_focus();
-	struct swine_node *parent = con->parent ? &con->parent->node :
-		con->workspace ? &con->workspace->node : NULL;
-	struct swine_node *active = parent ? seat_get_active_tiling_child(parent) : NULL;
-	if (con->view && con->view->urgent) {
-		return &config->border_colors.urgent;
-	} else if (focus == &con->node || (con->parent && focus == &con->parent->node)) {
-		return &config->border_colors.focused;
-	} else if (active == &con->node) {
-		return &config->border_colors.focused_inactive;
-	}
-	return &config->border_colors.unfocused;
-}
-
 void view_update_decoration(struct swine_view *view) {
 	struct swine_container *con = view->container;
 	struct view_decoration d = {0};
@@ -354,7 +339,10 @@ void view_update_decoration(struct swine_view *view) {
 		}
 	}
 	d.border_color = show_border ? colors->child_border : 0;
-	d.titlebar = con->border == B_NORMAL;
+	// In a tabbed or stacked container the tab is the title bar.
+	struct swine_box *tabs = con->parent ? &con->parent->title_box :
+		con->workspace && !floating ? &con->workspace->title_box : NULL;
+	d.titlebar = con->border == B_NORMAL && !(tabs && tabs->height > 0);
 	if (d.titlebar) {
 		d.title_color = colors->background;
 		d.title_text_color = colors->text;

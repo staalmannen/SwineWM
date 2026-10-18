@@ -104,6 +104,7 @@ add_library(swinewm_core STATIC
   swinewm/tree/node.c
   swinewm/tree/output.c
   swinewm/tree/root.c
+  swinewm/tree/titlebar.c
   swinewm/tree/view.c
   swinewm/tree/workspace.c
 )
@@ -136,6 +137,7 @@ if(WIN32)
     swinewm/win32/screenshot.c
     swinewm/win32/shell.c
     swinewm/win32/sysinfo.c
+    swinewm/win32/titlebar.c
     swinewm/win32/tray.c
     swinewm/win32/util.c
     swinewm/win32/wallpaper.c

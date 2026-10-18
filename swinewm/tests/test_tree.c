@@ -78,7 +78,8 @@ static void test_split_and_layouts(void) {
 	CHECK_INT(b->container->parent->layout, L_TABBED);
 	CHECK(b->pending.visible);
 	CHECK(!c->pending.visible);
-	CHECK_INT(b->pending.box.height, 800);
+	// Below one row of tabs: font height (15 in tests) + 2 * 4 padding.
+	CHECK_INT(b->pending.box.height, 800 - 23);
 	CHECK(run("focus right"));  // tabs are horizontal
 	CHECK(focused_view() == c);
 	CHECK(c->pending.visible);
