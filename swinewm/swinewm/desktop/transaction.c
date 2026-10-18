@@ -8,6 +8,7 @@
 #include "swinewm/tree/arrange.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/root.h"
+#include "swinewm/tree/titlebar.h"
 #include "swinewm/tree/workspace.h"
 #include "swinewm/tree/view.h"
 
@@ -65,6 +66,21 @@ void transaction_commit_dirty(void) {
 			view->current.valid = true;
 		}
 	}
+	// Decorations follow the focus, so after it is final (below) would be
+	// right too; they only depend on the seat, not on activation.
+	for (int i = 0; i < server.views->length; ++i) {
+		struct swine_view *view = server.views->items[i];
+		if (!view->container) {
+			continue;
+		}
+		view_update_decoration(view);
+		if (!view->current.deco_valid ||
+				!view_decoration_equal(&view->current.deco, &view->pending.deco)) {
+			platform_view_set_decoration(view, &view->pending.deco);
+			view->current.deco = view->pending.deco;
+			view->current.deco_valid = true;
+		}
+	}
 
 	// Ask the platform to activate the focused window if focus moved.
 	struct swine_container *focus = seat_get_focused_container();
@@ -84,6 +100,7 @@ void transaction_commit_dirty(void) {
 		last_activated = NULL;
 	}
 	cursor_apply_warp();
+	platform_titlebars_update(titlebars_get());
 	platform_ui_refresh();
 }
 

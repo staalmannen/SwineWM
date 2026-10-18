@@ -194,6 +194,20 @@ not manage are seen as such. While swinewm code runs on the main thread
 (`win32_busy`), the hook leaves input alone: a COM call that pumps messages
 must not re-enter the core.
 
+### Decorations
+
+The core works out each view's decoration at every commit
+(`view_update_decoration`: border colour from the `client.*` class, title
+bar or not, square corners for tiled windows, opacity) and hands changes to
+`platform_view_set_decoration`. `win32/decor.c` applies them on a worker
+thread, because changing another application's window style waits for that
+application: the DWM border colour (Windows 11), the title bar colours for
+`border normal`, `WS_DLGFRAME` removed for `pixel` and `none`, and
+`WS_EX_LAYERED` for `opacity`. What it changed per window goes into the
+recovery file and is undone on exit, by the crash handler and by
+`--recover`.
+
+### exec
 
 `exec` uses `CreateProcessW`, which searches `PATH` and app aliases such as
 `wt.exe`; if that fails the command is handed to `ShellExecuteExW`, which

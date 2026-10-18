@@ -5,7 +5,8 @@
 // taskbar). The handles of currently hidden windows are therefore written to
 // %LOCALAPPDATA%\swinewm\hidden-windows.txt (handle and process id);
 // "swinewm --recover" and the next
-// start of swinewm show them again.
+// start of swinewm show them again. Lines "<handle> <pid> d <flags>" record
+// decorations (decor.c) to undo in the same way.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -47,6 +48,21 @@ static char *state_file(bool create_dir) {
 	return file;
 }
 
+char *win32_state_path(const char *name, bool create_dir) {
+	char *dir = state_dir();
+	if (!dir) {
+		return NULL;
+	}
+	if (create_dir) {
+		wchar_t *wdir = utf8_to_utf16(dir);
+		CreateDirectoryW(wdir, NULL);
+		free(wdir);
+	}
+	char *path = format_str("%s\\%s", dir, name);
+	free(dir);
+	return path;
+}
+
 void win32_recover_schedule_save(void) {
 	if (!save_pending) {
 		save_pending = true;
@@ -72,6 +88,7 @@ void win32_recover_save(void) {
 				view->pid);
 		}
 	}
+	win32_decor_save(f);
 	fclose(f);
 }
 
@@ -138,6 +155,7 @@ void win32_recover_display_done(void) {
 
 int platform_recover_windows(void) {
 	recover_display_settings();
+	win32_theme_recover();
 	if (win32_shell_recover_taskbar()) {
 		swine_log(SWINE_INFO, "Restored Explorer's taskbar setting");
 	}
@@ -153,20 +171,38 @@ int platform_recover_windows(void) {
 		return 0;
 	}
 	int restored = 0;
-	unsigned long long value;
-	unsigned long pid;
-	while (fscanf(f, "%llx %lu", &value, &pid) == 2) {
+	bool decorations = false;
+	char line[128];
+	while (fgets(line, sizeof(line), f)) {
+		unsigned long long value;
+		unsigned long pid;
+		char kind[8] = "";
+		unsigned flags = 0;
+		int fields = sscanf(line, "%llx %lu %7s %x", &value, &pid, kind, &flags);
+		if (fields < 2) {
+			continue;
+		}
 		HWND hwnd = (HWND)(size_t)value;
 		// Window handles are recycled: only touch the window if it still
 		// belongs to the same process.
 		DWORD owner = 0;
-		if (IsWindow(hwnd) && GetWindowThreadProcessId(hwnd, &owner) &&
-				owner == pid && !IsWindowVisible(hwnd)) {
+		if (!IsWindow(hwnd) || !GetWindowThreadProcessId(hwnd, &owner) ||
+				owner != pid) {
+			continue;
+		}
+		if (fields == 4 && strcmp(kind, "d") == 0) {
+			// Decorations (border colour, title bar, opacity)
+			win32_decor_restore(hwnd, (DWORD)pid, flags);
+			decorations = true;
+		} else if (fields == 2 && !IsWindowVisible(hwnd)) {
 			ShowWindowAsync(hwnd, SW_SHOWNA);
 			restored++;
 		}
 	}
 	fclose(f);
+	if (decorations) {
+		win32_decor_wait(2000);
+	}
 	win32_recover_clear();
 	return restored;
 }

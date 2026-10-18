@@ -16,6 +16,13 @@ enum swine_container_layout {
 	L_TABBED,
 };
 
+enum swine_container_border {
+	B_NONE,
+	B_PIXEL,
+	B_NORMAL,
+	B_CSD,
+};
+
 enum swine_fullscreen_mode {
 	FULLSCREEN_NONE,
 	FULLSCREEN_WORKSPACE,
@@ -40,6 +47,11 @@ struct swine_container {
 	struct swine_box floating_box;    // geometry while floating
 	bool scratchpad;
 	bool is_sticky;                   // shown on every workspace (floating)
+	enum swine_container_border border;
+	int border_thickness;
+	float alpha;                      // "opacity", 0..1
+	struct swine_box title_box;       // tabs, if tabbed or stacked
+	char *title_format;               // "title_format", or NULL
 	list_t *marks;                    // char *, as sway's con->marks
 };
 
@@ -97,6 +109,11 @@ bool container_find_and_unmark(const char *mark);
 // different workspaces. Neither may be an ancestor of the other.
 void container_swap(struct swine_container *con1,
 		struct swine_container *con2);
+
+struct border_colors;
+bool container_has_focused_child(struct swine_container *con);
+// The client.* class that applies to a container (focused, urgent, ...).
+struct border_colors *container_get_colors(struct swine_container *con);
 
 const char *container_layout_to_str(enum swine_container_layout layout);
 bool layout_is_parallel(enum swine_container_layout layout,

@@ -64,6 +64,7 @@ add_library(swinewm_core STATIC
   swinewm/commands.c
   swinewm/commands/assign.c
   swinewm/commands/bar.c
+  swinewm/commands/border.c
   swinewm/commands/bind.c
   swinewm/commands/exec.c
   swinewm/commands/floating.c
@@ -103,6 +104,7 @@ add_library(swinewm_core STATIC
   swinewm/tree/node.c
   swinewm/tree/output.c
   swinewm/tree/root.c
+  swinewm/tree/titlebar.c
   swinewm/tree/view.c
   swinewm/tree/workspace.c
 )
@@ -123,6 +125,7 @@ if(WIN32)
     swinewm/main.c
     swinewm/win32/exec.c
     swinewm/win32/bar.c
+    swinewm/win32/decor.c
     swinewm/win32/draw.c
     swinewm/win32/ipc.c
     swinewm/win32/keyboard.c
@@ -134,6 +137,8 @@ if(WIN32)
     swinewm/win32/screenshot.c
     swinewm/win32/shell.c
     swinewm/win32/sysinfo.c
+    swinewm/win32/theme.c
+    swinewm/win32/titlebar.c
     swinewm/win32/tray.c
     swinewm/win32/util.c
     swinewm/win32/wallpaper.c
@@ -144,11 +149,12 @@ if(WIN32)
   target_link_libraries(swinewm PRIVATE swinewm_core user32 gdi32 dwmapi shell32
     shcore advapi32 ole32 windowscodecs msimg32 uuid)
 
-  add_executable(swinemenu WIN32 swinemenu/main.c swinemenu/apps.c)
+  add_executable(swinemenu WIN32 swinemenu/main.c swinemenu/apps.c
+    swinemenu/openwith.c)
   target_compile_definitions(swinemenu PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN
     WINVER=0x0A00 _WIN32_WINNT=0x0A00)
   target_link_libraries(swinemenu PRIVATE swine_common user32 gdi32 shell32 ole32
-    uuid)
+    shlwapi uuid)
   target_include_directories(swinemenu PRIVATE ${SWINEWM_GENERATED_DIR})
 
   add_executable(swinemsg swinemsg/main.c)
@@ -185,6 +191,7 @@ if(SWINEWM_BUILD_TESTS)
     tests/test_marks.c
     tests/test_outputs.c
     tests/test_cursor.c
+    tests/test_decorations.c
     tests/test_tree.c
     tests/test_bar.c
     tests/test_notify.c

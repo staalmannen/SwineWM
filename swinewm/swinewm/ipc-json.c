@@ -194,6 +194,13 @@ static void write_container(struct json_writer *w, struct swine_container *con) 
 	json_key(w, "sticky");
 	json_bool(w, con->is_sticky);
 	if (con->view) {
+		static const char *const borders[] = {"none", "pixel", "normal", "csd"};
+		json_key(w, "border");
+		json_string(w, borders[con->border]);
+		json_key(w, "current_border_width");
+		json_int(w, con->border == B_NONE ? 0 : con->border_thickness);
+	}
+	if (con->view) {
 		json_key(w, "visible");
 		json_bool(w, con->view->pending.visible);
 		json_key(w, "app_id");

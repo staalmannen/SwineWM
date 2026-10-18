@@ -70,6 +70,28 @@ enum mouse_warping_mode {
 	WARP_CONTAINER,
 };
 
+// Colours of one client.* class, as 0xRRGGBBAA.
+struct border_colors {
+	uint32_t border;
+	uint32_t background;
+	uint32_t text;
+	uint32_t indicator;
+	uint32_t child_border;
+};
+
+enum edge_border_types {
+	E_NONE,
+	E_VERTICAL,
+	E_HORIZONTAL,
+	E_BOTH,
+};
+
+enum smart_borders_mode {
+	ESMART_OFF,
+	ESMART_ON,
+	ESMART_NO_GAPS,
+};
+
 enum focus_wrapping_mode {
 	WRAP_NO,
 	WRAP_YES,
@@ -91,6 +113,7 @@ struct swine_config {
 	// Integrated Waybar-compatible bar, enabled by a sway "bar { }" block or
 	// by "exec waybar". Everything else comes from the Waybar config.
 	bool explorer_taskbar_autohide;  // swinewm extension, see settings.c
+	int windows_theme;           // swinewm extension: -1 none, 0 light, 1 dark, 2 auto
 	bool bar_enabled;
 	bool bar_invisible;          // "bar mode invisible"
 	int bar_position;            // 0 = unset, 1 = top, 2 = bottom
@@ -107,6 +130,31 @@ struct swine_config {
 	bool floating_mod_inverse;   // move with the right button, resize left
 	bool tiling_drag;
 	int tiling_drag_threshold;
+
+	// Decorations
+	enum swine_container_border border;            // default_border
+	int border_thickness;
+	enum swine_container_border floating_border;   // default_floating_border
+	int floating_border_thickness;
+	enum edge_border_types hide_edge_borders;
+	enum smart_borders_mode hide_edge_borders_smart;
+	bool hide_lone_tab;
+	struct {
+		struct border_colors focused;
+		struct border_colors focused_inactive;
+		struct border_colors focused_tab_title;
+		struct border_colors unfocused;
+		struct border_colors urgent;
+		struct border_colors placeholder;
+		uint32_t background;
+	} border_colors;
+	bool has_focused_tab_title;
+	char *font;                  // "pango:DejaVu Sans Mono 10", as given
+	int font_height;             // its height in pixels at scale 1; 0: unknown
+	int titlebar_border_thickness;
+	int titlebar_h_padding;
+	int titlebar_v_padding;
+	int title_align;             // 0 left, 1 center, 2 right
 
 	char *current_config_path;
 	char *current_config;      // full text of the main config file

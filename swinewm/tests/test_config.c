@@ -120,6 +120,11 @@ static void test_errors_and_defer(void) {
 	CHECK(run("exec \"C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Firefox.lnk\""));
 	CHECK_STR(fake.last_spawn,
 		"C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Firefox.lnk");
+	// Several quoted arguments keep their quotes (swinemenu --open-with
+	// sends "<program>" "<file>").
+	CHECK(run("exec \"C:\\Program Files\\App\\app.exe\" \"C:\\My Files\\a b.txt\""));
+	CHECK_STR(fake.last_spawn,
+		"\"C:\\Program Files\\App\\app.exe\" \"C:\\My Files\\a b.txt\"");
 	CHECK(run("exec shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App"));
 	CHECK_STR(fake.last_spawn,
 		"shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App");
@@ -146,7 +151,26 @@ static void test_settings(void) {
 	CHECK_INT(config->focus_wrapping, WRAP_NO);
 	CHECK(config->auto_back_and_forth);
 	CHECK_INT(config->floating_mod, SWINE_MOD_LOGO);
-	CHECK(config->ignored_count >= 2);   // font, input
+	CHECK_STR(config->font, "pango:monospace 10");
+	CHECK(config->ignored_count >= 1);   // input
+	fake_teardown();
+}
+
+static void test_windows_theme(void) {
+	fake_setup();
+	fake.windows_theme = 99;
+	// Not set: the user's own mode (-1).
+	CHECK(load_main_config(SWINEWM_SOURCE_DIR "/config.in", false, false));
+	CHECK_INT(fake.windows_theme, -1);
+	// auto: the default Waybar style has a dark background.
+	CHECK(load_main_config(SWINEWM_SOURCE_DIR "/tests/data/theme/config",
+		false, false));
+	CHECK_INT(config->windows_theme, 2);
+	CHECK_INT(fake.windows_theme, 1);
+	CHECK(load_main_config(SWINEWM_SOURCE_DIR "/tests/data/theme/light",
+		true, false));
+	CHECK_INT(fake.windows_theme, 0);
+	CHECK(!run("windows_theme dark"));   // config only
 	fake_teardown();
 }
 
@@ -297,4 +321,5 @@ void test_config_all(void) {
 	test_errors_and_defer();
 	test_settings();
 	test_default_config();
+	test_windows_theme();
 }

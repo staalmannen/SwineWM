@@ -28,7 +28,7 @@ ignored · ❌ not implemented (error)
 | Command | Status | Notes |
 | --- | --- | --- |
 | `bindsym [--release] [--no-repeat] [--locked] <combo> <command>` | 🟡 | `--to-code`, `--no-warn`, `--inhibited`, … accepted |
-| `bindsym [--whole-window] [--border] [--exclude-titlebar] <mod>+button<n> <command>` | 🟡 | Mouse bindings: `button1`–`button9` (4–7 are the wheel) and `BTN_*` names. Without a flag a binding is for title bars, as in sway; until swinewm draws title bars only `--whole-window` bindings fire on windows (and on the desktop). `--border` never fires: Windows windows have no border swinewm can tell apart. No `bindcode` |
+| `bindsym [--whole-window] [--border] [--exclude-titlebar] <mod>+button<n> <command>` | 🟡 | Mouse bindings: `button1`–`button9` (4–7 are the wheel) and `BTN_*` names. Without a flag a binding is for title bars, as in sway: swinewm draws title bars only for tabbed and stacked containers (a window's own title bar belongs to the window), so elsewhere only `--whole-window` bindings fire on windows (and on the desktop). `--border` never fires: Windows windows have no border swinewm can tell apart. No `bindcode` |
 | `unbindsym` | ✅ | |
 | `bindcode`, `bindswitch`, `bindgesture` | ⚪ | |
 | `mode <name>`, `mode <name> { … }` | ✅ | `--pango_markup` accepted |
@@ -51,7 +51,7 @@ ignored · ❌ not implemented (error)
 | `move [absolute] position center\|<x> <y>` | 🟡 | Floating windows; coordinates relative to the output's work area |
 | `move workspace [to] [output] <name\|direction\|current>` | ✅ | The workspace remembers the output for when monitors come and go |
 | `split h/v/t/none`, `splith`, `splitv`, `splitt` | ✅ | |
-| `layout splith/splitv/stacking/tabbed/default`, `layout toggle [split\|all\|…]` | ✅ | Tabbed/stacked show only the active child; no title bars yet |
+| `layout splith/splitv/stacking/tabbed/default`, `layout toggle [split\|all\|…]` | ✅ | Tabbed and stacked containers get title bars drawn by swinewm (tabs side by side, or one row per child), clickable and scrollable as in sway; the windows in them lose their own title bar (`border normal`) |
 | `workspace [number] <name>`, `next`, `prev`, `next_on_output`, `prev_on_output`, `back_and_forth`, `--no-auto-back-and-forth` | ✅ | |
 | `workspace <name> output <outputs…>`, `workspace <name> gaps <type> <n>` | ✅ | The first connected output in the list; workspaces return to it when the monitor is plugged back in |
 | `workspace_auto_back_and_forth` | ✅ | |
@@ -67,8 +67,15 @@ ignored · ❌ not implemented (error)
 | `floating_modifier <mod> [normal\|inverse]` | ✅ | $mod + left button moves floating windows and drags tiled ones (`tiling_drag`), $mod + right button resizes either, from the nearest corner; Shift keeps the aspect ratio of a floating window. A click with the modifier never reaches the window, and Win released after it does not open the Start menu |
 | `tiling_drag enable\|disable\|toggle`, `tiling_drag_threshold <px>` | ✅ | Drop zones as in sway, shown with a translucent rectangle; dropped on a window's middle the two swap. Dragging by title bar waits for the threshold |
 | `mouse_warping output\|container\|none` | ✅ | After `focus` commands and `move workspace to output`, as in sway |
-| `smart_gaps`, `smart_borders`, `hide_edge_borders` | ⚪ | |
-| `border`, `default_border`, `default_floating_border`, `client.*`, `font`, `title_align`, `titlebar_*`, `show_marks` | ⚪ | Decorations not drawn yet |
+| `border none\|normal\|pixel [<n>]\|toggle`, `default_border`, `default_floating_border` | 🟡 | The border is the window's own DWM border (Windows 11), always 1 px whatever `<n>` says. `normal` keeps the window's own title bar; `pixel` and `none` remove it (for windows that have a standard one). `csd` is refused |
+| `client.focused\|focused_inactive\|unfocused\|urgent <border> <background> <text> [<indicator> [<child_border>]]` | 🟡 | `child_border` colours the window border; with `border normal`, `background` and `text` colour the window's own title bar (standard title bars only, Windows 11). `indicator` colours the drop zone of `tiling_drag`. `client.placeholder` and `client.background` are accepted and ignored, as in sway |
+| `smart_borders on\|off\|no_gaps`, `hide_edge_borders smart\|smart_no_gaps` | ✅ | |
+| `hide_edge_borders none\|vertical\|horizontal\|both` | 🟡 | Stored; a DWM border cannot hide single edges |
+| `smart_gaps` | ⚪ | |
+| `font`, `title_align`, `titlebar_padding`, `titlebar_border_thickness`, `client.focused_tab_title` | ✅ | For the tabs of tabbed and stacked containers. `font` takes a Pango description (`pango:DejaVu Sans Mono 10`); generic families map to Segoe UI, Times New Roman and Consolas |
+| `title_format <format>` | 🟡 | Tab titles: `%title`, `%app_id`, `%class`, `%instance` (the class) and `%shell` (`win32`); no Pango markup |
+| `hide_edge_borders --i3` | ✅ | No tab for a lone child |
+| `show_marks` | ⚪ | |
 | `for_window`, `assign` (`workspace`, `number`, `output`, `→`), `no_focus` | ✅ | As in sway: rules run when a window appears and again when its title changes (once per rule and window); `assign` picks the workspace, `no_focus` keeps the focus where it was |
 | Criteria `[…] <commands>` | ✅ | All tokens; what they match on Windows is listed under "Criteria" below. Regular expressions use a built-in PCRE-like engine (no look-around or back-references) |
 | `output <name\|*> bg <file> <stretch\|fill\|fit\|center\|tile> [<#color>]`, `output … bg <#color> solid_color` | ✅ | swaybg's options; PNG, JPEG, BMP, GIF, TIFF (anything the Windows Imaging Component reads). `~`, `%VAR%` and paths relative to the config file |
@@ -83,8 +90,10 @@ ignored · ❌ not implemented (error)
 | `swap container with id\|con_id\|mark <arg>` | ✅ | `id` is the window handle |
 | `sticky enable\|disable\|toggle` | ✅ | Floating windows follow workspace switches |
 | `rename workspace [<old>\|number <n>] to <new>` | ✅ | |
-| `title_format`, `opacity`, `create_output` | ❌ | |
+| `opacity [set\|plus\|minus] <0..1>` | ✅ | Makes the window layered (`WS_EX_LAYERED`); undone on exit, after a crash and by `--recover` |
+| `create_output` | ❌ | |
 | `explorer_taskbar autohide\|show\|toggle` | ✅ | swinewm extension: while running next to Explorer, keep Explorer's taskbar auto-hidden (restored on exit) |
+| `windows_theme dark\|light\|auto\|none` | ✅ | swinewm extension (config only): sets Windows' light/dark mode for apps and the system while swinewm runs; `auto` picks dark if the bar's background is dark. The user's own mode comes back on exit, after a crash and with `--recover`. Default `none`: Windows' setting is left alone |
 
 ## Criteria
 
@@ -166,6 +175,8 @@ is; any other launcher can be set in the config instead.
 | Keys | ✅ | Type to filter, Up/Down, Tab, Ctrl+n/p/j/k, Page Up/Down, Enter, Esc, Ctrl+u, Ctrl+w/Ctrl+Backspace; a click starts an entry; clicking elsewhere closes it; starting it again closes it |
 | Starting the choice | ✅ | Sent to swinewm as `exec` over IPC, so Store apps start as the shell too; without swinewm it opens the choice itself |
 | Theme | 🟡 | Colours and font from the bar (`get_bar_config`); wofi's own `config`/`style.css` and icons are not read yet |
+| `--open-with <file>` (swinewm extension) | ✅ | Replaces Windows' "Open with" dialog: the programs registered for the file's type (`SHAssocEnumHandlers`, else the type's ProgIDs, `OpenWithProgids` and `OpenWithList` in the registry), the default marked; Enter opens the file with the choice, a typed program name opens it with that |
+| `--install-open-with`, `--uninstall-open-with` | ✅ | Adds (or removes) "Open with swinemenu" in every file's context menu and makes swinemenu the program Windows asks for files that have none (`HKCU\Software\Classes`, the `Unknown` type's `openas` verb) |
 
 ## Session
 
@@ -181,9 +192,10 @@ run when Explorer is the shell.
 The "Open with" dialog (`OpenWith.exe`) then centres itself on the
 screen's top-left corner and shows only its buttons, without the app list.
 swinewm moves it to the middle of the screen, but it stays empty and does
-not react to clicks (Esc closes it); choose
-apps in Settings → Apps → Default apps, or open files from a terminal with
-the program you want. Win+S (search) and Win+W (widgets) likely have the
+not react to clicks (Esc closes it). Use `swinemenu --open-with <file>`
+instead; `swinemenu --install-open-with` puts it in file managers' context
+menus. Defaults per file type are still changed in Settings → Apps →
+Default apps (Windows protects them from other programs). Win+S (search) and Win+W (widgets) likely have the
 same cause.
 
 ## Keys

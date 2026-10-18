@@ -8,6 +8,14 @@ the MSI and zip with the matching section below as release notes.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-18
+
+Mouse and decorations (see the roadmap in
+[`doc/project_summary.md`](doc/project_summary.md)): focus follows mouse,
+moving and resizing windows with the mouse, window borders and title bars
+in the `client.*` colours, tabbed and stacked title bars, plus a
+replacement for the "Open with" dialog in swinemenu.
+
 ### Added
 
 - Mouse support, ported from sway: `focus_follows_mouse yes|no|always`,
@@ -16,6 +24,36 @@ the MSI and zip with the matching section below as release notes.
   button resizes either), `tiling_drag`, `tiling_drag_threshold`,
   `mouse_warping output|container|none`, and mouse bindings
   (`bindsym --whole-window $mod+button4 workspace prev`).
+- Window decorations, as in sway: `border none|normal|pixel|toggle`,
+  `default_border`, `default_floating_border`, `client.focused`,
+  `client.focused_inactive`, `client.unfocused`, `client.urgent`,
+  `smart_borders`, `hide_edge_borders smart|smart_no_gaps` and
+  `opacity`. On Windows 11 the border is the window's own (1 px) border in
+  the `child_border` colour; `border normal` keeps the window's title bar
+  and colours it, `pixel` and `none` remove it. Tiled windows get square
+  corners. Everything is undone when swinewm exits, after a crash and by
+  `swinewm --recover`. sway's defaults apply, so title bars now follow the
+  `client.*` colours (dark blue for the focused window) unless the config
+  sets other colours.
+- Tabbed and stacked containers get title bars, as in sway: one row of
+  tabs, or one row per child, in the `client.*` colours with `font`,
+  `title_align`, `titlebar_padding`, `titlebar_border_thickness` and
+  `client.focused_tab_title`. A click on a tab focuses it, the wheel
+  switches tabs, and title bar mouse bindings (`bindsym button2 kill`) work
+  on them. `title_format` sets the tab titles.
+- The drop zone of a dragged tiled window uses `client.focused`'s
+  indicator colour.
+- `windows_theme dark|light|auto` (swinewm extension, off by default):
+  switches Windows' light/dark mode, which Windows' dialogs and most
+  applications follow, while swinewm runs; `auto` follows the brightness
+  of the bar's background. Your own setting comes back on exit, after a
+  crash and with `swinewm --recover`.
+- `swinemenu --open-with <file>`, a replacement for Windows' "Open with"
+  dialog (which stays empty without Explorer): it lists the programs
+  registered for the file's type and opens the file with the chosen one.
+  `swinemenu --install-open-with` adds "Open with swinemenu" to every
+  file's context menu and uses swinemenu for files no program is set for;
+  `--uninstall-open-with` removes both.
 
 ### Fixed
 
@@ -161,7 +199,8 @@ built-in Waybar (config.jsonc, CSS subset, common modules) and Mako
 (config, criteria, modes, `notify-send`, `makoctl`), wallpapers,
 running as the Windows shell (`--set-shell`), and an MSI installer.
 
-[Unreleased]: https://github.com/staalmannen/SwineWM/compare/0.2.0...HEAD
+[Unreleased]: https://github.com/staalmannen/SwineWM/compare/0.3.0...HEAD
+[0.3.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.3.0
 [0.2.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.2.0
 [0.1.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.1.0
 [0.0.1]: https://github.com/staalmannen/SwineWM/releases/tag/0.0.1

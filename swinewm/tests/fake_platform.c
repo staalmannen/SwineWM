@@ -52,6 +52,27 @@ void platform_view_set_visible(struct swine_view *view, bool visible) {
 	fake.visibility_calls++;
 }
 
+void platform_view_set_decoration(struct swine_view *view,
+		const struct view_decoration *deco) {
+	(void)view;
+	(void)deco;
+	fake.decoration_calls++;
+}
+
+void platform_titlebars_update(list_t *titlebars) {
+	fake.titlebar_updates++;
+	fake.titlebar_count = titlebars->length;
+}
+
+void platform_set_windows_theme(int mode) {
+	fake.windows_theme = mode;
+}
+
+int platform_font_height(const char *font) {
+	(void)font;
+	return 15;
+}
+
 bool platform_view_activate(struct swine_view *view) {
 	fake.activate_calls++;
 	fake.last_activated = view;

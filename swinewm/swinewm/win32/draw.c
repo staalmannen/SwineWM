@@ -98,6 +98,67 @@ HFONT win32_font(const char *families, int px, bool bold, bool italic) {
 	return f->font;
 }
 
+// A sway/Pango font description: "pango:DejaVu Sans Mono Bold 10" (size in
+// points, style words before it, families separated by commas).
+HFONT win32_sway_font(const char *desc, double scale) {
+	if (!desc) {
+		desc = "monospace 10";
+	}
+	if (strncmp(desc, "pango:", 6) == 0) {
+		desc += 6;
+	}
+	list_t *words = split_string(desc, " ");
+	double pt = 10;
+	bool bold = false, italic = false;
+	int end = words->length;
+	if (end > 0) {
+		char *last = words->items[end - 1];
+		char *rest = NULL;
+		double size = strtod(last, &rest);
+		if (rest != last && (*rest == '\0' || strcmp(rest, "px") == 0)) {
+			pt = strcmp(rest, "px") == 0 ? size * 72.0 / 96.0 : size;
+			end--;
+		}
+	}
+	while (end > 0) {
+		const char *word = words->items[end - 1];
+		if (swine_strcasecmp(word, "bold") == 0) {
+			bold = true;
+		} else if (swine_strcasecmp(word, "italic") == 0 ||
+				swine_strcasecmp(word, "oblique") == 0) {
+			italic = true;
+		} else if (swine_strcasecmp(word, "regular") != 0 &&
+				swine_strcasecmp(word, "normal") != 0 &&
+				swine_strcasecmp(word, "book") != 0) {
+			break;
+		}
+		end--;
+	}
+	char families[256] = "";
+	for (int i = 0; i < end; ++i) {
+		if (i > 0) {
+			strncat(families, " ", sizeof(families) - strlen(families) - 1);
+		}
+		strncat(families, words->items[i], sizeof(families) - strlen(families) - 1);
+	}
+	list_free_items_and_destroy(words);
+	if (!families[0]) {
+		strcpy(families, "monospace");
+	}
+	int px = (int)(pt * 96.0 / 72.0 * scale + 0.5);
+	return win32_font(families, px > 0 ? px : 1, bold, italic);
+}
+
+int platform_font_height(const char *desc) {
+	HDC dc = GetDC(NULL);
+	HGDIOBJ old = SelectObject(dc, win32_sway_font(desc, 1.0));
+	TEXTMETRICW tm = {0};
+	GetTextMetricsW(dc, &tm);
+	SelectObject(dc, old);
+	ReleaseDC(NULL, dc);
+	return tm.tmHeight > 0 ? tm.tmHeight : 16;
+}
+
 void win32_fonts_clear(void) {
 	if (!fonts) {
 		return;

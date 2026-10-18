@@ -191,3 +191,27 @@ struct cmd_results *cmd_include(int argc, char **argv) {
 	free(files);
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
+
+// swinewm extension: "windows_theme dark|light|auto|none". Switches
+// Windows' own light/dark mode (which applications follow) while swinewm
+// runs; "auto" follows the brightness of the bar's background. "none"
+// leaves the user's setting alone (the default).
+struct cmd_results *cmd_windows_theme(int argc, char **argv) {
+	struct cmd_results *error = NULL;
+	if ((error = checkarg(argc, "windows_theme", EXPECTED_EQUAL_TO, 1))) {
+		return error;
+	}
+	if (swine_strcasecmp(argv[0], "dark") == 0) {
+		config->windows_theme = 1;
+	} else if (swine_strcasecmp(argv[0], "light") == 0) {
+		config->windows_theme = 0;
+	} else if (swine_strcasecmp(argv[0], "auto") == 0) {
+		config->windows_theme = 2;
+	} else if (swine_strcasecmp(argv[0], "none") == 0) {
+		config->windows_theme = -1;
+	} else {
+		return cmd_results_new(CMD_INVALID,
+			"Expected 'windows_theme dark|light|auto|none'");
+	}
+	return cmd_results_new(CMD_SUCCESS, NULL);
+}

@@ -1,10 +1,12 @@
 #include <math.h>
+#include "swinewm/config.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/server.h"
 #include "swinewm/tree/arrange.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/output.h"
 #include "swinewm/tree/root.h"
+#include "swinewm/tree/titlebar.h"
 #include "swinewm/tree/view.h"
 #include "swinewm/tree/workspace.h"
 
@@ -93,27 +95,58 @@ static void apply_linear_layout(list_t *children, const struct swine_box *parent
 	}
 }
 
+static struct swine_box *title_box_of(struct swine_node *node) {
+	return node->type == N_WORKSPACE ? &node->workspace->title_box :
+		&node->container->title_box;
+}
+
+// Tabbed and stacked: the title bars on top (one row of tabs, or one row
+// per child), the active child below them; the others are hidden.
+static struct swine_node *apply_tabbed_layout(enum swine_container_layout layout,
+		list_t *children, const struct swine_box *box,
+		struct swine_node *parent, bool visible) {
+	struct swine_node *active = seat_get_active_tiling_child(parent);
+	if (!active && children->length) {
+		struct swine_container *first = children->items[0];
+		active = &first->node;
+	}
+	struct swine_output *output = node_get_output(parent);
+	double scale = output && output->scale > 0 ? output->scale : 1;
+	int tab_height = (int)(container_titlebar_height() * scale + 0.5);
+	int rows = layout == L_STACKED ? children->length : 1;
+	if (config->hide_lone_tab && children->length == 1) {
+		rows = 0;
+	}
+	int title = tab_height * rows;
+	if (title > box->height - MIN_SANE_H) {
+		title = box->height > MIN_SANE_H ? box->height - MIN_SANE_H : 0;
+	}
+	struct swine_box *title_box = title_box_of(parent);
+	*title_box = (struct swine_box){box->x, box->y, box->width, title};
+	for (int i = 0; i < children->length; ++i) {
+		struct swine_container *child = children->items[i];
+		child->box = (struct swine_box){box->x, box->y + title, box->width,
+			box->height - title};
+	}
+	if (visible && title > 0 && children->length) {
+		titlebars_add(parent, children, title_box, layout == L_STACKED,
+			rows ? title / rows : 0, scale);
+	}
+	return active;
+}
+
 static void arrange_children(enum swine_container_layout layout,
 		list_t *children, const struct swine_box *box,
 		struct swine_node *parent, bool visible) {
 	struct swine_node *active = NULL;
+	*title_box_of(parent) = (struct swine_box){0};
 	switch (layout) {
 	case L_VERT:
 		apply_linear_layout(children, box, false);
 		break;
 	case L_TABBED:
 	case L_STACKED:
-		// Title bars/tabs are not drawn yet, so the children share the full
-		// area and only the active one is shown.
-		active = seat_get_active_tiling_child(parent);
-		if (!active && children->length) {
-			struct swine_container *first = children->items[0];
-			active = &first->node;
-		}
-		for (int i = 0; i < children->length; ++i) {
-			struct swine_container *child = children->items[i];
-			child->box = *box;
-		}
+		active = apply_tabbed_layout(layout, children, box, parent, visible);
 		break;
 	case L_HORIZ:
 	case L_NONE:
@@ -178,6 +211,7 @@ static void arrange_workspace(struct swine_workspace *ws) {
 }
 
 void arrange_root(void) {
+	titlebars_clear();
 	// Anything not reached below (hidden scratchpad, unmapped) is hidden.
 	for (int i = 0; i < server.views->length; ++i) {
 		struct swine_view *view = server.views->items[i];

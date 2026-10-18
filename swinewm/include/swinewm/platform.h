@@ -7,6 +7,7 @@
 
 struct swine_output;
 struct swine_view;
+struct view_decoration;
 
 // Boundary between the portable window-manager core and the OS. The Win32
 // implementation lives in swinewm/win32/; tests link a fake implementation.
@@ -40,6 +41,16 @@ void platform_finish(void);
 void platform_view_set_geometry(struct swine_view *view,
 		const struct swine_box *box);
 void platform_view_set_visible(struct swine_view *view, bool visible);
+// Draws the tabs of tabbed and stacked containers (struct swine_titlebar *,
+// see tree/titlebar.h); the list is only valid during the call.
+void platform_titlebars_update(list_t *titlebars);
+// Height of a line of text in a sway "font" description, at scale 1.
+int platform_font_height(const char *font);
+// Border colour, title bar, corners and opacity (struct view_decoration).
+// Changing a window's styles may block on its application, so this may
+// happen later; it is undone on exit, after a crash and by --recover.
+void platform_view_set_decoration(struct swine_view *view,
+		const struct view_decoration *deco);
 // Requests foreground activation. Windows may refuse; the result says so.
 bool platform_view_activate(struct swine_view *view);
 void platform_view_close(struct swine_view *view);
@@ -85,6 +96,9 @@ struct output_display_config {
 // --recover). Returns false if they could not be applied.
 bool platform_output_configure(struct swine_output *output,
 		const struct output_display_config *cfg);
+// windows_theme: 0 light, 1 dark for Windows' app and system mode, -1 the
+// user's own setting again. Undone on exit, after a crash and by --recover.
+void platform_set_windows_theme(int mode);
 // Called after the config changed so the platform can re-register hooks.
 void platform_config_changed(void);
 // The bar or notifications need repainting (called after every commit).

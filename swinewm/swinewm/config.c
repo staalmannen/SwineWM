@@ -61,10 +61,34 @@ struct swine_config *config_create(void) {
 	c->default_orientation = L_NONE;
 	c->default_layout = L_NONE;
 	c->focus_wrapping = WRAP_YES;
+	c->windows_theme = -1;
 	c->focus_follows_mouse = FOLLOWS_YES;
 	c->mouse_warping = WARP_OUTPUT;
 	c->tiling_drag = true;
 	c->tiling_drag_threshold = 9;
+
+	// Decorations: sway's defaults (config.c, do_config_defaults)
+	c->border = B_NORMAL;
+	c->border_thickness = 2;
+	c->floating_border = B_NORMAL;
+	c->floating_border_thickness = 2;
+	c->hide_edge_borders = E_NONE;
+	c->hide_edge_borders_smart = ESMART_OFF;
+	c->font = swine_strdup("monospace 10");
+	c->titlebar_border_thickness = 1;
+	c->titlebar_h_padding = 5;
+	c->titlebar_v_padding = 4;
+	c->border_colors.focused = (struct border_colors){
+		0x4C7899FF, 0x285577FF, 0xFFFFFFFF, 0x2E9EF4FF, 0x285577FF};
+	c->border_colors.focused_inactive = (struct border_colors){
+		0x333333FF, 0x5F676AFF, 0xFFFFFFFF, 0x484E50FF, 0x5F676AFF};
+	c->border_colors.unfocused = (struct border_colors){
+		0x333333FF, 0x222222FF, 0x888888FF, 0x292D2EFF, 0x222222FF};
+	c->border_colors.urgent = (struct border_colors){
+		0x2F343AFF, 0x900000FF, 0xFFFFFFFF, 0x900000FF, 0x900000FF};
+	c->border_colors.placeholder = (struct border_colors){
+		0x000000FF, 0x0C0C0CFF, 0xFFFFFFFF, 0x000000FF, 0x0C0C0CFF};
+	c->border_colors.background = 0xFFFFFFFF;
 	return c;
 }
 
@@ -98,6 +122,7 @@ void free_config(struct swine_config *c) {
 	list_free(c->workspace_configs);
 	list_free_items_and_destroy(c->config_chain);
 	list_free_items_and_destroy(c->errors);
+	free(c->font);
 	free(c->current_config_path);
 	free(c->current_config);
 	free(c);
@@ -444,6 +469,19 @@ static void apply_config_to_workspace(struct swine_workspace *ws, void *data) {
 	ws->gaps_outer = config->gaps_outer;
 }
 
+// windows_theme auto: dark if the bar's background is dark.
+static void apply_windows_theme(void) {
+	int mode = config->windows_theme;
+	if (mode == 2) {
+		struct bar_theme theme;
+		bar_get_theme(&theme);
+		struct swine_color c = theme.window.background;
+		double luminance = (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255.0;
+		mode = luminance < 0.5 ? 1 : 0;
+	}
+	platform_set_windows_theme(mode);
+}
+
 bool load_main_config(const char *path, bool is_active, bool validating) {
 	char *text = path ? read_file(path) : NULL;
 	if (path && !text) {
@@ -486,6 +524,7 @@ bool load_main_config(const char *path, bool is_active, bool validating) {
 		// sway "reload" reloads them too.
 		bar_load();
 		notify_load_config();
+		apply_windows_theme();
 	}
 	return success;
 }

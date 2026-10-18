@@ -2,6 +2,7 @@
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/commands.h"
+#include "swinewm/config.h"
 #include "swinewm/criteria.h"
 #include "swinewm/desktop/transaction.h"
 #include "swinewm/input/seat.h"
@@ -183,6 +184,8 @@ void view_map(struct swine_view *view) {
 	struct swine_workspace *ws = select_workspace(view);
 
 	if (view->natural_floating) {
+		con->border = config->floating_border;
+		con->border_thickness = config->floating_border_thickness;
 		workspace_add_floating(ws, con);
 		con->floating_box = view->natural;
 		if (con->floating_box.width <= 0 || con->floating_box.height <= 0) {
@@ -196,6 +199,8 @@ void view_map(struct swine_view *view) {
 			container_floating_move_to_center(con);
 		}
 	} else {
+		con->border = config->border;
+		con->border_thickness = config->border_thickness;
 		if (ws->fullscreen) {
 			container_set_fullscreen(ws->fullscreen, FULLSCREEN_NONE);
 		}
@@ -283,4 +288,73 @@ void view_request_fullscreen(struct swine_view *view, bool enable) {
 
 bool view_is_visible(struct swine_view *view) {
 	return view->pending.visible;
+}
+
+// sway's view_is_only_visible: no sibling on the way up, except in tabbed
+// and stacked containers (whose other children are hidden).
+static bool view_is_only_visible(struct swine_view *view) {
+	struct swine_container *con = view->container;
+	while (con) {
+		enum swine_container_layout layout = container_parent_layout(con);
+		if (layout != L_TABBED && layout != L_STACKED) {
+			list_t *siblings = container_get_siblings(con);
+			if (siblings && siblings->length > 1) {
+				return false;
+			}
+		}
+		con = con->parent;
+	}
+	return true;
+}
+
+static bool gaps_to_edge(struct swine_workspace *ws) {
+	struct side_gaps g = ws->gaps_outer;
+	int inner = ws->gaps_inner;
+	return g.top + inner > 0 || g.right + inner > 0 || g.bottom + inner > 0 ||
+		g.left + inner > 0;
+}
+
+void view_update_decoration(struct swine_view *view) {
+	struct swine_container *con = view->container;
+	struct view_decoration d = {0};
+	d.alpha = con->alpha;
+	struct swine_container *toplevel = container_toplevel_ancestor(con);
+	bool fullscreen = con->fullscreen_mode != FULLSCREEN_NONE ||
+		toplevel->fullscreen_mode != FULLSCREEN_NONE;
+	bool floating = container_is_floating_or_child(con);
+	if (fullscreen) {
+		d.square_corners = true;
+		d.titlebar = con->border == B_NORMAL;
+		view->pending.deco = d;
+		return;
+	}
+	struct border_colors *colors = container_get_colors(con);
+	bool show_border = con->border != B_NONE;
+	if (!floating && con->workspace) {
+		bool smart = config->hide_edge_borders_smart == ESMART_ON ||
+			(config->hide_edge_borders_smart == ESMART_NO_GAPS &&
+			 !gaps_to_edge(con->workspace));
+		if (smart && view_is_only_visible(view)) {
+			show_border = false;
+		}
+	}
+	d.border_color = show_border ? colors->child_border : 0;
+	// In a tabbed or stacked container the tab is the title bar.
+	struct swine_box *tabs = con->parent ? &con->parent->title_box :
+		con->workspace && !floating ? &con->workspace->title_box : NULL;
+	d.titlebar = con->border == B_NORMAL && !(tabs && tabs->height > 0);
+	if (d.titlebar) {
+		d.title_color = colors->background;
+		d.title_text_color = colors->text;
+	}
+	d.square_corners = !floating;
+	view->pending.deco = d;
+}
+
+bool view_decoration_equal(const struct view_decoration *a,
+		const struct view_decoration *b) {
+	return a->border_color == b->border_color && a->titlebar == b->titlebar &&
+		a->title_color == b->title_color &&
+		a->title_text_color == b->title_text_color &&
+		a->square_corners == b->square_corners && a->alpha == b->alpha;
 }

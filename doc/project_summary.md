@@ -139,10 +139,10 @@ What an existing sway config needs to load and behave.
   `move workspace to output`, `focus output`, monitor hot-plug.
 - `include` with glob patterns; a swaynag equivalent for config errors.
 
-### 0.3.0 — mouse and decorations
+### 0.3.0 — mouse and decorations (released)
 
 - `focus_follows_mouse`, `mouse_warping`, `floating_modifier` drag and
-  resize, mouse `bindsym`/`bindcode` (button and wheel).
+  resize, mouse `bindsym` (button and wheel; `bindcode` is left for later).
 - Title bars for tabbed/stacked containers (clickable tabs), focus
   borders and `client.*` colours, `default_border`, `title_format`,
   `hide_edge_borders`, `smart_borders`. Borders through DWM's own border
