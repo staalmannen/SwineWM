@@ -251,6 +251,15 @@ the tree directly; only the configuration is Waybar's.
 - **Space.** The bar's height (scaled by the monitor's DPI) is reserved on
   each output, and tiling uses the remaining area. The bar hides while the
   output shows a fullscreen window.
+- **Display changes.** Display and DPI notifications are coalesced briefly
+  before outputs are re-enumerated and the layout, bars and wallpaper are
+  refreshed. This lets resolution and mixed-DPI changes settle before the
+  bar and wallpaper windows are placed again. Windows-only smoke checks:
+  change a monitor's resolution or refresh rate while a game is fullscreen,
+  exit the game, and verify the layout, bar and wallpaper recover; repeat
+  with monitors at different scaling percentages and verify display settings
+  are restored by normal exit and `swinewm --recover` after a configured mode
+  change.
 - **Rendering** (`win32/bar.c`): one topmost, non-activating tool window per
   output, painted with GDI into a back buffer. Clicks run the item's
   command (for example `workspace "2"`); the wheel switches workspaces.

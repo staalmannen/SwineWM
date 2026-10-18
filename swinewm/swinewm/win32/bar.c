@@ -299,6 +299,17 @@ static LRESULT CALLBACK bar_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 		LPARAM lparam) {
 	struct bar_window *bw = bar_from_hwnd(hwnd);
 	switch (msg) {
+	case WM_DPICHANGED:
+		// Bar windows are per-monitor-aware top-level windows. Defer the
+		// output refresh to the shell thread so every bar is repositioned
+		// with the final monitor scale and geometry.
+		if (win32_shell_hwnd) {
+			if (!PostMessageW(win32_shell_hwnd, WM_SWINE_DISPLAY_REFRESH, 0, 0)) {
+				swine_log(SWINE_ERROR, "Unable to request a display refresh "
+					"from the shell (error %lu)", GetLastError());
+			}
+		}
+		return 0;
 	case WM_PAINT: {
 		PAINTSTRUCT ps;
 		HDC dc = BeginPaint(hwnd, &ps);

@@ -11,6 +11,8 @@ the MSI and zip with the matching section below as release notes.
 ### Fixed
 
 - Gap values are range-checked and cannot overflow layout geometry.
+- Display and DPI changes are coalesced before outputs, window layout, bars
+  and wallpaper are refreshed, including DPI notifications received by bars.
 
 ## [0.3.0] - 2026-10-18
 
