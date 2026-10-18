@@ -10,6 +10,24 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- Window decorations, as in sway: `border none|normal|pixel|toggle`,
+  `default_border`, `default_floating_border`, `client.focused`,
+  `client.focused_inactive`, `client.unfocused`, `client.urgent`,
+  `smart_borders`, `hide_edge_borders smart|smart_no_gaps` and
+  `opacity`. On Windows 11 the border is the window's own (1 px) border in
+  the `child_border` colour; `border normal` keeps the window's title bar
+  and colours it, `pixel` and `none` remove it. Tiled windows get square
+  corners. Everything is undone when swinewm exits, after a crash and by
+  `swinewm --recover`. sway's defaults apply, so title bars now follow the
+  `client.*` colours (dark blue for the focused window) unless the config
+  sets other colours.
+- `font`, `title_align`, `titlebar_padding`, `titlebar_border_thickness` and
+  `client.focused_tab_title` are read (for tabbed and stacked title bars).
+- The drop zone of a dragged tiled window uses `client.focused`'s
+  indicator colour.
+
+### Added
+
 - Mouse support, ported from sway: `focus_follows_mouse yes|no|always`,
   `floating_modifier <mod> [normal|inverse]` ($mod + left button moves a
   floating window or drags a tiled one to another place, $mod + right
