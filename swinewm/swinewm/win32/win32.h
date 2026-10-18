@@ -22,7 +22,7 @@ struct swine_output;
 #define WM_SWINE_EVENTS (WM_APP + 3)   // drain queued WinEvents
 #define WM_SWINE_SAVE_HIDDEN (WM_APP + 4)
 #define WM_SWINE_TRAY (WM_APP + 5)     // tray.c: icons changed, or a balloon
-#define WM_SWINE_DISPLAY_REFRESH (WM_APP + 6) // refresh outputs after a DPI change
+#define WM_SWINE_DISPLAY_REFRESH (WM_APP + 7) // refresh outputs after a DPI change
 
 extern HWND win32_shell_hwnd;
 
