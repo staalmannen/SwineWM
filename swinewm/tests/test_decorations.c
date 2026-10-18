@@ -1,6 +1,8 @@
 // Decorations: border, default_border, client.* colours, smart_borders and
 // opacity, as worked out by view_update_decoration (compare with sway's
 // container_get_current_colors and view_autoconfigure).
+#include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "fake_platform.h"
@@ -176,6 +178,37 @@ static void test_smart_borders(void) {
 	fake_teardown();
 }
 
+static void test_gap_bounds(void) {
+	fake_setup();
+	struct swine_view *a = fake_map_view("a");
+	int max_gap = INT_MAX / 4;
+	char command[64];
+	CHECK(!run("gaps inner 2147483647"));
+	CHECK(!run("gaps inner 999999999999999999999999"));
+	snprintf(command, sizeof(command), "gaps inner current set %d", max_gap);
+	CHECK(run(command));
+	CHECK_INT(a->container->workspace->gaps_inner, max_gap);
+	CHECK(!run("gaps inner current plus 1"));
+	CHECK_INT(a->container->workspace->gaps_inner, max_gap);
+	snprintf(command, sizeof(command), "gaps left current set %d", max_gap);
+	CHECK(run(command));
+	CHECK(!run("gaps left current plus 1"));
+	CHECK_INT(a->container->workspace->gaps_outer.left, max_gap);
+
+	struct swine_workspace *first = a->container->workspace;
+	CHECK(run("workspace 2"));
+	struct swine_workspace *second = config->handler_context.workspace;
+	snprintf(command, sizeof(command), "gaps inner current set %d", max_gap);
+	CHECK(run(command));
+	CHECK(run("workspace 1"));
+	snprintf(command, sizeof(command), "gaps inner current set %d", max_gap - 1);
+	CHECK(run(command));
+	CHECK(!run("gaps inner all plus 1"));
+	CHECK_INT(first->gaps_inner, max_gap - 1);
+	CHECK_INT(second->gaps_inner, max_gap);
+	fake_teardown();
+}
+
 static void test_opacity(void) {
 	fake_setup();
 	struct swine_view *a = fake_map_view("a");
@@ -301,6 +334,7 @@ void test_decorations_all(void) {
 	test_border_command();
 	test_client_colors();
 	test_smart_borders();
+	test_gap_bounds();
 	test_opacity();
 	test_font_and_titlebar();
 	test_titlebars();
