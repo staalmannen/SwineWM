@@ -1,3 +1,5 @@
+#include <errno.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include "stringop.h"
@@ -5,6 +7,8 @@
 #include "swinewm/config.h"
 #include "swinewm/tree/root.h"
 #include "swinewm/tree/workspace.h"
+
+#define MAX_GAP (INT_MAX / 4)
 
 enum gaps_op {
 	GAPS_OP_SET,
@@ -40,62 +44,110 @@ static bool parse_type(const char *s, enum gaps_type *type) {
 
 static bool parse_amount(const char *s, int *amount) {
 	char *end = NULL;
+	errno = 0;
 	long n = strtol(s, &end, 10);
-	if (end == s || (*end && strcmp(end, "px") != 0)) {
+	if (errno == ERANGE || end == s || (*end && strcmp(end, "px") != 0) ||
+			n < -MAX_GAP || n > MAX_GAP) {
 		return false;
 	}
 	*amount = (int)n;
 	return true;
 }
 
-static int apply_op(int current, enum gaps_op op, int amount) {
-	int value = current;
+static bool apply_op(int current, enum gaps_op op, int amount, int *result) {
+	long long value = current;
 	switch (op) {
 	case GAPS_OP_SET: value = amount; break;
-	case GAPS_OP_ADD: value = current + amount; break;
-	case GAPS_OP_SUBTRACT: value = current - amount; break;
+	case GAPS_OP_ADD: value = (long long)current + amount; break;
+	case GAPS_OP_SUBTRACT: value = (long long)current - amount; break;
 	case GAPS_OP_TOGGLE: value = current ? 0 : amount; break;
 	}
-	return value < 0 ? 0 : value;
+	if (value < 0) {
+		value = 0;
+	}
+	if (value > MAX_GAP) {
+		return false;
+	}
+	*result = (int)value;
+	return true;
 }
 
-static void apply_gaps(int *inner, struct side_gaps *outer,
+static bool apply_gaps(int *inner, struct side_gaps *outer,
 		enum gaps_type type, enum gaps_op op, int amount) {
+	int new_inner = *inner;
+	struct side_gaps new_outer = *outer;
 	switch (type) {
 	case GAPS_INNER:
-		*inner = apply_op(*inner, op, amount);
+		if (!apply_op(new_inner, op, amount, &new_inner)) {
+			return false;
+		}
 		break;
 	case GAPS_OUTER:
-		outer->top = apply_op(outer->top, op, amount);
-		outer->right = apply_op(outer->right, op, amount);
-		outer->bottom = apply_op(outer->bottom, op, amount);
-		outer->left = apply_op(outer->left, op, amount);
+		if (!apply_op(new_outer.top, op, amount, &new_outer.top) ||
+				!apply_op(new_outer.right, op, amount, &new_outer.right) ||
+				!apply_op(new_outer.bottom, op, amount, &new_outer.bottom) ||
+				!apply_op(new_outer.left, op, amount, &new_outer.left)) {
+			return false;
+		}
 		break;
 	case GAPS_HORIZONTAL:
-		outer->right = apply_op(outer->right, op, amount);
-		outer->left = apply_op(outer->left, op, amount);
+		if (!apply_op(new_outer.right, op, amount, &new_outer.right) ||
+				!apply_op(new_outer.left, op, amount, &new_outer.left)) {
+			return false;
+		}
 		break;
 	case GAPS_VERTICAL:
-		outer->top = apply_op(outer->top, op, amount);
-		outer->bottom = apply_op(outer->bottom, op, amount);
+		if (!apply_op(new_outer.top, op, amount, &new_outer.top) ||
+				!apply_op(new_outer.bottom, op, amount, &new_outer.bottom)) {
+			return false;
+		}
 		break;
-	case GAPS_TOP: outer->top = apply_op(outer->top, op, amount); break;
-	case GAPS_RIGHT: outer->right = apply_op(outer->right, op, amount); break;
-	case GAPS_BOTTOM: outer->bottom = apply_op(outer->bottom, op, amount); break;
-	case GAPS_LEFT: outer->left = apply_op(outer->left, op, amount); break;
+	case GAPS_TOP:
+		if (!apply_op(new_outer.top, op, amount, &new_outer.top)) {
+			return false;
+		}
+		break;
+	case GAPS_RIGHT:
+		if (!apply_op(new_outer.right, op, amount, &new_outer.right)) {
+			return false;
+		}
+		break;
+	case GAPS_BOTTOM:
+		if (!apply_op(new_outer.bottom, op, amount, &new_outer.bottom)) {
+			return false;
+		}
+		break;
+	case GAPS_LEFT:
+		if (!apply_op(new_outer.left, op, amount, &new_outer.left)) {
+			return false;
+		}
+		break;
 	}
+	*inner = new_inner;
+	*outer = new_outer;
+	return true;
 }
 
 struct gaps_args {
 	enum gaps_type type;
 	enum gaps_op op;
 	int amount;
+	bool validate_only;
+	bool valid;
 };
 
 static void apply_to_workspace(struct swine_workspace *ws, void *data) {
 	struct gaps_args *args = data;
-	apply_gaps(&ws->gaps_inner, &ws->gaps_outer, args->type, args->op,
-		args->amount);
+	int inner = ws->gaps_inner;
+	struct side_gaps outer = ws->gaps_outer;
+	if (!apply_gaps(&inner, &outer, args->type, args->op, args->amount)) {
+		args->valid = false;
+		return;
+	}
+	if (!args->validate_only) {
+		ws->gaps_inner = inner;
+		ws->gaps_outer = outer;
+	}
 }
 
 static const char expected_syntax[] =
@@ -117,8 +169,10 @@ struct cmd_results *cmd_gaps(int argc, char **argv) {
 		if (!parse_amount(argv[1], &args.amount)) {
 			return cmd_results_new(CMD_INVALID, expected_syntax);
 		}
-		apply_gaps(&config->gaps_inner, &config->gaps_outer, args.type,
-			args.op, args.amount);
+		if (!apply_gaps(&config->gaps_inner, &config->gaps_outer,
+				args.type, args.op, args.amount)) {
+			return cmd_results_new(CMD_INVALID, "Gap amount exceeds the supported range");
+		}
 		return cmd_results_new(CMD_SUCCESS, NULL);
 	}
 	if (argc != 4 || config->reading) {
@@ -147,9 +201,22 @@ struct cmd_results *cmd_gaps(int argc, char **argv) {
 		return cmd_results_new(CMD_INVALID, expected_syntax);
 	}
 	if (all) {
+		args.valid = true;
+		args.validate_only = true;
+		root_for_each_workspace(apply_to_workspace, &args);
+		if (!args.valid) {
+			return cmd_results_new(CMD_INVALID,
+				"Gap operation exceeds the supported range");
+		}
+		args.validate_only = false;
 		root_for_each_workspace(apply_to_workspace, &args);
 	} else if (config->handler_context.workspace) {
+		args.valid = true;
 		apply_to_workspace(config->handler_context.workspace, &args);
+		if (!args.valid) {
+			return cmd_results_new(CMD_INVALID,
+				"Gap operation exceeds the supported range");
+		}
 	}
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }

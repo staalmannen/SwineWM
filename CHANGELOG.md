@@ -8,6 +8,10 @@ the MSI and zip with the matching section below as release notes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Gap values are range-checked and cannot overflow layout geometry.
+
 ## [0.3.0] - 2026-10-18
 
 Mouse and decorations (see the roadmap in
