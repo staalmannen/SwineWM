@@ -50,6 +50,7 @@ struct decor_job {
 	HWND hwnd;
 	DWORD pid;
 	bool restore;
+	bool restore_all;
 	unsigned restore_flags;   // for windows from the recovery file
 	struct view_decoration deco;
 };
@@ -62,6 +63,8 @@ static struct decor_job *jobs;
 static int job_count, job_cap;
 static struct decor_entry *entries;
 static int entry_count, entry_cap;
+// Once restore-all is queued, shutdown must not accept later decorations.
+static bool restoring_all;
 
 static COLORREF to_colorref(uint32_t rgba) {
 	return RGB((rgba >> 24) & 0xFF, (rgba >> 16) & 0xFF, (rgba >> 8) & 0xFF);
@@ -77,9 +80,16 @@ static void frame_changed(HWND hwnd) {
 		SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 }
 
+static bool is_same_process(HWND hwnd, DWORD pid) {
+	DWORD owner = 0;
+	return pid && IsWindow(hwnd) &&
+		GetWindowThreadProcessId(hwnd, &owner) && owner == pid;
+}
+
 // Runs on the worker. Returns the new flags.
-static unsigned apply(HWND hwnd, unsigned flags, const struct view_decoration *d) {
-	if (!IsWindow(hwnd)) {
+static unsigned apply(HWND hwnd, DWORD pid, unsigned flags,
+		const struct view_decoration *d) {
+	if (!is_same_process(hwnd, pid)) {
 		return 0;
 	}
 	set_dwm(hwnd, DWMWA_BORDER_COLOR, (d->border_color & 0xFF) ?
@@ -123,8 +133,8 @@ static unsigned apply(HWND hwnd, unsigned flags, const struct view_decoration *d
 	return flags;
 }
 
-static void restore(HWND hwnd, unsigned flags) {
-	if (!IsWindow(hwnd)) {
+static void restore(HWND hwnd, DWORD pid, unsigned flags) {
+	if (!is_same_process(hwnd, pid)) {
 		return;
 	}
 	if (flags & DECOR_DWM) {
@@ -145,13 +155,39 @@ static void restore(HWND hwnd, unsigned flags) {
 }
 
 // With the lock held.
-static int find_entry(HWND hwnd) {
+static int find_entry(HWND hwnd, DWORD pid) {
 	for (int i = 0; i < entry_count; ++i) {
-		if (entries[i].hwnd == hwnd) {
+		if (entries[i].hwnd == hwnd && entries[i].pid == pid) {
 			return i;
 		}
 	}
 	return -1;
+}
+
+static void restore_all_entries(void) {
+	bool changed = false;
+	for (;;) {
+		EnterCriticalSection(&lock);
+		if (entry_count == 0) {
+			LeaveCriticalSection(&lock);
+			break;
+		}
+		struct decor_entry entry = entries[entry_count - 1];
+		LeaveCriticalSection(&lock);
+
+		restore(entry.hwnd, entry.pid, entry.flags);
+
+		EnterCriticalSection(&lock);
+		int index = find_entry(entry.hwnd, entry.pid);
+		if (index >= 0) {
+			entries[index] = entries[--entry_count];
+			changed = true;
+		}
+		LeaveCriticalSection(&lock);
+	}
+	if (changed && win32_shell_hwnd) {
+		PostMessageW(win32_shell_hwnd, WM_SWINE_SAVE_HIDDEN, 0, 0);
+	}
 }
 
 static DWORD WINAPI worker(LPVOID param) {
@@ -167,20 +203,25 @@ static DWORD WINAPI worker(LPVOID param) {
 			struct decor_job job = jobs[0];
 			memmove(jobs, jobs + 1, sizeof(*jobs) * (size_t)(job_count - 1));
 			job_count--;
-			int index = find_entry(job.hwnd);
+			if (job.restore_all) {
+				LeaveCriticalSection(&lock);
+				restore_all_entries();
+				continue;
+			}
+			int index = find_entry(job.hwnd, job.pid);
 			unsigned flags = index >= 0 ? entries[index].flags :
 				job.restore_flags;
 			LeaveCriticalSection(&lock);
 
 			unsigned new_flags = 0;
 			if (job.restore) {
-				restore(job.hwnd, flags);
+				restore(job.hwnd, job.pid, flags);
 			} else {
-				new_flags = apply(job.hwnd, flags, &job.deco);
+				new_flags = apply(job.hwnd, job.pid, flags, &job.deco);
 			}
 
 			EnterCriticalSection(&lock);
-			index = find_entry(job.hwnd);
+			index = find_entry(job.hwnd, job.pid);
 			bool changed = (index >= 0 ? entries[index].flags : 0) != new_flags;
 			if (new_flags && index < 0) {
 				if (entry_count == entry_cap) {
@@ -224,10 +265,14 @@ static void queue(const struct decor_job *job) {
 		return;
 	}
 	EnterCriticalSection(&lock);
+	if (restoring_all) {
+		LeaveCriticalSection(&lock);
+		return;
+	}
 	// The latest wish for a window replaces an older one still waiting.
 	int i = 0;
 	for (; i < job_count; ++i) {
-		if (jobs[i].hwnd == job->hwnd) {
+		if (jobs[i].hwnd == job->hwnd && jobs[i].pid == job->pid) {
 			break;
 		}
 	}
@@ -253,12 +298,13 @@ void platform_view_set_decoration(struct swine_view *view,
 	queue(&job);
 }
 
-void win32_decor_forget(HWND hwnd) {
+void win32_decor_forget(HWND hwnd, DWORD pid) {
 	if (!thread) {
 		return;
 	}
 	struct decor_job job = {0};
 	job.hwnd = hwnd;
+	job.pid = pid;
 	job.restore = true;
 	queue(&job);
 }
@@ -277,16 +323,17 @@ void win32_decor_restore_all(DWORD timeout_ms) {
 		return;
 	}
 	EnterCriticalSection(&lock);
-	// Drop pending changes; undo everything that was applied.
+	// Let the worker finish any active job before restoring its recorded state.
+	restoring_all = true;
 	job_count = 0;
-	int count = entry_count;
-	struct decor_entry *copy = malloc(sizeof(*copy) * (size_t)(count ? count : 1));
-	memcpy(copy, entries, sizeof(*copy) * (size_t)count);
-	LeaveCriticalSection(&lock);
-	for (int i = 0; i < count; ++i) {
-		win32_decor_restore(copy[i].hwnd, copy[i].pid, copy[i].flags);
+	if (job_count == job_cap) {
+		job_cap = job_cap ? job_cap * 2 : 32;
+		jobs = realloc(jobs, sizeof(*jobs) * (size_t)job_cap);
 	}
-	free(copy);
+	jobs[job_count++] = (struct decor_job){.restore_all = true};
+	ResetEvent(idle);
+	LeaveCriticalSection(&lock);
+	SetEvent(wake);
 	win32_decor_wait(timeout_ms);
 }
 

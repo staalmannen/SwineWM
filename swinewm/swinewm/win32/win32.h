@@ -119,7 +119,7 @@ void win32_windows_shell_hook(WPARAM code, LPARAM lparam);
 #define DECOR_CAPTION 2u    // WS_DLGFRAME was taken away
 #define DECOR_LAYERED 4u    // WS_EX_LAYERED was added
 // The window is no longer managed: undo its decorations.
-void win32_decor_forget(HWND hwnd);
+void win32_decor_forget(HWND hwnd, DWORD pid);
 // Undoes decorations recorded in the recovery file (by a previous run).
 void win32_decor_restore(HWND hwnd, DWORD pid, unsigned flags);
 // Undoes every decoration and waits for the worker (exit, crash).
