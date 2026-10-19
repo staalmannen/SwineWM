@@ -221,7 +221,8 @@ The i3/sway wire format (`"i3-ipc"`, length, type, JSON payload) over the
 named pipe `\\.\pipe\swinewm-ipc.<user>`, overridable with `SWINESOCK`.
 Remote clients are rejected. The first pipe instance is created with
 `FILE_FLAG_FIRST_PIPE_INSTANCE`, which also prevents a second swinewm from
-starting. Event subscriptions are the next step; swinebar needs them.
+starting. Subscribed clients receive events through per-client writer queues,
+so a slow IPC reader cannot block the window-manager thread.
 
 ## The built-in bar (Waybar)
 

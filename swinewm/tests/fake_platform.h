@@ -44,6 +44,9 @@ struct fake_platform_state {
 	int warp_calls;
 	bool drop_indicator_shown;
 	struct swine_box drop_indicator;
+	int ipc_event_count;
+	uint32_t ipc_last_event_type;
+	char ipc_last_event[512];
 };
 
 extern struct fake_platform_state fake;

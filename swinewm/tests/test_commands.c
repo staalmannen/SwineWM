@@ -36,7 +36,11 @@ static void test_chains_and_errors(void) {
 
 static void test_ipc(void) {
 	fake_setup();
+	fake.ipc_event_count = 0;
 	fake_map_view("hello");
+	CHECK(fake.ipc_event_count > 0);
+	CHECK_INT(fake.ipc_last_event_type, (uint32_t)IPC_EVENT_WINDOW);
+	CHECK(strstr(fake.ipc_last_event, "\"change\":\"new\"") != NULL);
 	uint32_t type;
 	const char *cmd = "workspace 4";
 	char *reply = ipc_handle_request(IPC_COMMAND, cmd, (uint32_t)strlen(cmd), &type);
@@ -60,6 +64,48 @@ static void test_ipc(void) {
 
 	reply = ipc_handle_request(IPC_GET_BINDING_STATE, "", 0, &type);
 	CHECK_STR(reply, "{\"name\":\"default\"}");
+	free(reply);
+
+	fake.ipc_event_count = 0;
+	CHECK(run("workspace 5"));
+	CHECK(fake.ipc_event_count > 0);
+	CHECK_INT(fake.ipc_last_event_type, (uint32_t)IPC_EVENT_WORKSPACE);
+	CHECK(strstr(fake.ipc_last_event, "\"change\":\"focus\"") != NULL);
+
+	const char *subscribe = "[\"workspace\",\"tick\",\"binding\"]";
+	uint32_t subscriptions = 0;
+	CHECK(ipc_parse_subscriptions(subscribe, (uint32_t)strlen(subscribe),
+		&subscriptions));
+	CHECK_INT(subscriptions,
+		IPC_SUB_WORKSPACE | IPC_SUB_TICK | IPC_SUB_BINDING);
+	const char *unknown_subscription = "[\"unknown\"]";
+	const char *invalid_subscription = "[\"workspace\",1]";
+	CHECK(!ipc_parse_subscriptions(unknown_subscription,
+		(uint32_t)strlen(unknown_subscription), &subscriptions));
+	CHECK(!ipc_parse_subscriptions(invalid_subscription,
+		(uint32_t)strlen(invalid_subscription), &subscriptions));
+	reply = ipc_handle_request(IPC_SUBSCRIBE, subscribe,
+		(uint32_t)strlen(subscribe), &type);
+	CHECK_STR(reply, "{\"success\":true}");
+	free(reply);
+	reply = ipc_handle_request(IPC_SUBSCRIBE, unknown_subscription,
+		(uint32_t)strlen(unknown_subscription), &type);
+	CHECK_STR(reply, "{\"success\":false}");
+	free(reply);
+
+	const char *tick_payload = "{\"payload\":\"hello\"}";
+	char *tick = ipc_json_tick_event(tick_payload,
+		(uint32_t)strlen(tick_payload));
+	CHECK_STR(tick, "{\"first\":true,\"payload\":\"hello\"}");
+	free(tick);
+	reply = ipc_handle_request(IPC_SEND_TICK, tick_payload,
+		(uint32_t)strlen(tick_payload), &type);
+	CHECK_STR(reply, "{\"success\":true}");
+	free(reply);
+	const char *invalid_tick = "{\"payload\":1}";
+	reply = ipc_handle_request(IPC_SEND_TICK, invalid_tick,
+		(uint32_t)strlen(invalid_tick), &type);
+	CHECK_STR(reply, "{\"success\":false}");
 	free(reply);
 
 	CHECK(ipc_handle_request(12345, "", 0, &type) == NULL);

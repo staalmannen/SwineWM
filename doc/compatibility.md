@@ -219,8 +219,8 @@ same cause.
 | `GET_BAR_CONFIG` | ✅ one bar, `bar-0`: position, height, and `colors`/`font` computed from the Waybar `style.css` (window, workspace buttons) |
 | `GET_INPUTS`, `GET_SEATS` | Empty lists |
 | `GET_NOTIFICATIONS` (1000), `GET_NOTIFICATION_HISTORY` (1001) | ✅ swinewm extensions |
-| `SEND_TICK` | 🟡 replies success, no event |
-| `SUBSCRIBE` and events | ❌ next on the list (needed by swinebar) |
+| `SEND_TICK` | ✅ replies success and broadcasts a tick event |
+| `SUBSCRIBE` and events | 🟡 Validates subscriptions and streams events asynchronously; workspace focus/init/empty/move, window new/close/focus/title, mode, output, binding, barconfig, shutdown and tick are covered. Window move/fullscreen and workspace rename/urgent changes are not yet emitted |
 
 `get_tree` reports native window properties as `app_id` (the executable
 name, e.g. `notepad.exe`), `pid`, `window` (the HWND) and

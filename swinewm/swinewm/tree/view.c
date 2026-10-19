@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include "ipc.h"
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/commands.h"
@@ -6,6 +7,7 @@
 #include "swinewm/criteria.h"
 #include "swinewm/desktop/transaction.h"
 #include "swinewm/input/seat.h"
+#include "swinewm/ipc-json.h"
 #include "swinewm/platform.h"
 #include "swinewm/server.h"
 #include "swinewm/tree/container.h"
@@ -35,6 +37,11 @@ struct swine_view *view_from_handle(void *handle) {
 bool view_set_title(struct swine_view *view, const char *title) {
 	free(view->title);
 	view->title = swine_strdup(title);
+	if (view->container) {
+		char *event = ipc_json_event_window("title", view->container);
+		platform_ipc_event((uint32_t)IPC_EVENT_WINDOW, event);
+		free(event);
+	}
 	// As in sway, for_window rules are checked again when the title
 	// changes (each rule runs once per view).
 	if (!view->container) {
@@ -220,6 +227,11 @@ void view_map(struct swine_view *view) {
 	if (view->container && should_focus(view)) {
 		seat_set_focus_container(view->container);
 	}
+	if (view->container) {
+		char *event = ipc_json_event_window("new", view->container);
+		platform_ipc_event((uint32_t)IPC_EVENT_WINDOW, event);
+		free(event);
+	}
 }
 
 void view_unmap(struct swine_view *view) {
@@ -227,6 +239,9 @@ void view_unmap(struct swine_view *view) {
 	if (!con) {
 		return;
 	}
+	char *event = ipc_json_event_window("close", con);
+	platform_ipc_event((uint32_t)IPC_EVENT_WINDOW, event);
+	free(event);
 	view->executed_criteria->length = 0;
 	struct swine_container *parent = con->parent;
 	struct swine_workspace *ws = con->workspace;

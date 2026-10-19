@@ -6,10 +6,13 @@
 // Windows silently removes it, so matching is a table lookup and the command
 // itself runs later on the main thread via WM_SWINE_BINDING.
 #include <stdlib.h>
+#include "ipc.h"
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/config.h"
 #include "swinewm/input/keyboard.h"
+#include "swinewm/ipc-json.h"
+#include "swinewm/platform.h"
 #include "win32.h"
 
 // Unassigned virtual-key code used to "break" a lone Win/Alt press.
@@ -75,6 +78,9 @@ static void send_dummy_key(void) {
 }
 
 static void post_binding(struct swine_binding *binding) {
+	char *event = ipc_json_event_binding(binding, "keyboard");
+	platform_ipc_event((uint32_t)IPC_EVENT_BINDING, event);
+	free(event);
 	char *command = swine_strdup(binding->command);
 	if (!PostMessageW(win32_shell_hwnd, WM_SWINE_BINDING, 0, (LPARAM)command)) {
 		free(command);

@@ -14,6 +14,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+#include "ipc.h"
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/commands.h"
@@ -22,6 +23,7 @@
 #include "swinewm/input/cursor.h"
 #include "swinewm/input/keyboard.h"
 #include "swinewm/input/seat.h"
+#include "swinewm/ipc-json.h"
 #include "swinewm/platform.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/output.h"
@@ -196,6 +198,9 @@ static struct swine_binding *get_active_mouse_binding(uint32_t modifiers,
 }
 
 static void run_binding(struct swine_binding *binding) {
+	char *event = ipc_json_event_binding(binding, "mouse");
+	platform_ipc_event((uint32_t)IPC_EVENT_BINDING, event);
+	free(event);
 	platform_queue_command(binding->command);
 }
 

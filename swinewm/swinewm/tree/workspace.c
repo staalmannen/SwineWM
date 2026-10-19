@@ -3,10 +3,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "ipc.h"
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/config.h"
 #include "swinewm/input/seat.h"
+#include "swinewm/ipc-json.h"
+#include "swinewm/platform.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/output.h"
 #include "swinewm/tree/root.h"
@@ -109,6 +112,9 @@ struct swine_workspace *workspace_create(struct swine_output *output,
 
 	output_add_workspace(output, ws);
 	seat_node_created(&ws->node);
+	char *event = ipc_json_event_workspace("init", ws, NULL);
+	platform_ipc_event((uint32_t)IPC_EVENT_WORKSPACE, event);
+	free(event);
 	swine_log(SWINE_DEBUG, "Created workspace %s on %s", ws->name,
 		output->name);
 	return ws;
@@ -116,6 +122,9 @@ struct swine_workspace *workspace_create(struct swine_output *output,
 
 void workspace_destroy(struct swine_workspace *ws) {
 	swine_log(SWINE_DEBUG, "Destroying workspace %s", ws->name);
+	char *event = ipc_json_event_workspace("empty", NULL, ws);
+	platform_ipc_event((uint32_t)IPC_EVENT_WORKSPACE, event);
+	free(event);
 	if (ws->output) {
 		workspace_detach(ws);
 	}
@@ -451,6 +460,9 @@ void workspace_move_to_output(struct swine_workspace *ws,
 
 	output_sort_workspaces(output);
 	workspace_output_raise_priority(ws, old_output, output);
+	char *event = ipc_json_event_workspace("move", ws, NULL);
+	platform_ipc_event((uint32_t)IPC_EVENT_WORKSPACE, event);
+	free(event);
 }
 
 static void count_tiling_views(struct swine_container *con, void *data) {

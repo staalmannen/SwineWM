@@ -14,6 +14,8 @@
 #include "swinewm/tree/view.h"
 #include "swinewm/tree/workspace.h"
 
+static void write_container(struct json_writer *w, struct swine_container *con);
+
 static void write_rect(struct json_writer *w, const char *key,
 		const struct swine_box *box) {
 	json_key(w, key);
@@ -86,6 +88,29 @@ char *ipc_json_get_workspaces(void) {
 	return json_finish(&w);
 }
 
+char *ipc_json_event_workspace(const char *change,
+		struct swine_workspace *current, struct swine_workspace *old) {
+	struct json_writer w;
+	json_init(&w);
+	json_begin_object(&w);
+	json_key(&w, "change");
+	json_string(&w, change);
+	json_key(&w, "current");
+	if (current && current->output && current->output->enabled) {
+		write_workspace_summary(current, &w);
+	} else {
+		json_null(&w);
+	}
+	json_key(&w, "old");
+	if (old && old->output && old->output->enabled) {
+		write_workspace_summary(old, &w);
+	} else {
+		json_null(&w);
+	}
+	json_end_object(&w);
+	return json_finish(&w);
+}
+
 char *ipc_json_get_outputs(void) {
 	struct json_writer w;
 	json_init(&w);
@@ -142,6 +167,46 @@ char *ipc_json_get_outputs(void) {
 	return json_finish(&w);
 }
 
+char *ipc_json_event_window(const char *change, struct swine_container *con) {
+	struct json_writer w;
+	json_init(&w);
+	json_begin_object(&w);
+	json_key(&w, "change");
+	json_string(&w, change);
+	json_key(&w, "container");
+	if (con) {
+		write_container(&w, con);
+	} else {
+		json_null(&w);
+	}
+	json_end_object(&w);
+	return json_finish(&w);
+}
+
+char *ipc_json_event_mode(const char *change, const char *name) {
+	struct json_writer w;
+	json_init(&w);
+	json_begin_object(&w);
+	json_key(&w, "change");
+	json_string(&w, change);
+	json_key(&w, "pango_markup");
+	json_bool(&w, false);
+	json_key(&w, "name");
+	json_string(&w, name);
+	json_end_object(&w);
+	return json_finish(&w);
+}
+
+char *ipc_json_event_output(const char *change) {
+	struct json_writer w;
+	json_init(&w);
+	json_begin_object(&w);
+	json_key(&w, "change");
+	json_string(&w, change);
+	json_end_object(&w);
+	return json_finish(&w);
+}
+
 static void write_focus_list(struct json_writer *w, struct swine_node *node) {
 	// Children ids ordered by focus recency, like sway's "focus" array.
 	json_key(w, "focus");
@@ -154,8 +219,6 @@ static void write_focus_list(struct json_writer *w, struct swine_node *node) {
 	}
 	json_end_array(w);
 }
-
-static void write_container(struct json_writer *w, struct swine_container *con);
 
 static void write_container_list(struct json_writer *w, const char *key,
 		list_t *list) {
@@ -262,6 +325,45 @@ static void write_output(struct json_writer *w, struct swine_output *output) {
 	}
 	json_end_array(w);
 	json_end_object(w);
+}
+
+char *ipc_json_event_binding(const struct swine_binding *binding,
+		const char *event) {
+	static const uint32_t modifier_bits[] = {
+		SWINE_MOD_SHIFT, SWINE_MOD_CAPS, SWINE_MOD_CTRL, SWINE_MOD_ALT,
+		SWINE_MOD_MOD2, SWINE_MOD_MOD3, SWINE_MOD_LOGO, SWINE_MOD_MOD5,
+	};
+	struct json_writer w;
+	json_init(&w);
+	json_begin_object(&w);
+	json_key(&w, "change");
+	json_string(&w, "run");
+	json_key(&w, "binding");
+	json_begin_object(&w);
+	json_key(&w, "command");
+	json_string(&w, binding->command);
+	json_key(&w, "event_state_mask");
+	json_int(&w, 0);
+	json_key(&w, "input_code");
+	json_int(&w, binding->keycode);
+	json_key(&w, "symbol");
+	json_string(&w, strcmp(event, "keyboard") == 0 ?
+		keycode_to_name(binding->keycode) : NULL);
+	json_key(&w, "input_type");
+	json_string(&w, event);
+	json_key(&w, "input");
+	json_string(&w, binding->input);
+	json_key(&w, "mods");
+	json_begin_array(&w);
+	for (size_t i = 0; i < sizeof(modifier_bits) / sizeof(modifier_bits[0]); ++i) {
+		if (binding->modifiers & modifier_bits[i]) {
+			json_string(&w, get_modifier_name_by_mask(modifier_bits[i]));
+		}
+	}
+	json_end_array(&w);
+	json_end_object(&w);
+	json_end_object(&w);
+	return json_finish(&w);
 }
 
 char *ipc_json_get_tree(void) {

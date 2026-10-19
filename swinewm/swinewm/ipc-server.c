@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "ipc.h"
+#include "json.h"
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/commands.h"
@@ -11,6 +12,84 @@
 
 static char *simple_reply(bool success) {
 	return swine_strdup(success ? "{\"success\":true}" : "{\"success\":false}");
+}
+
+bool ipc_parse_subscriptions(const char *payload, uint32_t length,
+		uint32_t *subscriptions) {
+	char *text = swine_strndup(payload, length);
+	char *error = NULL;
+	struct json_value *value = json_parse(text, &error);
+	free(text);
+	free(error);
+	if (!value || value->type != JSON_ARRAY) {
+		json_value_free(value);
+		return false;
+	}
+	static const struct {
+		const char *name;
+		uint32_t subscription;
+	} event_names[] = {
+		{"workspace", IPC_SUB_WORKSPACE},
+		{"output", IPC_SUB_OUTPUT},
+		{"mode", IPC_SUB_MODE},
+		{"window", IPC_SUB_WINDOW},
+		{"barconfig_update", IPC_SUB_BARCONFIG_UPDATE},
+		{"binding", IPC_SUB_BINDING},
+		{"shutdown", IPC_SUB_SHUTDOWN},
+		{"tick", IPC_SUB_TICK},
+	};
+	uint32_t mask = 0;
+	bool valid = true;
+	for (int i = 0; i < value->items->length && valid; ++i) {
+		struct json_value *item = value->items->items[i];
+		if (item->type != JSON_STRING) {
+			valid = false;
+			break;
+		}
+		bool found = false;
+		for (size_t j = 0; j < sizeof(event_names) / sizeof(event_names[0]); ++j) {
+			if (strcmp(item->string, event_names[j].name) == 0) {
+				mask |= event_names[j].subscription;
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			valid = false;
+		}
+	}
+	json_value_free(value);
+	if (valid && subscriptions) {
+		*subscriptions = mask;
+	}
+	return valid;
+}
+
+char *ipc_json_tick_event(const char *payload, uint32_t length) {
+	char *text = swine_strndup(payload, length);
+	char *error = NULL;
+	struct json_value *value = json_parse(text, &error);
+	free(text);
+	free(error);
+	if (!value || value->type != JSON_OBJECT) {
+		json_value_free(value);
+		return NULL;
+	}
+	struct json_value *tick = json_object_get(value, "payload");
+	if (tick && tick->type != JSON_STRING) {
+		json_value_free(value);
+		return NULL;
+	}
+	struct json_writer w;
+	json_init(&w);
+	json_begin_object(&w);
+	json_key(&w, "first");
+	json_bool(&w, true);
+	json_key(&w, "payload");
+	json_string(&w, tick ? tick->string : "");
+	json_end_object(&w);
+	json_value_free(value);
+	return json_finish(&w);
 }
 
 char *ipc_handle_request(uint32_t type, const char *payload, uint32_t length,
@@ -55,12 +134,17 @@ char *ipc_handle_request(uint32_t type, const char *payload, uint32_t length,
 		return notify_list_json(notify_active());
 	case SWINE_IPC_GET_NOTIFICATION_HISTORY:
 		return notify_list_json(notify_history());
-	case IPC_SEND_TICK:
-		return simple_reply(true);
-	case IPC_SUBSCRIBE:
-		// Events are not implemented yet; tell the client so.
-		swine_log(SWINE_INFO, "IPC subscribe is not implemented yet");
-		return simple_reply(false);
+	case IPC_SEND_TICK: {
+		char *tick = ipc_json_tick_event(payload, length);
+		bool valid = tick != NULL;
+		free(tick);
+		return simple_reply(valid);
+	}
+	case IPC_SUBSCRIBE: {
+		uint32_t subscriptions;
+		return simple_reply(ipc_parse_subscriptions(payload, length,
+			&subscriptions));
+	}
 	case IPC_SYNC:
 		return simple_reply(false);
 	default:
