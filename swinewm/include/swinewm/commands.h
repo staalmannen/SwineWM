@@ -67,6 +67,7 @@ void free_cmd_results_list(list_t *res_list);
 char *cmd_results_to_json(list_t *res_list);
 
 swine_cmd cmd_bar;
+swine_cmd cmd_bindcode;
 swine_cmd cmd_bindsym;
 swine_cmd cmd_border;
 swine_cmd cmd_client_focused;
@@ -127,6 +128,7 @@ swine_cmd cmd_splitv;
 swine_cmd cmd_sticky;
 swine_cmd cmd_swap;
 swine_cmd cmd_unbindsym;
+swine_cmd cmd_unbindcode;
 swine_cmd cmd_unmark;
 swine_cmd cmd_urgent;
 swine_cmd cmd_workspace;

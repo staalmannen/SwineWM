@@ -7,10 +7,11 @@
 
 // Must be in order for the bsearch
 static const struct cmd_handler mode_handlers[] = {
-	{ "bindcode", cmd_ignored, 0 },
+	{ "bindcode", cmd_bindcode, 0 },
 	{ "bindgesture", cmd_ignored, 0 },
 	{ "bindswitch", cmd_ignored, 0 },
 	{ "bindsym", cmd_bindsym, 0 },
+	{ "unbindcode", cmd_unbindcode, 0 },
 	{ "unbindsym", cmd_unbindsym, 0 },
 };
 

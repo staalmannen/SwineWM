@@ -70,6 +70,7 @@ static void test_next_name(void) {
 	CHECK(config_lines(
 		"bindsym Mod4+1 workspace number 1:web\n"
 		"bindsym Mod4+2 workspace mail\n"
+		"bindsym Mod4+3 move container to workspace number 3:chat\n"
 		"workspace mail output DISPLAY2\n"
 		"workspace chat output DISPLAY3\n"));
 	// The first output got "1" before the bindings existed. A new output
@@ -78,6 +79,8 @@ static void test_next_name(void) {
 	CHECK_STR(((struct swine_workspace *)two->active_workspace)->name, "mail");
 	struct swine_output *three = fake_add_output("DISPLAY3", 2000, 0, 1000, 800);
 	CHECK_STR(three->active_workspace->name, "chat");
+	struct swine_output *four = fake_add_output("DISPLAY4", 3000, 0, 1000, 800);
+	CHECK_STR(four->active_workspace->name, "3:chat");
 	fake_teardown();
 }
 

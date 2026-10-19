@@ -87,7 +87,8 @@ static void test_every_command_is_found(void) {
 		"smart_borders", "smart_gaps", "split", "splith", "splitt", "splitv", "sticky", "swap",
 		"swaybg_command", "swaynag_command", "tiling_drag",
 		"tiling_drag_threshold", "title_align", "titlebar_border_thickness",
-		"titlebar_padding", "unbindsym", "unmark", "urgent", "workspace",
+		"titlebar_padding", "unbindcode", "unbindsym", "unmark", "urgent",
+		"workspace",
 		"workspace_auto_back_and_forth", "workspace_layout", "xwayland",
 	};
 	fake_setup();
