@@ -66,6 +66,7 @@ static void test_ipc(void) {
 	CHECK_STR(reply, "{\"name\":\"default\"}");
 	free(reply);
 
+	CHECK(run("workspace 1"));
 	fake.ipc_event_count = 0;
 	CHECK(run("workspace 5"));
 	CHECK(fake.ipc_event_count > 0);
