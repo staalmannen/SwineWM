@@ -271,18 +271,6 @@ static void test_include(void) {
 	fake_teardown();
 }
 
-static int count_swaynag(void) {
-	int count = 0;
-	list_t *active = notify_active();
-	for (int i = 0; i < active->length; ++i) {
-		struct swine_notification *n = active->items[i];
-		if (strcmp(n->category, "swaynag") == 0) {
-			count++;
-		}
-	}
-	return count;
-}
-
 static void test_swaynag(void) {
 	fake_setup();
 	config->active = false;
@@ -292,20 +280,19 @@ static void test_swaynag(void) {
 	config->active = true;
 	CHECK_INT(config->errors->length, 3);
 	swaynag_show_config_errors();
-	CHECK_INT(count_swaynag(), 1);
-	struct swine_notification *n = notify_active()->items[0];
-	CHECK(n->urgency == NOTIFY_URGENCY_CRITICAL);
-	CHECK(n->expire_ms == 0);
-	CHECK(strstr(n->body, "Error on line 1 (cfg) 'frobnicate'") != NULL);
-	CHECK(strstr(n->body, "Unclosed block") != NULL);
-	// Showing again replaces the message; a clean config removes it.
+	CHECK_INT(fake.swaynag_show_calls, 1);
+	CHECK(fake.swaynag_visible);
+	CHECK(strstr(fake.swaynag_details,
+		"Error on line 1 (cfg) 'frobnicate'") != NULL);
+	CHECK(strstr(fake.swaynag_details, "Unclosed block") != NULL);
 	swaynag_show_config_errors();
-	CHECK_INT(count_swaynag(), 1);
+	CHECK_INT(fake.swaynag_show_calls, 2);
+	CHECK(fake.swaynag_visible);
 	list_free_items_and_destroy(config->errors);
 	config->errors = create_list();
 	swaynag_show_config_errors();
-	CHECK_INT(count_swaynag(), 0);
-	notify_dismiss_all(false);
+	CHECK_INT(fake.swaynag_show_calls, 3);
+	CHECK(!fake.swaynag_visible);
 	fake_teardown();
 }
 

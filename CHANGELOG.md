@@ -10,6 +10,8 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- A native config-error nag window with the complete error list and reload
+  and dismiss actions.
 - IPC `SUBSCRIBE` support for workspace, window, mode, output, binding,
   bar-config, shutdown and tick events; `SEND_TICK` now broadcasts its tick
   payload.

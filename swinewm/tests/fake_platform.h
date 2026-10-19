@@ -48,6 +48,9 @@ struct fake_platform_state {
 	uint32_t ipc_last_event_type;
 	uint32_t ipc_input_capabilities;
 	char ipc_last_event[512];
+	int swaynag_show_calls;
+	bool swaynag_visible;
+	char swaynag_details[2048];
 };
 
 extern struct fake_platform_state fake;
