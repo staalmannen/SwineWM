@@ -63,6 +63,8 @@ void platform_view_set_decoration(struct swine_view *view,
 		const struct view_decoration *deco);
 // Requests foreground activation. Windows may refuse; the result says so.
 bool platform_view_activate(struct swine_view *view);
+// True when the view owns a visible, managed window that should stay above it.
+bool platform_view_has_visible_owned_window(struct swine_view *view);
 void platform_view_close(struct swine_view *view);
 
 // Runs a command line on the main loop soon (a mouse binding: the input

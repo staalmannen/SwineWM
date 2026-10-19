@@ -12,6 +12,7 @@ struct fake_platform_state {
 	int geometry_calls;
 	int visibility_calls;
 	int activate_calls;
+	bool has_visible_owned_window;
 	int close_calls;
 	int spawn_calls;
 	bool quit;

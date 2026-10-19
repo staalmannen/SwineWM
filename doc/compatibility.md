@@ -64,7 +64,7 @@ ignored · ❌ not implemented (error)
 | `gaps <type> all\|current set\|plus\|minus\|toggle <n>` | ✅ | Runtime |
 | `default_orientation`, `workspace_layout` | ✅ | |
 | `focus_wrapping` | ✅ | |
-| `focus_follows_mouse yes\|no\|always` | ✅ | Port of sway's `seatop_default.c`. Not while a mouse button is held, and never away from a window swinewm does not manage that has the focus (a menu, a launcher, a dialog it leaves alone) |
+| `focus_follows_mouse yes\|no\|always` | ✅ | Port of sway's `seatop_default.c`. Not while a mouse button is held, and never away from a window swinewm does not manage that has the focus (a menu or launcher); it also keeps a visible owned dialog focused instead of activating its owner underneath it |
 | `floating_modifier <mod> [normal\|inverse]` | ✅ | $mod + left button moves floating windows and drags tiled ones (`tiling_drag`), $mod + right button resizes either, from the nearest corner; Shift keeps the aspect ratio of a floating window. A click with the modifier never reaches the window, and Win released after it does not open the Start menu |
 | `tiling_drag enable\|disable\|toggle`, `tiling_drag_threshold <px>` | ✅ | Drop zones as in sway, shown with a translucent rectangle; dropped on a window's middle the two swap. Dragging by title bar waits for the threshold |
 | `mouse_warping output\|container\|none` | ✅ | After `focus` commands and `move workspace to output`, as in sway |
