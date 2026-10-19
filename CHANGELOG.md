@@ -29,6 +29,8 @@ the MSI and zip with the matching section below as release notes.
 
 ### Fixed
 
+- Newly mapped floating windows are raised above their parent without
+  activating them, so owned dialogs do not remain obscured.
 - Gap values are range-checked and cannot overflow layout geometry.
 - Display and DPI changes are coalesced before outputs, window layout, bars
   and wallpaper are refreshed, including DPI notifications received by bars.
