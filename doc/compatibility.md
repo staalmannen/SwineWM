@@ -221,7 +221,7 @@ same cause.
 | `GET_NOTIFICATIONS` (1000), `GET_NOTIFICATION_HISTORY` (1001) | ✅ swinewm extensions |
 | `IPC_SYNC` | ✅ Returns the unsupported response, as sway does |
 | `SEND_TICK` | ✅ replies success and broadcasts a tick event |
-| `SUBSCRIBE` and events | 🟡 Validates subscriptions and streams events asynchronously; workspace focus/init/empty/move, window new/close/focus/title, mode, output, binding, barconfig, shutdown and tick are covered. Window move/fullscreen and workspace rename/urgent changes are not yet emitted |
+| `SUBSCRIBE` and events | 🟡 Validates subscriptions and streams events asynchronously; workspace focus/init/empty/move/rename/urgent, window new/close/focus/title/move/fullscreen_mode, mode, output, binding, barconfig, shutdown and tick are covered. Some sway event types and state changes remain unimplemented |
 | Watchdog | ✅ A companion process probes the manager's hidden window and process. After three missed probes it terminates an unresponsive manager and runs `--recover`; an unexpected exit also runs recovery. If SwineWM is the login shell, it starts Explorer afterward |
 
 `get_tree` reports native window properties as `app_id` (the executable

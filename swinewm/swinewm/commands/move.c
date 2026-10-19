@@ -1,11 +1,14 @@
 #include <stdlib.h>
 #include <string.h>
+#include "ipc.h"
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/commands.h"
 #include "swinewm/commands_util.h"
 #include "swinewm/config.h"
 #include "swinewm/input/seat.h"
+#include "swinewm/ipc-json.h"
+#include "swinewm/platform.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/output.h"
 #include "swinewm/tree/root.h"
@@ -22,6 +25,12 @@ static const char expected_syntax[] =
 
 static void reset_fractions(struct swine_container *con) {
 	con->width_fraction = con->height_fraction = 0;
+}
+
+static void emit_move_event(struct swine_container *con) {
+	char *event = ipc_json_event_window("move", con);
+	platform_ipc_event((uint32_t)IPC_EVENT_WINDOW, event);
+	free(event);
 }
 
 static void container_move_to_container_from_direction(
@@ -300,6 +309,7 @@ static struct cmd_results *cmd_move_in_direction(enum swine_direction direction,
 	} else if (old_ws) {
 		workspace_consider_destroy(old_ws);
 	}
+	emit_move_event(container);
 	// Moving to another output makes that output's workspace the focused one
 	seat_set_focus_container(container);
 	return cmd_results_new(CMD_SUCCESS, NULL);
@@ -343,6 +353,8 @@ static struct cmd_results *cmd_move_container(bool no_auto_back_and_forth,
 
 	struct swine_container *old_parent = container->parent;
 	struct swine_workspace *old_ws = container->workspace;
+	int old_index = container_sibling_index(container);
+	bool old_floating = container_is_floating(container);
 	struct swine_output *old_output = old_ws ? old_ws->output : NULL;
 	struct swine_node *destination = NULL;
 
@@ -483,6 +495,11 @@ static struct cmd_results *cmd_move_container(bool no_auto_back_and_forth,
 	} else if (old_ws) {
 		workspace_consider_destroy(old_ws);
 	}
+	if (old_parent != container->parent || old_ws != container->workspace ||
+			old_index != container_sibling_index(container) ||
+			old_floating != container_is_floating(container)) {
+		emit_move_event(container);
+	}
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 
@@ -507,10 +524,14 @@ static struct cmd_results *cmd_move_to_scratchpad(void) {
 	if (container_is_floating_or_child(con)) {
 		con = container_toplevel_ancestor(con);
 	}
+	struct swine_workspace *old_ws = con->workspace;
 	if (!con->scratchpad) {
 		root_scratchpad_add_container(con);
 	} else if (con->workspace) {
 		root_scratchpad_hide(con);
+	}
+	if (old_ws != con->workspace) {
+		emit_move_event(con);
 	}
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }

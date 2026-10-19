@@ -573,9 +573,15 @@ static void find_urgent(struct swine_container *con, void *data) {
 }
 
 void workspace_detect_urgent(struct swine_workspace *ws) {
+	bool was_urgent = ws->urgent;
 	bool urgent = false;
 	workspace_for_each_container(ws, find_urgent, &urgent);
 	ws->urgent = urgent;
+	if (was_urgent != urgent) {
+		char *event = ipc_json_event_workspace("urgent", ws, NULL);
+		platform_ipc_event((uint32_t)IPC_EVENT_WORKSPACE, event);
+		free(event);
+	}
 }
 
 bool workspace_is_empty(struct swine_workspace *ws) {

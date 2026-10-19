@@ -1,9 +1,12 @@
 #include <stdlib.h>
 #include <string.h>
+#include "ipc.h"
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/config.h"
+#include "swinewm/ipc-json.h"
 #include "swinewm/input/seat.h"
+#include "swinewm/platform.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/output.h"
 #include "swinewm/tree/root.h"
@@ -52,6 +55,12 @@ void container_destroy(struct swine_container *con) {
 static void set_workspace(struct swine_container *con, void *data) {
 	(void)data;
 	con->workspace = con->parent ? con->parent->workspace : NULL;
+}
+
+static void emit_fullscreen_event(struct swine_container *con) {
+	char *event = ipc_json_event_window("fullscreen_mode", con);
+	platform_ipc_event((uint32_t)IPC_EVENT_WINDOW, event);
+	free(event);
 }
 
 void container_for_each_child(struct swine_container *con,
@@ -405,6 +414,9 @@ void container_floating_move_to(struct swine_container *con, int x, int y) {
 			workspace_detect_urgent(old_workspace);
 		}
 		workspace_detect_urgent(new_workspace);
+		char *event = ipc_json_event_window("move", con);
+		platform_ipc_event((uint32_t)IPC_EVENT_WINDOW, event);
+		free(event);
 	}
 }
 
@@ -474,6 +486,7 @@ void container_set_floating(struct swine_container *con, bool enable) {
 void container_set_fullscreen(struct swine_container *con,
 		enum swine_fullscreen_mode mode) {
 	struct swine_workspace *ws = con->workspace;
+	bool changed = con->fullscreen_mode != mode;
 	if (mode == FULLSCREEN_GLOBAL) {
 		// Spanning every monitor is not supported yet; treat it like the
 		// per-output fullscreen that sway calls "workspace" fullscreen.
@@ -484,15 +497,27 @@ void container_set_fullscreen(struct swine_container *con,
 			ws->fullscreen = NULL;
 		}
 		con->fullscreen_mode = FULLSCREEN_NONE;
+		if (changed) {
+			emit_fullscreen_event(con);
+		}
 		return;
 	}
 	if (ws) {
 		if (ws->fullscreen && ws->fullscreen != con) {
-			ws->fullscreen->fullscreen_mode = FULLSCREEN_NONE;
+			struct swine_container *previous = ws->fullscreen;
+			bool previous_changed =
+				previous->fullscreen_mode != FULLSCREEN_NONE;
+			previous->fullscreen_mode = FULLSCREEN_NONE;
+			if (previous_changed) {
+				emit_fullscreen_event(previous);
+			}
 		}
 		ws->fullscreen = con;
 	}
 	con->fullscreen_mode = mode;
+	if (changed) {
+		emit_fullscreen_event(con);
+	}
 }
 
 static bool find_by_mark_iterator(struct swine_container *con, void *data) {
