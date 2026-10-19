@@ -8,9 +8,10 @@
 #include "swinewm/input/keyboard.h"
 
 // Parses "Mod4+Shift+q" into modifiers and a key code, or "Mod4+button3"
-// into modifiers and a mouse button (*mouse set).
+// into modifiers and a mouse button (*mouse set). bindcode uses decimal
+// Windows virtual-key values instead of key names.
 static struct cmd_results *parse_combo(const char *combo, uint32_t *modifiers,
-		uint32_t *keycode, bool *mouse) {
+		uint32_t *keycode, bool *mouse, bool by_code) {
 	*modifiers = 0;
 	*mouse = false;
 	bool have_key = false;
@@ -27,6 +28,18 @@ static struct cmd_results *parse_combo(const char *combo, uint32_t *modifiers,
 			error = cmd_results_new(CMD_INVALID,
 				"Only one key may be bound in '%s'", combo);
 			break;
+		}
+		if (by_code) {
+			char *end = NULL;
+			unsigned long value = strtoul(part, &end, 10);
+			if (end == part || *end || value == 0 || value > 0xFF) {
+				error = cmd_results_new(CMD_INVALID,
+					"Invalid virtual-key code '%s' in '%s'", part, combo);
+				break;
+			}
+			*keycode = (uint32_t)value;
+			have_key = true;
+			continue;
 		}
 		char *button_error = NULL;
 		uint32_t button = get_mouse_button(part, &button_error);
@@ -66,8 +79,10 @@ static int find_binding(list_t *bindings, struct swine_binding *needle) {
 }
 
 static struct cmd_results *cmd_bindsym_or_unbind(int argc, char **argv,
-		bool unbind) {
-	const char *name = unbind ? "unbindsym" : "bindsym";
+		bool unbind, bool by_code) {
+	const char *name = by_code ?
+		(unbind ? "unbindcode" : "bindcode") :
+		(unbind ? "unbindsym" : "bindsym");
 	struct cmd_results *error = NULL;
 	if ((error = checkarg(argc, name, EXPECTED_AT_LEAST, unbind ? 1 : 2))) {
 		return error;
@@ -76,6 +91,13 @@ static struct cmd_results *cmd_bindsym_or_unbind(int argc, char **argv,
 	struct swine_binding *binding = calloc(1, sizeof(*binding));
 	bool exclude_titlebar = false;
 	while (argc > 0 && has_prefix(argv[0], "--")) {
+		if (by_code && (strcmp(argv[0], "--whole-window") == 0 ||
+				strcmp(argv[0], "--border") == 0 ||
+				strcmp(argv[0], "--exclude-titlebar") == 0)) {
+			free_swine_binding(binding);
+			return cmd_results_new(CMD_INVALID,
+				"Invalid %s flag '%s'", name, argv[0]);
+		}
 		if (strcmp(argv[0], "--release") == 0) {
 			binding->flags |= BINDING_RELEASE;
 		} else if (strcmp(argv[0], "--locked") == 0) {
@@ -109,7 +131,7 @@ static struct cmd_results *cmd_bindsym_or_unbind(int argc, char **argv,
 
 	bool mouse = false;
 	if ((error = parse_combo(argv[0], &binding->modifiers, &binding->keycode,
-			&mouse))) {
+			&mouse, by_code))) {
 		free_swine_binding(binding);
 		return error;
 	}
@@ -157,9 +179,17 @@ static struct cmd_results *cmd_bindsym_or_unbind(int argc, char **argv,
 }
 
 struct cmd_results *cmd_bindsym(int argc, char **argv) {
-	return cmd_bindsym_or_unbind(argc, argv, false);
+	return cmd_bindsym_or_unbind(argc, argv, false, false);
 }
 
 struct cmd_results *cmd_unbindsym(int argc, char **argv) {
-	return cmd_bindsym_or_unbind(argc, argv, true);
+	return cmd_bindsym_or_unbind(argc, argv, true, false);
+}
+
+struct cmd_results *cmd_bindcode(int argc, char **argv) {
+	return cmd_bindsym_or_unbind(argc, argv, false, true);
+}
+
+struct cmd_results *cmd_unbindcode(int argc, char **argv) {
+	return cmd_bindsym_or_unbind(argc, argv, true, true);
 }

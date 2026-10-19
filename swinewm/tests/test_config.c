@@ -33,6 +33,7 @@ static void test_variables_and_bindings(void) {
 		"set $term wt.exe\n"
 		"bindsym $mod+Return exec $term\n"
 		"bindsym $mod_shift+q kill\n"
+		"bindcode Mod4+65 exec code-bound\n"
 		"bindsym $mod+1 workspace \\\n"
 		"    number 1\n";
 	CHECK(read_inactive(text));
@@ -51,9 +52,19 @@ static void test_variables_and_bindings(void) {
 	if (b) {
 		CHECK_STR(b->command, "workspace number 1");
 	}
+	b = keyboard_find_binding(SWINE_MOD_LOGO, 65, false);
+	CHECK(b != NULL);
+	if (b) {
+		CHECK_STR(b->command, "exec code-bound");
+	}
 	// Caps Lock does not prevent a match; extra modifiers do.
 	CHECK(keyboard_find_binding(SWINE_MOD_LOGO | SWINE_MOD_CAPS, 0x0D, false));
 	CHECK(!keyboard_find_binding(SWINE_MOD_LOGO | SWINE_MOD_CTRL, 0x0D, false));
+	CHECK(!run("bindcode Mod4+256 nop"));
+	CHECK(!run("bindcode Mod4+65x nop"));
+	CHECK(!run("bindcode --whole-window Mod4+65 nop"));
+	CHECK(run("unbindcode Mod4+65"));
+	CHECK(!keyboard_find_binding(SWINE_MOD_LOGO, 65, false));
 	fake_teardown();
 }
 
@@ -62,6 +73,7 @@ static void test_modes_and_blocks(void) {
 	const char *text =
 		"mode \"resize\" {\n"
 		"    bindsym Left resize shrink width 10px\n"
+		"    bindcode 65 exec code-bound\n"
 		"    bindsym Return mode \"default\"\n"
 		"}\n"
 		"bindsym Mod4+r mode \"resize\"\n"
@@ -76,7 +88,7 @@ static void test_modes_and_blocks(void) {
 	struct swine_mode *resize = config_find_mode("resize");
 	CHECK(resize != NULL);
 	if (resize) {
-		CHECK_INT(resize->keysym_bindings->length, 2);
+		CHECK_INT(resize->keysym_bindings->length, 3);
 	}
 	CHECK(keyboard_find_binding(0, 0x25, false) == NULL);
 	CHECK(run("mode resize"));
@@ -85,6 +97,11 @@ static void test_modes_and_blocks(void) {
 	CHECK(b != NULL);
 	if (b) {
 		CHECK_STR(b->command, "resize shrink width 10px");
+	}
+	b = keyboard_find_binding(0, 65, false);
+	CHECK(b != NULL);
+	if (b) {
+		CHECK_STR(b->command, "exec code-bound");
 	}
 	CHECK(run("mode default"));
 	CHECK_STR(config->current_mode->name, "default");

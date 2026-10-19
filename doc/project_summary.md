@@ -142,7 +142,8 @@ What an existing sway config needs to load and behave.
 ### 0.3.0 — mouse and decorations (released)
 
 - `focus_follows_mouse`, `mouse_warping`, `floating_modifier` drag and
-  resize, mouse `bindsym` (button and wheel; `bindcode` is left for later).
+  resize, mouse `bindsym` (button and wheel), and `bindcode` with numeric
+  Windows virtual-key values.
 - Title bars for tabbed/stacked containers (clickable tabs), focus
   borders and `client.*` colours, `default_border`, `title_format`,
   `hide_edge_borders`, `smart_borders`. Borders through DWM's own border

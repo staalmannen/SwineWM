@@ -219,22 +219,45 @@ static bool workspace_valid_on_output(struct swine_output *output,
 	return false;
 }
 
+static char *workspace_target_from_binding_command(char *command) {
+	char *cmd = argsep(&command, " ", NULL);
+	if (!cmd || !command) {
+		return NULL;
+	}
+	if (strcmp(cmd, "workspace") == 0) {
+		return argsep(&command, ",;", NULL);
+	}
+	if (strcmp(cmd, "move") != 0) {
+		return NULL;
+	}
+
+	char *arg = argsep(&command, " ", NULL);
+	if (!arg) {
+		return NULL;
+	}
+	if (strcmp(arg, "container") == 0 || strcmp(arg, "window") == 0) {
+		arg = argsep(&command, " ", NULL);
+		if (!arg || strcmp(arg, "to") != 0) {
+			return NULL;
+		}
+	} else if (strcmp(arg, "to") != 0) {
+		return NULL;
+	}
+	arg = argsep(&command, " ", NULL);
+	if (!arg || strcmp(arg, "workspace") != 0) {
+		return NULL;
+	}
+	return argsep(&command, ",;", NULL);
+}
+
 // Ported from sway/tree/workspace.c.
 static void workspace_name_from_binding(const struct swine_binding *binding,
 		struct swine_output *output, int *min_order, char **earliest_name) {
 	char *cmdlist = swine_strdup(binding->command);
 	char *dup = cmdlist;
-	char *name = NULL;
+	char *name = workspace_target_from_binding_command(cmdlist);
 
-	// workspace n
-	char *cmd = argsep(&cmdlist, " ", NULL);
-	if (cmdlist) {
-		name = argsep(&cmdlist, ",;", NULL);
-	}
-
-	// TODO: support "move container to workspace" bindings as well
-
-	if (strcmp("workspace", cmd) == 0 && name) {
+	if (name && *name) {
 		char *target = swine_strdup(name);
 		target = do_var_replacement(target);
 		strip_quotes(target);

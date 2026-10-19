@@ -8,6 +8,13 @@ the MSI and zip with the matching section below as release notes.
 
 ## [Unreleased]
 
+### Added
+
+- `bindcode` and `unbindcode` accept numeric Windows virtual-key values
+  (decimal, 1–255), so key bindings can be specified by code.
+- New-output workspace discovery recognizes `move container to workspace`
+  bindings as well as `workspace` bindings.
+
 ### Fixed
 
 - Gap values are range-checked and cannot overflow layout geometry.
