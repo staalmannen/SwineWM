@@ -8,6 +8,8 @@
 #include "swinewm/config.h"
 #include "swinewm/ipc-server.h"
 #include "swinewm/notify.h"
+#include "swinewm/server.h"
+#include "swinewm/tree/view.h"
 #include "test.h"
 
 static void test_chains_and_errors(void) {
@@ -95,6 +97,32 @@ static void test_ipc(void) {
 	CHECK(fake.ipc_event_count > 0);
 	CHECK_INT(fake.ipc_last_event_type, (uint32_t)IPC_EVENT_WORKSPACE);
 	CHECK(strstr(fake.ipc_last_event, "\"change\":\"focus\"") != NULL);
+
+	CHECK(run("workspace 1"));
+	fake.ipc_event_count = 0;
+	CHECK(run("move container to workspace 5"));
+	CHECK_INT(fake.ipc_last_event_type, (uint32_t)IPC_EVENT_WINDOW);
+	CHECK(strstr(fake.ipc_last_event, "\"change\":\"move\"") != NULL);
+
+	fake.ipc_event_count = 0;
+	CHECK(run("rename workspace to renamed"));
+	CHECK_INT(fake.ipc_last_event_type, (uint32_t)IPC_EVENT_WORKSPACE);
+	CHECK(strstr(fake.ipc_last_event, "\"change\":\"rename\"") != NULL);
+	CHECK(strstr(fake.ipc_last_event, "\"name\":\"renamed\"") != NULL);
+
+	struct swine_view *first_view = server.views->items[0];
+	fake_map_view("urgent");
+	fake.ipc_event_count = 0;
+	view_set_urgent(first_view, true);
+	CHECK_INT(fake.ipc_last_event_type, (uint32_t)IPC_EVENT_WORKSPACE);
+	CHECK(strstr(fake.ipc_last_event, "\"change\":\"urgent\"") != NULL);
+	CHECK(strstr(fake.ipc_last_event, "\"urgent\":true") != NULL);
+
+	fake.ipc_event_count = 0;
+	CHECK(run("fullscreen"));
+	CHECK_INT(fake.ipc_last_event_type, (uint32_t)IPC_EVENT_WINDOW);
+	CHECK(strstr(fake.ipc_last_event,
+		"\"change\":\"fullscreen_mode\"") != NULL);
 
 	const char *subscribe = "[\"workspace\",\"tick\",\"binding\"]";
 	uint32_t subscriptions = 0;

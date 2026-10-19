@@ -2,10 +2,13 @@
 // Drew DeVault).
 #include <ctype.h>
 #include <stdlib.h>
+#include "ipc.h"
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
+#include "swinewm/ipc-json.h"
+#include "swinewm/platform.h"
 #include "swinewm/tree/output.h"
 #include "swinewm/tree/root.h"
 #include "swinewm/tree/workspace.h"
@@ -95,6 +98,9 @@ struct cmd_results *cmd_rename(int argc, char **argv) {
 	workspace->name = new_name;
 
 	output_sort_workspaces(workspace->output);
+	char *event = ipc_json_event_workspace("rename", workspace, NULL);
+	platform_ipc_event((uint32_t)IPC_EVENT_WORKSPACE, event);
+	free(event);
 
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }

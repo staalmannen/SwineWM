@@ -667,6 +667,9 @@ static void move_tiling_finalize(void) {
 	}
 	seat_set_focus_container(con->view ? con :
 		seat_get_focus_inactive_view(&con->node));
+	char *event = ipc_json_event_window("move", con);
+	platform_ipc_event((uint32_t)IPC_EVENT_WINDOW, event);
+	free(event);
 	transaction_commit_dirty();
 }
 

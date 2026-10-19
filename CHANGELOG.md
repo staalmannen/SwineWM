@@ -15,6 +15,8 @@ the MSI and zip with the matching section below as release notes.
   payload.
 - IPC `GET_INPUTS` and `GET_SEATS` now describe SwineWM's aggregate keyboard
   and pointer hooks and its single seat.
+- IPC subscriptions now report window move/fullscreen changes and workspace
+  rename/urgency changes.
 - A companion watchdog restores hidden windows after an unexpected exit or
   after the manager's message loop stops responding; as the login shell it
   also starts Explorer after recovery.
