@@ -27,6 +27,12 @@ void fake_reset(void) {
 	fake.ipc_input_capabilities =
 		PLATFORM_IPC_INPUT_KEYBOARD | PLATFORM_IPC_INPUT_POINTER;
 }
+void platform_swaynag_show(const char *details) {
+	fake.swaynag_show_calls++;
+	fake.swaynag_visible = details != NULL;
+	snprintf(fake.swaynag_details, sizeof(fake.swaynag_details), "%s",
+		details ? details : "");
+}
 
 void platform_setup_environment(void) {}
 void platform_set_shell_mode(int mode) { (void)mode; }

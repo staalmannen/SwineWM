@@ -70,6 +70,10 @@ void win32_watch_signal_exit(void);
 void win32_watch_finish(void);
 bool win32_watch_responsible(void);
 
+// swaynag.c
+void win32_swaynag_show(const char *details);
+void win32_swaynag_finish(void);
+
 // Explorer's own taskbar window, skipping swinewm's Shell_TrayWnd.
 HWND win32_find_explorer_tray(void);
 

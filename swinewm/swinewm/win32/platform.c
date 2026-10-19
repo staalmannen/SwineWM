@@ -233,6 +233,10 @@ void platform_ui_refresh(void) {
 	}
 }
 
+void platform_swaynag_show(const char *details) {
+	win32_swaynag_show(details);
+}
+
 long long platform_now_ms(void) {
 	return (long long)GetTickCount64();
 }
@@ -313,6 +317,7 @@ void platform_finish(void) {
 	win32_titlebars_finish();
 	win32_bar_finish();
 	win32_notify_finish();
+	win32_swaynag_finish();
 	win32_wallpaper_finish();
 	win32_outputs_finish();
 	win32_recover_display_done();

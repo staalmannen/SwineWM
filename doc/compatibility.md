@@ -18,7 +18,7 @@ ignored · ❌ not implemented (error)
 | Blocks (`mode "x" { }`, `bar { }`, `input … { }`) | ✅ | Lines are prefixed with the block header, as in sway |
 | `set $var value`, `$var` replacement | ✅ | Longest variable name wins; `$$` escapes |
 | `include <path>` | ✅ | Relative to the including file; `~` and `%VAR%` expanded; wildcards (`*`, `?`, `[…]`) in the file name, matched in sorted order and ignoring case; each file at most once; a missing file is not an error (as in sway) |
-| Config errors (swaynag) | ✅ | Shown as a critical notification of the built-in mako ("There are errors in your config file" with the first errors); it stays until dismissed and goes away after a reload without errors. `swaynag_command` is ignored |
+| Config errors (swaynag) | ✅ | Shown in a persistent native window with the full error list and Reload config/Dismiss buttons; it goes away after a reload without errors. `swaynag_command` is ignored |
 | `exec` / `exec_always` deferral | ✅ | Run after the config is read; `exec` is skipped on reload |
 | `swinewm -C` (validate config) | ✅ | |
 | UTF-8 paths and BOM | ✅ | |

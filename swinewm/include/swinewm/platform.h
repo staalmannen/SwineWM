@@ -113,6 +113,8 @@ void platform_set_windows_theme(int mode);
 void platform_config_changed(void);
 // The bar or notifications need repainting (called after every commit).
 void platform_ui_refresh(void);
+// Shows persistent config errors in the native nag UI; NULL hides it.
+void platform_swaynag_show(const char *details);
 // Milliseconds on a monotonic clock, for notification timeouts.
 long long platform_now_ms(void);
 // Shows windows left hidden by a previous instance that did not exit

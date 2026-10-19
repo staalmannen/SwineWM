@@ -72,7 +72,7 @@ follows the Linux programs, so existing files keep working:
 | `mako` | built-in notifications | mako's `config` | Draft working |
 | `notify-send`, `makoctl` | swinewm commands (also via `exec` and `swinemsg`) | — | Draft working |
 | `swaymsg` | `swinemsg.exe` | — | Draft working |
-| `swaynag` | — | — | Later, likely built in as well |
+| `swaynag` | Native config-error nag window | — | Persistent error details with reload and dismiss actions |
 | `wofi`/`wmenu` | `swinemenu.exe`, a separate small program, the default `$menu` | — (colours and font from the bar, over `get_bar_config`) | Draft working: drun (Start menu and Store apps), run (PATH) and dmenu modes; the choice is started by swinewm over IPC |
 
 The code still keeps the parts apart: [`../swinewm/swinewm/bar/`](../swinewm/swinewm/bar/)
@@ -137,7 +137,7 @@ What an existing sway config needs to load and behave.
 - Outputs: `output <name> position|resolution|scale|transform` (through
   `ChangeDisplaySettingsEx`, where Windows allows), `workspace … output …`,
   `move workspace to output`, `focus output`, monitor hot-plug.
-- `include` with glob patterns; a swaynag equivalent for config errors.
+- `include` with glob patterns; a native swaynag-style config-error window.
 
 ### 0.3.0 — mouse and decorations (released)
 
