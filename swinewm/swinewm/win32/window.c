@@ -227,6 +227,13 @@ static struct swine_view *create_view(HWND hwnd) {
 static void map_view(struct swine_view *view) {
 	view->natural = visible_rect(view->handle);
 	view_map(view);
+	if (view->container && container_is_floating(view->container) &&
+			!SetWindowPos(view->handle, HWND_TOP, 0, 0, 0, 0,
+				SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE |
+				SWP_ASYNCWINDOWPOS)) {
+		swine_log(SWINE_DEBUG, "Unable to raise new floating window '%s'",
+			view->title ? view->title : "");
+	}
 	swine_log(SWINE_INFO, "Managing '%s' (%s, %s)%s", view->title,
 		view->app_id ? view->app_id : "?", view->class_name,
 		view->natural_floating ? " floating" : "");

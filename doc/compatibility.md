@@ -109,7 +109,7 @@ sway's tokens and what they match here. Values are regular expressions
 | `class` | The window class (case-sensitive) | `[class="MozillaWindowClass"]` |
 | `title` | The window title (case-sensitive; `(?i)` for ignoring case) | `[title="(?i)picture-in-picture"]` |
 | `shell` | Always `native` | |
-| `window_type` | `normal` (tiled by default) or `dialog` (dialogs, fixed-size windows); other types never match | |
+| `window_type` | `normal` (tiled by default) or `dialog` (dialogs, fixed-size windows); other types never match | Newly mapped floating windows are raised without stealing focus, keeping owned dialogs above their parent |
 | `id` | The window handle (HWND) as a decimal number | |
 | `pid`, `con_id`, `con_mark`, `workspace`, `floating`, `tiling`, `urgent=first\|latest…`, `all` | As in sway | |
 | `window_role`, `sandbox_engine`, `sandbox_app_id`, `sandbox_instance_id`, `tag` | Never match (Windows has none of these) | |
