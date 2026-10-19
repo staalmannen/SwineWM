@@ -426,6 +426,78 @@ char *ipc_json_get_binding_state(void) {
 	return json_finish(&w);
 }
 
+static void write_input(struct json_writer *w, const char *identifier,
+		const char *name, const char *type) {
+	json_begin_object(w);
+	json_key(w, "identifier");
+	json_string(w, identifier);
+	json_key(w, "name");
+	json_string(w, name);
+	json_key(w, "vendor");
+	json_int(w, 0);
+	json_key(w, "product");
+	json_int(w, 0);
+	json_key(w, "type");
+	json_string(w, type);
+	if (strcmp(type, "keyboard") == 0) {
+		json_key(w, "xkb_layout_names");
+		json_begin_array(w);
+		json_end_array(w);
+	}
+	json_end_object(w);
+}
+
+char *ipc_json_get_inputs(void) {
+	uint32_t capabilities = platform_ipc_input_capabilities();
+	struct json_writer w;
+	json_init(&w);
+	json_begin_array(&w);
+	if (capabilities & PLATFORM_IPC_INPUT_KEYBOARD) {
+		write_input(&w, "swinewm:keyboard",
+			"Windows keyboard hook", "keyboard");
+	}
+	if (capabilities & PLATFORM_IPC_INPUT_POINTER) {
+		write_input(&w, "swinewm:mouse", "Windows mouse hook", "pointer");
+	}
+	json_end_array(&w);
+	return json_finish(&w);
+}
+
+char *ipc_json_get_seats(void) {
+	struct swine_node *focus = seat_get_focus();
+	uint32_t capabilities = platform_ipc_input_capabilities();
+	int seat_capabilities = 0;
+	if (capabilities & PLATFORM_IPC_INPUT_POINTER) {
+		seat_capabilities |= 1;
+	}
+	if (capabilities & PLATFORM_IPC_INPUT_KEYBOARD) {
+		seat_capabilities |= 2;
+	}
+	struct json_writer w;
+	json_init(&w);
+	json_begin_array(&w);
+	json_begin_object(&w);
+	json_key(&w, "name");
+	json_string(&w, "seat0");
+	json_key(&w, "capabilities");
+	json_int(&w, seat_capabilities);
+	json_key(&w, "focus");
+	json_int(&w, focus ? (long long)focus->id : 0);
+	json_key(&w, "devices");
+	json_begin_array(&w);
+	if (capabilities & PLATFORM_IPC_INPUT_KEYBOARD) {
+		write_input(&w, "swinewm:keyboard",
+			"Windows keyboard hook", "keyboard");
+	}
+	if (capabilities & PLATFORM_IPC_INPUT_POINTER) {
+		write_input(&w, "swinewm:mouse", "Windows mouse hook", "pointer");
+	}
+	json_end_array(&w);
+	json_end_object(&w);
+	json_end_array(&w);
+	return json_finish(&w);
+}
+
 char *ipc_json_get_config(void) {
 	struct json_writer w;
 	json_init(&w);

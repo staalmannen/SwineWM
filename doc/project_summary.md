@@ -157,10 +157,10 @@ What an existing sway config needs to load and behave.
 - `SUBSCRIBE` with workspace, window, mode, output, binding, shutdown and
   tick events, matching sway-ipc(7), so i3/sway IPC libraries and scripts
   (autotiling, workspace renamers) work against the pipe.
-- `get_marks`, `get_binding_state`, `get_seats` and the remaining replies.
-- A watchdog (`swinewm --watch`): a second process that follows the IPC
-  events and shows every window again if swinewm is killed or hangs, which
-  an in-process crash handler cannot cover (as GlazeWM's watcher does).
+- The remaining IPC replies.
+- A watchdog: a second process monitors the manager's message-loop
+  responsiveness and shows every window again if swinewm is killed or hangs,
+  which an in-process crash handler cannot cover (as GlazeWM's watcher does).
 
 ### 0.5.0 — Waybar beyond the basics
 

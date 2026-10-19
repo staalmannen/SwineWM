@@ -217,10 +217,12 @@ same cause.
 | `GET_BINDING_MODES`, `GET_BINDING_STATE`, `GET_CONFIG` | ✅ |
 | `GET_MARKS` | ✅ |
 | `GET_BAR_CONFIG` | ✅ one bar, `bar-0`: position, height, and `colors`/`font` computed from the Waybar `style.css` (window, workspace buttons) |
-| `GET_INPUTS`, `GET_SEATS` | Empty lists |
+| `GET_INPUTS`, `GET_SEATS` | ✅ Reports each successfully installed aggregate keyboard/pointer hook and one seat (`seat0`) with the corresponding capabilities. Physical devices and Windows keyboard layouts are not exposed |
 | `GET_NOTIFICATIONS` (1000), `GET_NOTIFICATION_HISTORY` (1001) | ✅ swinewm extensions |
+| `IPC_SYNC` | ✅ Returns the unsupported response, as sway does |
 | `SEND_TICK` | ✅ replies success and broadcasts a tick event |
 | `SUBSCRIBE` and events | 🟡 Validates subscriptions and streams events asynchronously; workspace focus/init/empty/move, window new/close/focus/title, mode, output, binding, barconfig, shutdown and tick are covered. Window move/fullscreen and workspace rename/urgent changes are not yet emitted |
+| Watchdog | ✅ A companion process probes the manager's hidden window and process. After three missed probes it terminates an unresponsive manager and runs `--recover`; an unexpected exit also runs recovery. If SwineWM is the login shell, it starts Explorer afterward |
 
 `get_tree` reports native window properties as `app_id` (the executable
 name, e.g. `notepad.exe`), `pid`, `window` (the HWND) and

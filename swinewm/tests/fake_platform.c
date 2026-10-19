@@ -24,6 +24,8 @@ struct fake_platform_state fake;
 
 void fake_reset(void) {
 	memset(&fake, 0, sizeof(fake));
+	fake.ipc_input_capabilities =
+		PLATFORM_IPC_INPUT_KEYBOARD | PLATFORM_IPC_INPUT_POINTER;
 }
 
 void platform_setup_environment(void) {}
@@ -42,8 +44,16 @@ void platform_ipc_event(uint32_t type, const char *payload) {
 	snprintf(fake.ipc_last_event, sizeof(fake.ipc_last_event), "%s",
 		payload ? payload : "");
 }
+uint32_t platform_ipc_input_capabilities(void) {
+	return fake.ipc_input_capabilities;
+}
 void platform_config_changed(void) {}
 int platform_recover_windows(void) { return 0; }
+int platform_watch(unsigned long process_id, bool shell_mode) {
+	(void)process_id;
+	(void)shell_mode;
+	return 0;
+}
 
 void platform_view_set_geometry(struct swine_view *view,
 		const struct swine_box *box) {

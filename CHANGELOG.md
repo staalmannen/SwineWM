@@ -13,6 +13,11 @@ the MSI and zip with the matching section below as release notes.
 - IPC `SUBSCRIBE` support for workspace, window, mode, output, binding,
   bar-config, shutdown and tick events; `SEND_TICK` now broadcasts its tick
   payload.
+- IPC `GET_INPUTS` and `GET_SEATS` now describe SwineWM's aggregate keyboard
+  and pointer hooks and its single seat.
+- A companion watchdog restores hidden windows after an unexpected exit or
+  after the manager's message loop stops responding; as the login shell it
+  also starts Explorer after recovery.
 - `bindcode` and `unbindcode` accept numeric Windows virtual-key values
   (decimal, 1–255), so key bindings can be specified by code.
 - New-output workspace discovery recognizes `move container to workspace`

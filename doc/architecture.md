@@ -109,8 +109,8 @@ post or send messages to the shell's hidden top-level window:
 - **The low-level keyboard hook** must return quickly or Windows removes it,
   so it only looks the key up and posts `WM_SWINE_BINDING` with a copy of
   the command.
-- **IPC client threads** pass each request with `SendMessageTimeout` and
-  write the reply back.
+- **IPC client threads** pass each request to the main thread and write the
+  reply back. Subscribed event frames use a per-client writer queue.
 - **The tray thread** owns swinewm's `Shell_TrayWnd` (see the tray section
   below) and posts `WM_SWINE_TRAY` when icons change.
 - A hidden top-level window (not a message-only window) is used because only
@@ -140,6 +140,11 @@ Hidden windows would be lost if swinewm crashed, so:
 - `swinewm --recover` and every start of swinewm show them again;
 - an unhandled-exception filter and the normal exit path show every hidden
   window.
+- a separate watchdog process checks the shell window's responsiveness and
+  watches the manager process. After three missed heartbeats it terminates a
+  hung manager before running `--recover`; a clean-shutdown event prevents
+  recovery on an intentional exit. When SwineWM is the login shell, the
+  watchdog starts Explorer after recovery.
 
 ### Geometry
 
@@ -223,6 +228,15 @@ Remote clients are rejected. The first pipe instance is created with
 `FILE_FLAG_FIRST_PIPE_INSTANCE`, which also prevents a second swinewm from
 starting. Subscribed clients receive events through per-client writer queues,
 so a slow IPC reader cannot block the window-manager thread.
+
+The manager starts a second `swinewm.exe --watch <pid> <shell-mode>` process. It probes
+the hidden shell window every two seconds and watches the manager process
+handle. Three consecutive missed probes cause the watchdog to terminate the
+unresponsive manager and run `--recover`; an unexpected process exit also
+triggers recovery. Intentional exit and restart signal a named event before
+teardown, so they do not trigger recovery (the normal shutdown path restores
+the desktop). If the manager was the login shell, the watchdog also starts
+Explorer after recovery.
 
 ## The built-in bar (Waybar)
 

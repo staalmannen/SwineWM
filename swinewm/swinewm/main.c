@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/config.h"
@@ -20,6 +21,7 @@ static const char usage[] =
 	"  -v, --version          Show the version number and quit.\n"
 	"  -V, --verbose          Enables more verbose logging.\n"
 	"      --recover          Show windows a crashed swinewm left hidden, then exit.\n"
+	"      --watch <pid> <shell>  Internal crash watchdog for a swinewm process.\n"
 	"      --shell            Act as the Windows shell (not while Explorer runs).\n"
 	"      --no-shell         Never act as the Windows shell.\n"
 	"      --set-autostart    Start swinewm at logon, with Explorer as the shell\n"
@@ -34,6 +36,9 @@ int main(int argc, char **argv) {
 	int shell_mode = -1;
 	bool validate = false;
 	bool recover = false;
+	bool watch = false;
+	unsigned long watch_pid = 0;
+	bool watch_shell_mode = false;
 	enum swine_log_importance verbosity = SWINE_ERROR;
 	bool verbosity_given = false;
 
@@ -59,6 +64,24 @@ int main(int argc, char **argv) {
 			return EXIT_SUCCESS;
 		} else if (strcmp(arg, "--recover") == 0) {
 			recover = true;
+		} else if (strcmp(arg, "--watch") == 0 && i + 2 < argc) {
+			char *end = NULL;
+			errno = 0;
+			watch_pid = strtoul(argv[++i], &end, 10);
+			if (errno == ERANGE || argv[i][0] == '-' || end == argv[i] ||
+					*end || !watch_pid) {
+				fprintf(stderr, "Invalid watchdog process id\n");
+				return EXIT_FAILURE;
+			}
+			if (strcmp(argv[++i], "0") == 0) {
+				watch_shell_mode = false;
+			} else if (strcmp(argv[i], "1") == 0) {
+				watch_shell_mode = true;
+			} else {
+				fprintf(stderr, "Invalid watchdog shell mode\n");
+				return EXIT_FAILURE;
+			}
+			watch = true;
 		} else if (strcmp(arg, "--shell") == 0) {
 			shell_mode = 1;
 		} else if (strcmp(arg, "--no-shell") == 0) {
@@ -82,7 +105,13 @@ int main(int argc, char **argv) {
 	if (!verbosity_given && env_level) {
 		verbosity_given = swine_log_parse_importance(env_level, &verbosity);
 	}
+	if (watch && !verbosity_given) {
+		verbosity = SWINE_INFO;
+	}
 	swine_log_init(verbosity);
+	if (watch) {
+		return platform_watch(watch_pid, watch_shell_mode);
+	}
 	platform_set_shell_mode(shell_mode);
 	if (!recover) {
 		platform_setup_environment();

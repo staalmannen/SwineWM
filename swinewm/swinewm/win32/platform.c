@@ -112,6 +112,7 @@ static LRESULT handle_shell_message(HWND hwnd, UINT msg, WPARAM wparam,
 		}
 		return 0;
 	case WM_CLOSE:
+		win32_watch_signal_exit();
 		PostQuitMessage(0);
 		return 0;
 	default:
@@ -151,7 +152,9 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *info) {
 	win32_shell_restore_taskbar();
 	win32_outputs_restore_settings();
 	win32_tray_crash();
-	win32_shell_rescue();
+	if (!win32_watch_responsible()) {
+		win32_shell_rescue();
+	}
 	return EXCEPTION_CONTINUE_SEARCH;
 }
 
@@ -206,6 +209,7 @@ bool platform_init(void) {
 	SetTimer(win32_shell_hwnd, TIMER_TICK, 1000, NULL);
 	win32_shell_start();
 	win32_theme_init();   // after the crash recovery above
+	win32_watch_start();
 	return true;
 }
 
@@ -245,6 +249,7 @@ int platform_run(void) {
 
 void platform_quit(void) {
 	platform_ipc_event((uint32_t)IPC_EVENT_SHUTDOWN, "{\"change\":\"exit\"}");
+	win32_watch_signal_exit();
 	win32_shell_exit();
 	PostQuitMessage(0);
 }
@@ -255,6 +260,7 @@ void platform_restart(void) {
 	swine_log(SWINE_INFO, "Restarting");
 	platform_ipc_event((uint32_t)IPC_EVENT_SHUTDOWN,
 		"{\"change\":\"restart\"}");
+	win32_watch_signal_exit();
 	restart_requested = true;
 	PostQuitMessage(0);
 }
@@ -317,6 +323,7 @@ void platform_finish(void) {
 		DestroyWindow(win32_shell_hwnd);
 		win32_shell_hwnd = NULL;
 	}
+	win32_watch_finish();
 	if (restart_requested) {
 		respawn();
 	}
@@ -324,6 +331,17 @@ void platform_finish(void) {
 
 void platform_ipc_event(uint32_t type, const char *payload) {
 	win32_ipc_publish(type, payload);
+}
+
+uint32_t platform_ipc_input_capabilities(void) {
+	uint32_t capabilities = 0;
+	if (keyboard_ok) {
+		capabilities |= PLATFORM_IPC_INPUT_KEYBOARD;
+	}
+	if (mouse_ok) {
+		capabilities |= PLATFORM_IPC_INPUT_POINTER;
+	}
+	return capabilities;
 }
 
 void platform_config_changed(void) {

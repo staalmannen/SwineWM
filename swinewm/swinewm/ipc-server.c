@@ -128,8 +128,9 @@ char *ipc_handle_request(uint32_t type, const char *payload, uint32_t length,
 		return json;
 	}
 	case IPC_GET_INPUTS:
+		return ipc_json_get_inputs();
 	case IPC_GET_SEATS:
-		return swine_strdup("[]");
+		return ipc_json_get_seats();
 	case SWINE_IPC_GET_NOTIFICATIONS:
 		return notify_list_json(notify_active());
 	case SWINE_IPC_GET_NOTIFICATION_HISTORY:

@@ -142,6 +142,7 @@ if(WIN32)
     swinewm/win32/tray.c
     swinewm/win32/util.c
     swinewm/win32/wallpaper.c
+    swinewm/win32/watch.c
     swinewm/win32/window.c
   )
   target_compile_definitions(swinewm PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN
