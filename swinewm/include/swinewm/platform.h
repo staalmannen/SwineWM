@@ -10,6 +10,11 @@ struct swine_output;
 struct swine_view;
 struct view_decoration;
 
+enum platform_ipc_input_capability {
+	PLATFORM_IPC_INPUT_KEYBOARD = 1u << 0,
+	PLATFORM_IPC_INPUT_POINTER = 1u << 1,
+};
+
 // Boundary between the portable window-manager core and the OS. The Win32
 // implementation lives in swinewm/win32/; tests link a fake implementation.
 // The core never includes <windows.h>.
@@ -41,6 +46,7 @@ void platform_finish(void);
 // Sends a JSON event body to subscribed IPC clients. The transport copies
 // the payload before returning.
 void platform_ipc_event(uint32_t type, const char *payload);
+uint32_t platform_ipc_input_capabilities(void);
 
 void platform_view_set_geometry(struct swine_view *view,
 		const struct swine_box *box);
@@ -112,5 +118,7 @@ long long platform_now_ms(void);
 // Shows windows left hidden by a previous instance that did not exit
 // cleanly (swinewm --recover). Returns the number of windows restored.
 int platform_recover_windows(void);
+// Runs the standalone crash watchdog for the manager process.
+int platform_watch(unsigned long process_id, bool shell_mode);
 
 #endif

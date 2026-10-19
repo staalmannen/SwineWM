@@ -11,6 +11,8 @@ char *ipc_json_get_outputs(void);
 char *ipc_json_get_tree(void);
 char *ipc_json_get_binding_modes(void);
 char *ipc_json_get_binding_state(void);
+char *ipc_json_get_inputs(void);
+char *ipc_json_get_seats(void);
 char *ipc_json_get_config(void);
 char *ipc_json_get_marks(void);
 char *ipc_json_event_workspace(const char *change,

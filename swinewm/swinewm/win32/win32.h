@@ -64,6 +64,12 @@ void win32_shell_finish(void);
 void win32_shell_exit(void);
 void win32_shell_rescue(void);
 
+// watch.c
+void win32_watch_start(void);
+void win32_watch_signal_exit(void);
+void win32_watch_finish(void);
+bool win32_watch_responsible(void);
+
 // Explorer's own taskbar window, skipping swinewm's Shell_TrayWnd.
 HWND win32_find_explorer_tray(void);
 

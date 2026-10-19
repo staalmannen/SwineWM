@@ -66,6 +66,29 @@ static void test_ipc(void) {
 	CHECK_STR(reply, "{\"name\":\"default\"}");
 	free(reply);
 
+	reply = ipc_handle_request(IPC_GET_INPUTS, "", 0, &type);
+	CHECK(strstr(reply, "\"identifier\":\"swinewm:keyboard\"") != NULL);
+	CHECK(strstr(reply, "\"type\":\"keyboard\"") != NULL);
+	CHECK(strstr(reply, "\"identifier\":\"swinewm:mouse\"") != NULL);
+	CHECK(strstr(reply, "\"type\":\"pointer\"") != NULL);
+	free(reply);
+
+	fake.ipc_input_capabilities = PLATFORM_IPC_INPUT_POINTER;
+	reply = ipc_handle_request(IPC_GET_INPUTS, "", 0, &type);
+	CHECK(strstr(reply, "\"identifier\":\"swinewm:keyboard\"") == NULL);
+	CHECK(strstr(reply, "\"identifier\":\"swinewm:mouse\"") != NULL);
+	free(reply);
+	reply = ipc_handle_request(IPC_GET_SEATS, "", 0, &type);
+	CHECK(strstr(reply, "\"name\":\"seat0\",\"capabilities\":1") != NULL);
+	CHECK(strstr(reply, "\"focus\":0") == NULL);
+	CHECK(strstr(reply, "\"identifier\":\"swinewm:keyboard\"") == NULL);
+	CHECK(strstr(reply, "\"identifier\":\"swinewm:mouse\"") != NULL);
+	free(reply);
+
+	reply = ipc_handle_request(IPC_SYNC, "{}", 2, &type);
+	CHECK_STR(reply, "{\"success\":false}");
+	free(reply);
+
 	CHECK(run("workspace 1"));
 	fake.ipc_event_count = 0;
 	CHECK(run("workspace 5"));

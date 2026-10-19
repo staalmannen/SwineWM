@@ -46,6 +46,7 @@ struct fake_platform_state {
 	struct swine_box drop_indicator;
 	int ipc_event_count;
 	uint32_t ipc_last_event_type;
+	uint32_t ipc_input_capabilities;
 	char ipc_last_event[512];
 };
 
