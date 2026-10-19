@@ -7,6 +7,7 @@
 #include "swinewm/input/keyboard.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/ipc-json.h"
+#include "swinewm/platform.h"
 #include "swinewm/server.h"
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/output.h"
