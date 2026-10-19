@@ -10,6 +10,9 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- IPC `SUBSCRIBE` support for workspace, window, mode, output, binding,
+  bar-config, shutdown and tick events; `SEND_TICK` now broadcasts its tick
+  payload.
 - `bindcode` and `unbindcode` accept numeric Windows virtual-key values
   (decimal, 1–255), so key bindings can be specified by code.
 - New-output workspace discovery recognizes `move container to workspace`

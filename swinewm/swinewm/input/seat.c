@@ -1,5 +1,8 @@
 #include <stdlib.h>
+#include "ipc.h"
 #include "log.h"
+#include "swinewm/ipc-json.h"
+#include "swinewm/platform.h"
 #include "swinewm/input/cursor.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/tree/container.h"
@@ -63,6 +66,7 @@ void seat_set_focus(struct swine_node *node) {
 	if (!node) {
 		return;
 	}
+	struct swine_node *old_focus = seat_get_focus();
 	struct swine_workspace *ws = NULL;
 	if (node->type == N_WORKSPACE) {
 		ws = node->workspace;
@@ -74,6 +78,16 @@ void seat_set_focus(struct swine_node *node) {
 		ws->output->active_workspace = ws;
 	}
 	seat_set_raw_focus(node);
+	struct swine_container *old_con = old_focus && old_focus->type == N_CONTAINER ?
+		old_focus->container : NULL;
+	struct swine_container *new_con = node->type == N_CONTAINER ?
+		node->container : NULL;
+	if (new_con && new_con->view &&
+			(!old_con || old_con->view != new_con->view)) {
+		char *event = ipc_json_event_window("focus", new_con);
+		platform_ipc_event((uint32_t)IPC_EVENT_WINDOW, event);
+		free(event);
+	}
 	if (node->type == N_CONTAINER && node->container->view &&
 			node->container->view->urgent) {
 		view_set_urgent(node->container->view, false);
@@ -88,6 +102,11 @@ void seat_set_focus(struct swine_node *node) {
 				--i;
 			}
 		}
+	}
+	if (ws && old_ws && ws != old_ws) {
+		char *event = ipc_json_event_workspace("focus", ws, old_ws);
+		platform_ipc_event((uint32_t)IPC_EVENT_WORKSPACE, event);
+		free(event);
 	}
 	if (old_ws && old_ws != ws) {
 		workspace_consider_destroy(old_ws);

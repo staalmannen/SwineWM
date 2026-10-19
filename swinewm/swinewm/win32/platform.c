@@ -2,11 +2,13 @@
 // and start-up/shut-down ordering.
 #include <stdlib.h>
 #include <wchar.h>
+#include "ipc.h"
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
 #include "swinewm/desktop/transaction.h"
+#include "swinewm/ipc-json.h"
 #include "swinewm/notify.h"
 #include "swinewm/platform.h"
 #include "swinewm/server.h"
@@ -32,6 +34,9 @@ static void refresh_display_state(void) {
 	win32_shell_resize_desktop();
 	win32_outputs_update();
 	transaction_commit_dirty();
+	char *event = ipc_json_event_output("unspecified");
+	platform_ipc_event((uint32_t)IPC_EVENT_OUTPUT, event);
+	free(event);
 }
 
 static void schedule_display_refresh(void) {
@@ -239,6 +244,7 @@ int platform_run(void) {
 }
 
 void platform_quit(void) {
+	platform_ipc_event((uint32_t)IPC_EVENT_SHUTDOWN, "{\"change\":\"exit\"}");
 	win32_shell_exit();
 	PostQuitMessage(0);
 }
@@ -247,6 +253,8 @@ static bool restart_requested = false;
 
 void platform_restart(void) {
 	swine_log(SWINE_INFO, "Restarting");
+	platform_ipc_event((uint32_t)IPC_EVENT_SHUTDOWN,
+		"{\"change\":\"restart\"}");
 	restart_requested = true;
 	PostQuitMessage(0);
 }
@@ -314,6 +322,12 @@ void platform_finish(void) {
 	}
 }
 
+void platform_ipc_event(uint32_t type, const char *payload) {
+	win32_ipc_publish(type, payload);
+}
+
 void platform_config_changed(void) {
 	// Bindings are looked up live from the config, so nothing to re-register.
+	platform_ipc_event((uint32_t)IPC_EVENT_BARCONFIG_UPDATE,
+		"{\"id\":\"bar-0\"}");
 }

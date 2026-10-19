@@ -36,6 +36,12 @@ int platform_run(void) { return 0; }
 void platform_quit(void) { fake.quit = true; }
 void platform_restart(void) { fake.restart = true; }
 void platform_finish(void) {}
+void platform_ipc_event(uint32_t type, const char *payload) {
+	fake.ipc_event_count++;
+	fake.ipc_last_event_type = type;
+	snprintf(fake.ipc_last_event, sizeof(fake.ipc_last_event), "%s",
+		payload ? payload : "");
+}
 void platform_config_changed(void) {}
 int platform_recover_windows(void) { return 0; }
 

@@ -1,9 +1,12 @@
 #include <stdlib.h>
 #include <string.h>
+#include "ipc.h"
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
+#include "swinewm/ipc-json.h"
+#include "swinewm/platform.h"
 
 // Must be in order for the bsearch
 static const struct cmd_handler mode_handlers[] = {
@@ -60,6 +63,9 @@ struct cmd_results *cmd_mode(int argc, char **argv) {
 	}
 	free(name);
 	config->current_mode = mode;
+	char *event = ipc_json_event_mode("switch", mode->name);
+	platform_ipc_event((uint32_t)IPC_EVENT_MODE, event);
+	free(event);
 	swine_log(SWINE_DEBUG, "Switched to mode '%s'", mode->name);
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }

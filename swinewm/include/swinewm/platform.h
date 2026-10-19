@@ -2,6 +2,7 @@
 #define _SWINE_PLATFORM_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "list.h"
 #include "swinewm/tree/node.h"
 
@@ -37,6 +38,9 @@ void platform_restart(void);
 // Restores every window the WM changed (unhides hidden workspaces) so that
 // exiting or crashing never strands applications.
 void platform_finish(void);
+// Sends a JSON event body to subscribed IPC clients. The transport copies
+// the payload before returning.
+void platform_ipc_event(uint32_t type, const char *payload);
 
 void platform_view_set_geometry(struct swine_view *view,
 		const struct swine_box *box);

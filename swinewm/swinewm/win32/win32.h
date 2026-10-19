@@ -156,6 +156,7 @@ struct win32_ipc_request {
 };
 bool win32_ipc_init(void);
 void win32_ipc_handle(struct win32_ipc_request *request);
+void win32_ipc_publish(uint32_t type, const char *payload);
 
 // theme.c: windows_theme (Windows' light/dark mode)
 void win32_theme_init(void);
