@@ -142,6 +142,21 @@ static void test_focus_follows_mouse(void) {
 	fake_teardown();
 }
 
+static void test_focus_follows_mouse_keeps_owned_dialog_focus(void) {
+	fake_setup();
+	struct swine_view *owner = fake_map_view("owner");
+	struct swine_view *dialog = fake_map_view("dialog");
+	CHECK(focused_view() == dialog);
+	fake.has_visible_owned_window = true;
+	hover(owner);
+	CHECK(focused_view() == dialog);
+	fake.has_visible_owned_window = false;
+	CHECK(run("focus_follows_mouse always"));
+	hover(owner);
+	CHECK(focused_view() == owner);
+	fake_teardown();
+}
+
 static void test_focus_follows_mouse_outputs(void) {
 	fake_setup_two_outputs();
 	struct swine_view *a = fake_map_view("a");
@@ -419,6 +434,7 @@ void test_cursor_all(void) {
 	test_mouse_bindings_parse();
 	test_mouse_bindings_run();
 	test_focus_follows_mouse();
+	test_focus_follows_mouse_keeps_owned_dialog_focus();
 	test_focus_follows_mouse_outputs();
 	test_move_floating();
 	test_resize_floating();

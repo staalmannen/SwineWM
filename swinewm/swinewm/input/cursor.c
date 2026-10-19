@@ -697,6 +697,9 @@ static void check_focus_follows_mouse(struct swine_node *hovered) {
 	// The common case. Hidden tabs are never focused.
 	struct swine_container *con = hovered->container;
 	if (con->view && view_is_visible(con->view) && focus != hovered) {
+		if (platform_view_has_visible_owned_window(con->view)) {
+			return;
+		}
 		// If the pointer got over the window because of, say, a workspace
 		// switch, "yes" leaves the focus alone; "always" takes it.
 		if (hovered != cursor.previous_node ||

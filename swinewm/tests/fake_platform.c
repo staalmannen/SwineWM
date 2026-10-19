@@ -101,6 +101,11 @@ bool platform_view_activate(struct swine_view *view) {
 	return true;
 }
 
+bool platform_view_has_visible_owned_window(struct swine_view *view) {
+	(void)view;
+	return fake.has_visible_owned_window;
+}
+
 void platform_queue_command(const char *command) {
 	run(command);
 }

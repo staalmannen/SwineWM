@@ -771,6 +771,23 @@ bool platform_view_activate(struct swine_view *view) {
 	return SetForegroundWindow(hwnd) != FALSE;
 }
 
+bool platform_view_has_visible_owned_window(struct swine_view *view) {
+	HWND owner = view->handle;
+	if (!IsWindow(owner) || !server.views) {
+		return false;
+	}
+	for (int i = 0; i < server.views->length; ++i) {
+		struct swine_view *child = server.views->items[i];
+		HWND hwnd = child->handle;
+		if (child != view && child->container && IsWindow(hwnd) &&
+				IsWindowVisible(hwnd) && !IsIconic(hwnd) &&
+				GetWindow(hwnd, GW_OWNER) == owner) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void platform_view_close(struct swine_view *view) {
 	if (IsWindow(view->handle)) {
 		PostMessageW(view->handle, WM_CLOSE, 0, 0);
