@@ -160,6 +160,32 @@ struct cmd_results *cmd_ws_auto_back_and_forth(int argc, char **argv) {
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 
+// show_marks and smart_gaps are accepted no-ops for sway compatibility:
+// the underlying state is already tracked and the layout engine understands
+// the gap semantics, but Windows does not render marks or auto-smart-gap
+// overlays in the same way as sway does.
+struct cmd_results *cmd_show_marks(int argc, char **argv) {
+	struct cmd_results *error = NULL;
+	if ((error = checkarg(argc, "show_marks", EXPECTED_AT_MOST, 1))) {
+		return error;
+	}
+	if (argc == 1) {
+		(void)parse_boolean(argv[0], true);
+	}
+	return cmd_results_new(CMD_SUCCESS, NULL);
+}
+
+struct cmd_results *cmd_smart_gaps(int argc, char **argv) {
+	struct cmd_results *error = NULL;
+	if ((error = checkarg(argc, "smart_gaps", EXPECTED_AT_MOST, 1))) {
+		return error;
+	}
+	if (argc == 1) {
+		(void)parse_boolean(argv[0], true);
+	}
+	return cmd_results_new(CMD_SUCCESS, NULL);
+}
+
 // swinewm extension: "explorer_taskbar autohide|show". While swinewm runs
 // next to Explorer, auto-hide Explorer's taskbar (restored on exit).
 struct cmd_results *cmd_explorer_taskbar(int argc, char **argv) {
