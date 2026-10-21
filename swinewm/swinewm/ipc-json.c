@@ -184,16 +184,15 @@ char *ipc_json_event_window(const char *change, struct swine_container *con) {
 	return json_finish(&w);
 }
 
-char *ipc_json_event_mode(const char *change, const char *name) {
+// sway's mode event: "change" is the name of the new mode.
+char *ipc_json_event_mode(const char *name, bool pango_markup) {
 	struct json_writer w;
 	json_init(&w);
 	json_begin_object(&w);
 	json_key(&w, "change");
-	json_string(&w, change);
-	json_key(&w, "pango_markup");
-	json_bool(&w, false);
-	json_key(&w, "name");
 	json_string(&w, name);
+	json_key(&w, "pango_markup");
+	json_bool(&w, pango_markup);
 	json_end_object(&w);
 	return json_finish(&w);
 }

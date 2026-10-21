@@ -12,6 +12,7 @@ static const char usage[] =
 	"Usage: swinemsg [options] [message]\n"
 	"\n"
 	"  -h, --help             Show help message and quit.\n"
+	"  -m, --monitor          Monitor until killed (-t SUBSCRIBE only)\n"
 	"  -q, --quiet            Be quiet.\n"
 	"  -r, --raw              Use raw output (the only output format so far).\n"
 	"  -s, --socket <pipe>    Use the specified named pipe.\n"
@@ -78,6 +79,7 @@ static char *quote_args(char **args, int count) {
 
 int main(int argc, char **argv) {
 	bool quiet = false;
+	bool monitor = false;
 	char *pipe_name = NULL;
 	const char *type_name = "command";
 	SetConsoleOutputCP(CP_UTF8);   // replies are UTF-8 JSON
@@ -89,6 +91,8 @@ int main(int argc, char **argv) {
 			return 0;
 		} else if (strcmp(arg, "-q") == 0 || strcmp(arg, "--quiet") == 0) {
 			quiet = true;
+		} else if (strcmp(arg, "-m") == 0 || strcmp(arg, "--monitor") == 0) {
+			monitor = true;
 		} else if (strcmp(arg, "-r") == 0 || strcmp(arg, "--raw") == 0) {
 			// Raw JSON is the only format for now.
 		} else if ((strcmp(arg, "-s") == 0 || strcmp(arg, "--socket") == 0) &&
@@ -123,7 +127,51 @@ int main(int argc, char **argv) {
 	// arguments with spaces so that `swinemsg notify-send "Hello there"`
 	// keeps its meaning when swinewm splits the command again.
 	char *payload = quote_args(argv + i, argc - i);
+	if (monitor && type != IPC_SUBSCRIBE) {
+		fprintf(stderr, "Monitor can only be used with -t SUBSCRIBE\n");
+		free(payload);
+		return 1;
+	}
 	char *error = NULL;
+	if (type == IPC_SUBSCRIBE) {
+		// As swaymsg: print the first event, or every event with -m.
+		void *connection = ipc_connect(pipe_name, &error);
+		char *reply = NULL;
+		if (!connection || !ipc_send(connection, type, payload) ||
+				!(reply = ipc_receive(connection, NULL))) {
+			fprintf(stderr, "%s\n", error ? error : "IPC request failed");
+			free(error);
+			ipc_close(connection);
+			free(payload);
+			return 1;
+		}
+		free(payload);
+		if (strstr(reply, "\"success\":false")) {
+			if (!quiet) {
+				printf("%s\n", reply);
+			}
+			free(reply);
+			ipc_close(connection);
+			return 2;
+		}
+		free(reply);
+		int status = 0;
+		do {
+			char *event = ipc_receive(connection, NULL);
+			if (!event) {
+				status = 1;
+				break;
+			}
+			if (!quiet) {
+				printf("%s\n", event);
+				fflush(stdout);
+			}
+			free(event);
+		} while (monitor);
+		ipc_close(connection);
+		free(pipe_name);
+		return status;
+	}
 	char *reply = ipc_request(pipe_name, type, payload, &error);
 	if (!reply) {
 		fprintf(stderr, "%s\n", error);

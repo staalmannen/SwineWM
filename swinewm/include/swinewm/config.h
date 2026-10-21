@@ -30,6 +30,7 @@ struct swine_mode {
 	char *name;
 	list_t *keysym_bindings;   // struct swine_binding *
 	list_t *mouse_bindings;    // struct swine_binding *
+	bool pango;                // "mode --pango_markup"
 };
 
 // "output <name|identifier|*> ..." (swaybg options and the display mode).

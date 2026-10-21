@@ -29,6 +29,20 @@ the MSI and zip with the matching section below as release notes.
 
 ### Fixed
 
+- IPC events reached a subscribed client only when it sent another
+  message: the pipe was opened for synchronous I/O, so a waiting read
+  blocked every event written to it. It now uses overlapped I/O, so
+  listening clients (i3ipc scripts, Waybar's sway modules) get events as
+  they happen. Events still queued when swinewm exits are written first.
+- IPC events now match sway: the `mode` event's `change` is the mode's
+  name (with `pango_markup` from `mode --pango_markup`); `SEND_TICK` takes
+  any text and broadcasts it with `"first": false`, and a new tick
+  subscriber first gets `{"first": true, "payload": ""}`; subscriptions add
+  up; the `empty` workspace event reports the workspace as `current`; a new
+  window's `new` event comes before its `focus` event; and nothing is sent
+  after `shutdown` (no `close` events for windows swinewm lets go of).
+- `swinemsg -t subscribe` prints the first event, and every event with
+  `-m`/`--monitor`, as `swaymsg` does.
 - Newly mapped floating windows are raised above their parent without
   activating them, so owned dialogs do not remain obscured.
 - Focus-follows-mouse keeps a visible owned dialog focused rather than

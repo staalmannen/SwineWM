@@ -220,8 +220,8 @@ same cause.
 | `GET_INPUTS`, `GET_SEATS` | ✅ Reports each successfully installed aggregate keyboard/pointer hook and one seat (`seat0`) with the corresponding capabilities. Physical devices and Windows keyboard layouts are not exposed |
 | `GET_NOTIFICATIONS` (1000), `GET_NOTIFICATION_HISTORY` (1001) | ✅ swinewm extensions |
 | `IPC_SYNC` | ✅ Returns the unsupported response, as sway does |
-| `SEND_TICK` | ✅ replies success and broadcasts a tick event |
-| `SUBSCRIBE` and events | 🟡 Validates subscriptions and streams events asynchronously; workspace focus/init/empty/move/rename/urgent, window new/close/focus/title/move/fullscreen_mode, mode, output, binding, barconfig, shutdown and tick are covered. Some sway event types and state changes remain unimplemented |
+| `SEND_TICK` | ✅ As in sway: the payload is any text, sent to tick subscribers as `{"first": false, "payload": …}`; a new tick subscriber first gets `{"first": true, "payload": ""}` |
+| `SUBSCRIBE` and events | 🟡 Validates subscriptions (they add up, as in sway) and streams events asynchronously; workspace focus/init/empty/move/rename/urgent, window new/close/focus/title/move/fullscreen_mode, mode (`change` is the mode's name), output, binding, barconfig, shutdown and tick are covered; nothing is sent after shutdown. Some sway event types (`input`, `bar_state_update`) and state changes remain unimplemented. `swinemsg -t subscribe [-m] '["window"]'` prints events as `swaymsg` does |
 | Watchdog | ✅ A companion process probes the manager's hidden window and process. After three missed probes it terminates an unresponsive manager and runs `--recover`; an unexpected exit also runs recovery. If SwineWM is the login shell, it starts Explorer afterward |
 
 `get_tree` reports native window properties as `app_id` (the executable

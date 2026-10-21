@@ -223,14 +223,13 @@ void view_map(struct swine_view *view) {
 	swine_log(SWINE_DEBUG, "Mapped view '%s' (%s) on workspace %s",
 		view->title ? view->title : "", view->app_id ? view->app_id : "?",
 		ws->name);
+	// As in sway: "new" first, then what the rules and the focus do.
+	char *event = ipc_json_event_window("new", con);
+	platform_ipc_event((uint32_t)IPC_EVENT_WINDOW, event);
+	free(event);
 	view_execute_criteria(view);
 	if (view->container && should_focus(view)) {
 		seat_set_focus_container(view->container);
-	}
-	if (view->container) {
-		char *event = ipc_json_event_window("new", view->container);
-		platform_ipc_event((uint32_t)IPC_EVENT_WINDOW, event);
-		free(event);
 	}
 }
 

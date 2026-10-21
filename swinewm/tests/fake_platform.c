@@ -49,6 +49,17 @@ void platform_ipc_event(uint32_t type, const char *payload) {
 	fake.ipc_last_event_type = type;
 	snprintf(fake.ipc_last_event, sizeof(fake.ipc_last_event), "%s",
 		payload ? payload : "");
+	const char *change = payload ? strstr(payload, "\"change\":\"") : NULL;
+	if (change) {
+		change += strlen("\"change\":\"");
+		size_t used = strlen(fake.ipc_changes);
+		size_t len = strcspn(change, "\"");
+		if (used + len + 2 < sizeof(fake.ipc_changes)) {
+			memcpy(fake.ipc_changes + used, change, len);
+			fake.ipc_changes[used + len] = ',';
+			fake.ipc_changes[used + len + 1] = '\0';
+		}
+	}
 }
 uint32_t platform_ipc_input_capabilities(void) {
 	return fake.ipc_input_capabilities;

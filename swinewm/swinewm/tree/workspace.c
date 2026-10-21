@@ -122,7 +122,7 @@ struct swine_workspace *workspace_create(struct swine_output *output,
 
 void workspace_destroy(struct swine_workspace *ws) {
 	swine_log(SWINE_DEBUG, "Destroying workspace %s", ws->name);
-	char *event = ipc_json_event_workspace("empty", NULL, ws);
+	char *event = ipc_json_event_workspace("empty", ws, NULL);
 	platform_ipc_event((uint32_t)IPC_EVENT_WORKSPACE, event);
 	free(event);
 	if (ws->output) {

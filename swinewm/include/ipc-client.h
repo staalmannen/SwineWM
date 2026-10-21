@@ -1,6 +1,7 @@
 #ifndef _SWINE_IPC_CLIENT_H
 #define _SWINE_IPC_CLIENT_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 // Windows only. Returns the pipe name to use: $SWINESOCK if set, otherwise
@@ -13,5 +14,14 @@ char *get_ipc_pipe_name(void);
 // receives a message on failure (caller frees).
 char *ipc_request(const char *pipe_name, uint32_t type, const char *payload,
 		char **error);
+
+// Windows only. A connection for more than one message (subscribing):
+// ipc_connect returns NULL on failure (and sets *error); ipc_receive returns
+// the next message's payload (caller frees) and its type, or NULL when the
+// connection is gone.
+void *ipc_connect(const char *pipe_name, char **error);
+bool ipc_send(void *connection, uint32_t type, const char *payload);
+char *ipc_receive(void *connection, uint32_t *type);
+void ipc_close(void *connection);
 
 #endif
