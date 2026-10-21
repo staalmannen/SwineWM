@@ -20,6 +20,7 @@
 struct tab_copy {
 	struct swine_container *con;
 	wchar_t *title;
+	wchar_t *marks;   // drawn on the right, as sway does, or NULL
 	struct border_colors colors;
 };
 
@@ -84,6 +85,19 @@ static void paint(struct tab_window *w, HDC dc) {
 		RECT text = {inner.left + padding, inner.top, inner.right - padding,
 			inner.bottom};
 		SetTextColor(dc, rgb(tab->colors.text));
+		if (tab->marks) {
+			RECT marks = text;
+			DrawTextW(dc, tab->marks, -1, &marks, DT_SINGLELINE | DT_NOPREFIX |
+				DT_CALCRECT);
+			int width = marks.right - marks.left;
+			marks = text;
+			marks.left = text.right - width > text.left ? text.right - width :
+				text.left;
+			DrawTextW(dc, tab->marks, -1, &marks, DT_RIGHT | DT_SINGLELINE |
+				DT_VCENTER | DT_NOPREFIX | DT_END_ELLIPSIS);
+			text.right = marks.left - padding > text.left ?
+				marks.left - padding : text.left;
+		}
 		DrawTextW(dc, tab->title, -1, &text, align | DT_SINGLELINE |
 			DT_VCENTER | DT_NOPREFIX | DT_END_ELLIPSIS);
 	}
@@ -125,6 +139,7 @@ static LRESULT CALLBACK tab_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 static void free_tabs(struct tab_window *w) {
 	for (int i = 0; i < w->count; ++i) {
 		free(w->tabs[i].title);
+		free(w->tabs[i].marks);
 	}
 	free(w->tabs);
 	w->tabs = NULL;
@@ -189,6 +204,7 @@ void platform_titlebars_update(list_t *titlebars) {
 			const struct swine_tab *tab = bar->tabs->items[j];
 			w->tabs[j].con = tab->con;
 			w->tabs[j].title = utf8_to_utf16(tab->title);
+			w->tabs[j].marks = tab->marks ? utf8_to_utf16(tab->marks) : NULL;
 			w->tabs[j].colors = tab->colors;
 		}
 		SetWindowPos(w->hwnd, insert_after(), w->box.x, w->box.y, w->box.width,

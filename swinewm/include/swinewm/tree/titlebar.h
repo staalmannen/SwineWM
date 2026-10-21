@@ -16,6 +16,7 @@ struct swine_container;
 struct swine_tab {
 	struct swine_container *con;   // the child the tab stands for
 	char *title;                   // its title, or "H[app app]" for a split
+	char *marks;                   // "[mark][other]" (show_marks), or NULL
 	struct border_colors colors;   // client.* class of the child
 };
 

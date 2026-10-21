@@ -93,6 +93,12 @@ enum smart_borders_mode {
 	ESMART_NO_GAPS,
 };
 
+enum smart_gaps_mode {
+	SMART_GAPS_OFF,
+	SMART_GAPS_ON,
+	SMART_GAPS_INVERSE_OUTER,
+};
+
 enum focus_wrapping_mode {
 	WRAP_NO,
 	WRAP_YES,
@@ -139,6 +145,8 @@ struct swine_config {
 	int floating_border_thickness;
 	enum edge_border_types hide_edge_borders;
 	enum smart_borders_mode hide_edge_borders_smart;
+	enum smart_gaps_mode smart_gaps;
+	bool show_marks;
 	bool hide_lone_tab;
 	struct {
 		struct border_colors focused;

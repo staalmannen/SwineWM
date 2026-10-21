@@ -65,6 +65,8 @@ struct swine_workspace *workspace_prev(struct swine_workspace *current);
 bool workspace_switch(struct swine_workspace *ws);
 bool workspace_is_visible(struct swine_workspace *ws);
 bool workspace_is_empty(struct swine_workspace *ws);
+// One tiled window shows (for smart_gaps), as sway's function of that name.
+bool workspace_has_single_visible_container(struct swine_workspace *ws);
 // Sets ws->urgent if any of its views is urgent.
 void workspace_detect_urgent(struct swine_workspace *ws);
 

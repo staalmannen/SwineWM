@@ -327,6 +327,80 @@ static void test_titlebars(void) {
 	fake_teardown();
 }
 
+static void test_smart_gaps(void) {
+	fake_setup();
+	CHECK(run("gaps inner all set 10; gaps outer all set 5"));
+	struct swine_view *a = fake_map_view("a");
+	// Without smart_gaps: outer 5 + inner 10 all around.
+	CHECK_INT(a->pending.box.x, 15);
+	CHECK(run("smart_gaps on"));
+	CHECK_INT(config->smart_gaps, SMART_GAPS_ON);
+	CHECK_INT(a->pending.box.x, 0);
+	CHECK_INT(a->pending.box.width, 1000);
+	// Two windows: gaps again.
+	struct swine_view *b = fake_map_view("b");
+	CHECK_INT(a->pending.box.x, 15);
+	// In a tabbed container only one window shows: no gaps.
+	CHECK(run("layout tabbed"));
+	CHECK_INT(b->pending.box.x, 0);
+	CHECK(run("layout splith"));
+	// inverse_outer: outer gaps only around a lone window.
+	CHECK(run("smart_gaps inverse_outer"));
+	CHECK_INT(config->smart_gaps, SMART_GAPS_INVERSE_OUTER);
+	CHECK_INT(a->pending.box.x, 10);   // inner only
+	view_unmap(b);
+	view_destroy(b);
+	transaction_commit_dirty();
+	CHECK_INT(a->pending.box.x, 15);
+	CHECK(run("smart_gaps toggle"));
+	CHECK_INT(config->smart_gaps, SMART_GAPS_OFF);
+	CHECK(run("smart_gaps toggle"));
+	CHECK_INT(config->smart_gaps, SMART_GAPS_ON);
+	CHECK(run("smart_gaps off"));
+	CHECK_INT(a->pending.box.x, 15);
+	fake_teardown();
+}
+
+static void test_show_marks(void) {
+	fake_setup();
+	struct swine_view *a = fake_map_view("a");
+	fake_map_view("b");
+	CHECK(run("layout tabbed; [title=\"^a$\"] mark --add one; "
+		"[title=\"^a$\"] mark --add _hidden; [title=\"^a$\"] mark --add two"));
+	struct swine_titlebar *bar = titlebars_get()->items[0];
+	struct swine_tab *tab = bar->tabs->items[0];
+	CHECK(tab->con == a->container);
+	// As in sway: marks starting with "_" are not shown.
+	CHECK_STR(tab->marks, "[one][two]");
+	CHECK(((struct swine_tab *)bar->tabs->items[1])->marks == NULL);
+	CHECK(run("show_marks no"));
+	CHECK(!config->show_marks);
+	bar = titlebars_get()->items[0];
+	CHECK(((struct swine_tab *)bar->tabs->items[0])->marks == NULL);
+	CHECK(run("show_marks toggle"));
+	CHECK(config->show_marks);
+	fake_teardown();
+}
+
+static void test_hide_edge_borders(void) {
+	fake_setup();
+	struct swine_view *a = fake_map_view("a");
+	CHECK(run("hide_edge_borders vertical"));
+	transaction_commit_dirty();
+	// The top and bottom edges would stay: the (single) DWM border stays.
+	CHECK(a->current.deco.border_color != 0);
+	CHECK(run("hide_edge_borders both"));
+	transaction_commit_dirty();
+	// Filling the workspace, every edge goes: no border.
+	CHECK_INT(a->current.deco.border_color, 0);
+	struct swine_view *b = fake_map_view("b");
+	// Side by side, each keeps an inner edge: borders again.
+	CHECK(a->current.deco.border_color != 0);
+	CHECK(b->current.deco.border_color != 0);
+	CHECK(run("hide_edge_borders none"));
+	fake_teardown();
+}
+
 void test_decorations_all(void) {
 	test_border_defaults();
 	test_border_command();
@@ -336,4 +410,7 @@ void test_decorations_all(void) {
 	test_opacity();
 	test_font_and_titlebar();
 	test_titlebars();
+	test_smart_gaps();
+	test_show_marks();
+	test_hide_edge_borders();
 }

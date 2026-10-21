@@ -22,6 +22,12 @@ the MSI and zip with the matching section below as release notes.
 - A companion watchdog restores hidden windows after an unexpected exit or
   after the manager's message loop stops responding; as the login shell it
   also starts Explorer after recovery.
+- `smart_gaps on|off|toggle|inverse_outer`, as in sway (until now accepted
+  and ignored).
+- `show_marks`: marks appear on the tabs of tabbed and stacked containers
+  as `[mark]`, right-aligned; marks starting with `_` stay hidden.
+- `hide_edge_borders both` hides the border of a window that fills its
+  workspace (a Windows border cannot hide single edges).
 - `bindcode` and `unbindcode` accept numeric Windows virtual-key values
   (decimal, 1–255), so key bindings can be specified by code.
 - New-output workspace discovery recognizes `move container to workspace`

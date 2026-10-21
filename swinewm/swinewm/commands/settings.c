@@ -3,6 +3,7 @@
 // floating_modifier, tiling_drag, tiling_drag_threshold,
 // workspace_auto_back_and_forth and include.
 #include <stdlib.h>
+#include <string.h>
 #include "stringop.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
@@ -160,28 +161,29 @@ struct cmd_results *cmd_ws_auto_back_and_forth(int argc, char **argv) {
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 
-// show_marks and smart_gaps are accepted no-ops for sway compatibility:
-// the underlying state is already tracked and the layout engine understands
-// the gap semantics, but Windows does not render marks or auto-smart-gap
-// overlays in the same way as sway does.
+// show_marks: marks on the title bars swinewm draws (the tabs of tabbed and
+// stacked containers). smart_gaps: no gaps around a lone window ("on"), or
+// outer gaps only around a lone window ("inverse_outer"), as in sway.
 struct cmd_results *cmd_show_marks(int argc, char **argv) {
 	struct cmd_results *error = NULL;
-	if ((error = checkarg(argc, "show_marks", EXPECTED_AT_MOST, 1))) {
+	if ((error = checkarg(argc, "show_marks", EXPECTED_AT_LEAST, 1))) {
 		return error;
 	}
-	if (argc == 1) {
-		(void)parse_boolean(argv[0], true);
-	}
+	config->show_marks = parse_boolean(argv[0], config->show_marks);
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 
 struct cmd_results *cmd_smart_gaps(int argc, char **argv) {
 	struct cmd_results *error = NULL;
-	if ((error = checkarg(argc, "smart_gaps", EXPECTED_AT_MOST, 1))) {
+	if ((error = checkarg(argc, "smart_gaps", EXPECTED_AT_LEAST, 1))) {
 		return error;
 	}
-	if (argc == 1) {
-		(void)parse_boolean(argv[0], true);
+	if (strcmp(argv[0], "inverse_outer") == 0) {
+		config->smart_gaps = SMART_GAPS_INVERSE_OUTER;
+	} else {
+		config->smart_gaps = parse_boolean(argv[0],
+			config->smart_gaps != SMART_GAPS_OFF) ?
+			SMART_GAPS_ON : SMART_GAPS_OFF;
 	}
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }

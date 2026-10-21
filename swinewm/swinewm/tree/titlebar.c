@@ -131,10 +131,36 @@ char *container_formatted_title(struct swine_container *con) {
 	return buf;
 }
 
+// sway's container_update_marks: "[mark]" for each mark not starting with
+// an underscore. NULL if there is nothing to show.
+static char *container_marks_text(struct swine_container *con) {
+	if (!config->show_marks || !con->marks->length) {
+		return NULL;
+	}
+	size_t len = 0, cap = 32;
+	char *buf = malloc(cap);
+	buf[0] = '\0';
+	for (int i = 0; i < con->marks->length; ++i) {
+		const char *mark = con->marks->items[i];
+		if (mark[0] == '_') {
+			continue;
+		}
+		append(&buf, &len, &cap, "[");
+		append(&buf, &len, &cap, mark);
+		append(&buf, &len, &cap, "]");
+	}
+	if (len == 0) {
+		free(buf);
+		return NULL;
+	}
+	return buf;
+}
+
 static void free_titlebar(struct swine_titlebar *bar) {
 	for (int i = 0; i < bar->tabs->length; ++i) {
 		struct swine_tab *tab = bar->tabs->items[i];
 		free(tab->title);
+		free(tab->marks);
 		free(tab);
 	}
 	list_free(bar->tabs);
@@ -173,6 +199,7 @@ void titlebars_add(struct swine_node *parent, list_t *children,
 		struct swine_tab *tab = calloc(1, sizeof(*tab));
 		tab->con = child;
 		tab->title = container_formatted_title(child);
+		tab->marks = container_marks_text(child);
 		tab->colors = *container_get_colors(child);
 		list_add(bar->tabs, tab);
 	}
