@@ -299,6 +299,7 @@ static void respawn(void) {
 }
 
 void platform_finish(void) {
+	win32_ipc_flush(500);
 	if (keyboard_ok) {
 		win32_keyboard_finish();
 	}
@@ -334,8 +335,18 @@ void platform_finish(void) {
 	}
 }
 
+// After the shutdown event nothing more is sent, as in sway: letting go of
+// the windows on the way out is not "close".
+static bool ipc_shut_down = false;
+
 void platform_ipc_event(uint32_t type, const char *payload) {
+	if (ipc_shut_down) {
+		return;
+	}
 	win32_ipc_publish(type, payload);
+	if (type == (uint32_t)IPC_EVENT_SHUTDOWN) {
+		ipc_shut_down = true;
+	}
 }
 
 uint32_t platform_ipc_input_capabilities(void) {

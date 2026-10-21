@@ -167,6 +167,9 @@ struct win32_ipc_request {
 bool win32_ipc_init(void);
 void win32_ipc_handle(struct win32_ipc_request *request);
 void win32_ipc_publish(uint32_t type, const char *payload);
+// Waits (at most timeout_ms) until queued events are written, so that the
+// shutdown event reaches subscribers before swinewm exits.
+void win32_ipc_flush(DWORD timeout_ms);
 
 // theme.c: windows_theme (Windows' light/dark mode)
 void win32_theme_init(void);

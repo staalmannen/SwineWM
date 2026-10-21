@@ -39,10 +39,18 @@ static void test_chains_and_errors(void) {
 static void test_ipc(void) {
 	fake_setup();
 	fake.ipc_event_count = 0;
+	fake.ipc_changes[0] = '\0';
 	fake_map_view("hello");
 	CHECK(fake.ipc_event_count > 0);
 	CHECK_INT(fake.ipc_last_event_type, (uint32_t)IPC_EVENT_WINDOW);
-	CHECK(strstr(fake.ipc_last_event, "\"change\":\"new\"") != NULL);
+	// As in sway: "new" before "focus".
+	CHECK_STR(fake.ipc_changes, "new,focus,");
+	// A workspace that goes away reports itself as "current".
+	fake.ipc_changes[0] = '\0';
+	CHECK(run("workspace 7; workspace 1"));
+	CHECK(strstr(fake.ipc_changes, "init,focus,") != NULL);
+	CHECK(strstr(fake.ipc_last_event, "\"change\":\"empty\",\"current\":{") != NULL);
+	CHECK(strstr(fake.ipc_last_event, "\"name\":\"7\"") != NULL);
 	uint32_t type;
 	const char *cmd = "workspace 4";
 	char *reply = ipc_handle_request(IPC_COMMAND, cmd, (uint32_t)strlen(cmd), &type);
@@ -145,20 +153,42 @@ static void test_ipc(void) {
 	CHECK_STR(reply, "{\"success\":false}");
 	free(reply);
 
-	const char *tick_payload = "{\"payload\":\"hello\"}";
-	char *tick = ipc_json_tick_event(tick_payload,
-		(uint32_t)strlen(tick_payload));
-	CHECK_STR(tick, "{\"first\":true,\"payload\":\"hello\"}");
+	// Ticks as in sway: the payload is any text, broadcast with first
+	// false; a new subscriber gets first true.
+	char *tick = ipc_json_tick_event(true, "", 0);
+	CHECK_STR(tick, "{\"first\":true,\"payload\":\"\"}");
 	free(tick);
+	const char *tick_payload = "hello \"world\"";
+	int events = fake.ipc_event_count;
 	reply = ipc_handle_request(IPC_SEND_TICK, tick_payload,
 		(uint32_t)strlen(tick_payload), &type);
 	CHECK_STR(reply, "{\"success\":true}");
 	free(reply);
-	const char *invalid_tick = "{\"payload\":1}";
-	reply = ipc_handle_request(IPC_SEND_TICK, invalid_tick,
-		(uint32_t)strlen(invalid_tick), &type);
-	CHECK_STR(reply, "{\"success\":false}");
+	CHECK_INT(fake.ipc_event_count, events + 1);
+	CHECK_INT(fake.ipc_last_event_type, (uint32_t)IPC_EVENT_TICK);
+	CHECK_STR(fake.ipc_last_event,
+		"{\"first\":false,\"payload\":\"hello \\\"world\\\"\"}");
+	reply = ipc_handle_request(IPC_SEND_TICK, "", 0, &type);
+	CHECK_STR(reply, "{\"success\":true}");
 	free(reply);
+	CHECK_STR(fake.ipc_last_event, "{\"first\":false,\"payload\":\"\"}");
+
+	// The mode event names the new mode in "change", as in sway (Waybar's
+	// sway/mode module shows it).
+	config->active = false;
+	config->reading = true;
+	CHECK(read_config_text("mode --pango_markup \"<b>resize</b>\" bindsym Escape mode default\n"
+		"mode plain bindsym Escape mode default\n", "test"));
+	config->reading = false;
+	config->active = true;
+	CHECK(run("mode plain"));
+	CHECK_INT(fake.ipc_last_event_type, (uint32_t)IPC_EVENT_MODE);
+	CHECK_STR(fake.ipc_last_event, "{\"change\":\"plain\",\"pango_markup\":false}");
+	CHECK(run("mode \"<b>resize</b>\""));
+	CHECK_STR(fake.ipc_last_event,
+		"{\"change\":\"<b>resize</b>\",\"pango_markup\":true}");
+	CHECK(run("mode default"));
+	CHECK_STR(fake.ipc_last_event, "{\"change\":\"default\",\"pango_markup\":false}");
 
 	CHECK(ipc_handle_request(12345, "", 0, &type) == NULL);
 	fake_teardown();

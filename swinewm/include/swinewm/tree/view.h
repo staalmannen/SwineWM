@@ -63,6 +63,7 @@ bool view_set_title(struct swine_view *view, const char *title);
 // Runs the for_window rules that match and have not run for this view.
 void view_execute_criteria(struct swine_view *view);
 bool view_is_visible(struct swine_view *view);
+bool view_ancestor_is_only_visible(struct swine_view *view);
 // Works out view->pending.deco from the container's border, the focus and
 // the client.* colours (sway: container_get_current_colors and the smart
 // borders part of view_autoconfigure).

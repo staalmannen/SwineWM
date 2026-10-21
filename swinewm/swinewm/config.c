@@ -73,6 +73,7 @@ struct swine_config *config_create(void) {
 	c->floating_border = B_NORMAL;
 	c->floating_border_thickness = 2;
 	c->hide_edge_borders = E_NONE;
+	c->show_marks = true;   // sway's default
 	c->hide_edge_borders_smart = ESMART_OFF;
 	c->font = swine_strdup("monospace 10");
 	c->titlebar_border_thickness = 1;

@@ -23,7 +23,8 @@ struct cmd_results *cmd_mode(int argc, char **argv) {
 	if ((error = checkarg(argc, "mode", EXPECTED_AT_LEAST, 1))) {
 		return error;
 	}
-	if (strcmp(argv[0], "--pango_markup") == 0) {
+	bool pango = strcmp(argv[0], "--pango_markup") == 0;
+	if (pango) {
 		--argc;
 		++argv;
 		if ((error = checkarg(argc, "mode", EXPECTED_AT_LEAST, 1))) {
@@ -41,6 +42,7 @@ struct cmd_results *cmd_mode(int argc, char **argv) {
 				"Can only define modes in the config");
 		}
 		struct swine_mode *mode = config_add_mode(name);
+		mode->pango = mode->pango || pango;
 		free(name);
 		struct swine_mode *previous = config->current_mode;
 		config->current_mode = mode;
@@ -63,7 +65,7 @@ struct cmd_results *cmd_mode(int argc, char **argv) {
 	}
 	free(name);
 	config->current_mode = mode;
-	char *event = ipc_json_event_mode("switch", mode->name);
+	char *event = ipc_json_event_mode(mode->name, mode->pango);
 	platform_ipc_event((uint32_t)IPC_EVENT_MODE, event);
 	free(event);
 	swine_log(SWINE_DEBUG, "Switched to mode '%s'", mode->name);

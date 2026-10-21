@@ -65,8 +65,7 @@ static HANDLE connect_pipe(const char *name) {
 	return pipe;
 }
 
-char *ipc_request(const char *pipe_name, uint32_t type, const char *payload,
-		char **error) {
+void *ipc_connect(const char *pipe_name, char **error) {
 	char *own_name = pipe_name ? NULL : get_ipc_pipe_name();
 	const char *name = pipe_name ? pipe_name : own_name;
 	HANDLE pipe = connect_pipe(name);
@@ -79,36 +78,62 @@ char *ipc_request(const char *pipe_name, uint32_t type, const char *payload,
 		return NULL;
 	}
 	free(own_name);
+	return pipe;
+}
+
+bool ipc_send(void *connection, uint32_t type, const char *payload) {
 	char header[IPC_HEADER_SIZE];
 	uint32_t len = (uint32_t)strlen(payload);
 	memcpy(header, IPC_MAGIC, IPC_MAGIC_LEN);
 	memcpy(header + IPC_MAGIC_LEN, &len, 4);
 	memcpy(header + IPC_MAGIC_LEN + 4, &type, 4);
+	return io_exact(connection, header, IPC_HEADER_SIZE, true) &&
+		io_exact(connection, (void *)payload, len, true);
+}
+
+char *ipc_receive(void *connection, uint32_t *type) {
+	char header[IPC_HEADER_SIZE];
+	if (!io_exact(connection, header, IPC_HEADER_SIZE, false) ||
+			memcmp(header, IPC_MAGIC, IPC_MAGIC_LEN) != 0) {
+		return NULL;
+	}
+	uint32_t len = 0;
+	memcpy(&len, header + IPC_MAGIC_LEN, 4);
+	if (type) {
+		memcpy(type, header + IPC_MAGIC_LEN + 4, 4);
+	}
+	char *payload = malloc((size_t)len + 1);
+	if (!payload || (len && !io_exact(connection, payload, len, false))) {
+		free(payload);
+		return NULL;
+	}
+	payload[len] = '\0';
+	return payload;
+}
+
+void ipc_close(void *connection) {
+	if (connection) {
+		CloseHandle(connection);
+	}
+}
+
+char *ipc_request(const char *pipe_name, uint32_t type, const char *payload,
+		char **error) {
+	void *connection = ipc_connect(pipe_name, error);
+	if (!connection) {
+		return NULL;
+	}
 	char *reply = NULL;
-	uint32_t reply_len = 0;
-	if (!io_exact(pipe, header, IPC_HEADER_SIZE, true) ||
-			!io_exact(pipe, (void *)payload, len, true)) {
+	if (!ipc_send(connection, type, payload)) {
 		if (error) {
 			*error = swine_strdup("Unable to send IPC message");
 		}
-	} else if (!io_exact(pipe, header, IPC_HEADER_SIZE, false)) {
+	} else if (!(reply = ipc_receive(connection, NULL))) {
 		if (error) {
 			*error = swine_strdup("Unable to receive IPC response");
 		}
-	} else {
-		memcpy(&reply_len, header + IPC_MAGIC_LEN, 4);
-		reply = malloc((size_t)reply_len + 1);
-		if (!reply || (reply_len && !io_exact(pipe, reply, reply_len, false))) {
-			free(reply);
-			reply = NULL;
-			if (error) {
-				*error = swine_strdup("Unable to receive IPC response");
-			}
-		} else {
-			reply[reply_len] = '\0';
-		}
 	}
-	CloseHandle(pipe);
+	ipc_close(connection);
 	return reply;
 }
 #endif

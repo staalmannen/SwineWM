@@ -223,14 +223,13 @@ void view_map(struct swine_view *view) {
 	swine_log(SWINE_DEBUG, "Mapped view '%s' (%s) on workspace %s",
 		view->title ? view->title : "", view->app_id ? view->app_id : "?",
 		ws->name);
+	// As in sway: "new" first, then what the rules and the focus do.
+	char *event = ipc_json_event_window("new", con);
+	platform_ipc_event((uint32_t)IPC_EVENT_WINDOW, event);
+	free(event);
 	view_execute_criteria(view);
 	if (view->container && should_focus(view)) {
 		seat_set_focus_container(view->container);
-	}
-	if (view->container) {
-		char *event = ipc_json_event_window("new", view->container);
-		platform_ipc_event((uint32_t)IPC_EVENT_WINDOW, event);
-		free(event);
 	}
 }
 
@@ -352,6 +351,16 @@ void view_update_decoration(struct swine_view *view) {
 		if (smart && view_is_only_visible(view)) {
 			show_border = false;
 		}
+		// hide_edge_borders: a DWM border cannot hide single edges, so it
+		// goes only when every edge would go: "both" and a window that
+		// fills its workspace.
+		const struct swine_box *b = &con->box;
+		const struct swine_box *area = &con->workspace->box;
+		if (config->hide_edge_borders == E_BOTH && b->x == area->x &&
+				b->y == area->y && b->width == area->width &&
+				b->height == area->height) {
+			show_border = false;
+		}
 	}
 	d.border_color = show_border ? colors->child_border : 0;
 	// In a tabbed or stacked container the tab is the title bar.
@@ -372,4 +381,24 @@ bool view_decoration_equal(const struct view_decoration *a,
 		a->title_color == b->title_color &&
 		a->title_text_color == b->title_text_color &&
 		a->square_corners == b->square_corners && a->alpha == b->alpha;
+}
+
+// sway's view_ancestor_is_only_visible: no sibling on the way up, where a
+// tabbed or stacked ancestor (showing one child) starts afresh.
+bool view_ancestor_is_only_visible(struct swine_view *view) {
+	bool only_visible = true;
+	struct swine_container *con = view->container;
+	while (con) {
+		enum swine_container_layout layout = container_parent_layout(con);
+		if (layout != L_TABBED && layout != L_STACKED) {
+			list_t *siblings = container_get_siblings(con);
+			if (siblings && siblings->length > 1) {
+				only_visible = false;
+			}
+		} else {
+			only_visible = true;
+		}
+		con = con->parent;
+	}
+	return only_visible;
 }

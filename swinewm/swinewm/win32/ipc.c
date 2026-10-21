@@ -2,6 +2,12 @@
 //
 // A listener thread accepts connections. Client threads send requests to the
 // main thread with SendMessage; per-client writer threads drain event queues.
+//
+// The pipe is opened for overlapped I/O. On a synchronous handle Windows
+// serializes all I/O: while a client thread waits in ReadFile for the next
+// request, an event writer's WriteFile would wait too, and a client that
+// subscribes and then only listens (i3ipc scripts, Waybar's sway modules)
+// would never get its events.
 #include <stdlib.h>
 #include <string.h>
 #include "ipc.h"
@@ -23,6 +29,8 @@ struct queued_ipc_event {
 
 struct ipc_client {
 	HANDLE pipe;
+	HANDLE read_event;    // for the client thread's reads
+	HANDLE write_event;   // for writes, which hold write_lock
 	HANDLE event_ready;
 	HANDLE writer_thread;
 	CRITICAL_SECTION write_lock;
@@ -39,11 +47,26 @@ static CRITICAL_SECTION clients_lock;
 static struct ipc_client *clients;
 static bool clients_lock_initialized;
 
-static bool read_exact(HANDLE pipe, void *buf, DWORD len) {
+// One overlapped read or write, waited for.
+static bool pipe_io(HANDLE pipe, HANDLE event, bool write, void *buf,
+		DWORD len, DWORD *done) {
+	OVERLAPPED ov = {0};
+	ov.hEvent = event;
+	ResetEvent(event);
+	BOOL ok = write ? WriteFile(pipe, buf, len, NULL, &ov) :
+		ReadFile(pipe, buf, len, NULL, &ov);
+	if (!ok && GetLastError() != ERROR_IO_PENDING) {
+		return false;
+	}
+	return GetOverlappedResult(pipe, &ov, done, TRUE) != FALSE;
+}
+
+static bool read_exact(struct ipc_client *client, void *buf, DWORD len) {
 	char *p = buf;
 	while (len > 0) {
 		DWORD got = 0;
-		if (!ReadFile(pipe, p, len, &got, NULL) || got == 0) {
+		if (!pipe_io(client->pipe, client->read_event, false, p, len, &got) ||
+				got == 0) {
 			return false;
 		}
 		p += got;
@@ -52,11 +75,13 @@ static bool read_exact(HANDLE pipe, void *buf, DWORD len) {
 	return true;
 }
 
-static bool write_exact(HANDLE pipe, const void *buf, DWORD len) {
+// With client->write_lock held.
+static bool write_exact(struct ipc_client *client, const void *buf, DWORD len) {
 	const char *p = buf;
 	while (len > 0) {
 		DWORD put = 0;
-		if (!WriteFile(pipe, p, len, &put, NULL) || put == 0) {
+		if (!pipe_io(client->pipe, client->write_event, true, (void *)p, len,
+				&put) || put == 0) {
 			return false;
 		}
 		p += put;
@@ -73,8 +98,8 @@ static bool write_frame_locked(struct ipc_client *client, uint32_t type,
 	memcpy(header + IPC_MAGIC_LEN, &length, 4);
 	memcpy(header + IPC_MAGIC_LEN + 4, &type, 4);
 	EnterCriticalSection(&client->write_lock);
-	bool ok = write_exact(client->pipe, header, IPC_HEADER_SIZE) &&
-		write_exact(client->pipe, payload, length);
+	bool ok = write_exact(client, header, IPC_HEADER_SIZE) &&
+		write_exact(client, payload, length);
 	LeaveCriticalSection(&client->write_lock);
 	return ok;
 }
@@ -139,6 +164,45 @@ static uint32_t subscription_for_event(uint32_t type) {
 	}
 }
 
+// With clients_lock held.
+static void queue_event(struct ipc_client *client, uint32_t type,
+		const char *payload) {
+	struct queued_ipc_event *event = calloc(1, sizeof(*event));
+	if (!event) {
+		swine_log(SWINE_ERROR, "IPC: unable to queue event for a client");
+		return;
+	}
+	event->type = type;
+	event->payload = swine_strdup(payload);
+	if (!event->payload) {
+		free(event);
+		swine_log(SWINE_ERROR, "IPC: unable to copy event for a client");
+		return;
+	}
+	EnterCriticalSection(&client->queue_lock);
+	bool slow = client->queue_length >= 256;
+	if (client->stopping || slow) {
+		LeaveCriticalSection(&client->queue_lock);
+		free(event->payload);
+		free(event);
+		if (slow) {
+			client->subscriptions = 0;
+			swine_log(SWINE_ERROR,
+				"IPC: stopped event delivery to a slow client");
+		}
+		return;
+	}
+	if (client->queue_tail) {
+		client->queue_tail->next = event;
+	} else {
+		client->queue_head = event;
+	}
+	client->queue_tail = event;
+	client->queue_length++;
+	wake_event_writer(client);
+	LeaveCriticalSection(&client->queue_lock);
+}
+
 void win32_ipc_publish(uint32_t type, const char *payload) {
 	uint32_t subscription = subscription_for_event(type);
 	if (!subscription || !payload || !clients_lock_initialized) {
@@ -146,43 +210,9 @@ void win32_ipc_publish(uint32_t type, const char *payload) {
 	}
 	EnterCriticalSection(&clients_lock);
 	for (struct ipc_client *client = clients; client; client = client->next) {
-		if (!(client->subscriptions & subscription)) {
-			continue;
+		if (client->subscriptions & subscription) {
+			queue_event(client, type, payload);
 		}
-		struct queued_ipc_event *event = calloc(1, sizeof(*event));
-		if (!event) {
-			swine_log(SWINE_ERROR, "IPC: unable to queue event for a client");
-			continue;
-		}
-		event->type = type;
-		event->payload = swine_strdup(payload);
-		if (!event->payload) {
-			free(event);
-			swine_log(SWINE_ERROR, "IPC: unable to copy event for a client");
-			continue;
-		}
-		EnterCriticalSection(&client->queue_lock);
-		bool slow = client->queue_length >= 256;
-		if (client->stopping || slow) {
-			LeaveCriticalSection(&client->queue_lock);
-			free(event->payload);
-			free(event);
-			if (slow) {
-				client->subscriptions = 0;
-				swine_log(SWINE_ERROR,
-					"IPC: stopped event delivery to a slow client");
-			}
-			continue;
-		}
-		if (client->queue_tail) {
-			client->queue_tail->next = event;
-		} else {
-			client->queue_head = event;
-		}
-		client->queue_tail = event;
-		client->queue_length++;
-		wake_event_writer(client);
-		LeaveCriticalSection(&client->queue_lock);
 	}
 	LeaveCriticalSection(&clients_lock);
 }
@@ -202,7 +232,7 @@ static void remove_client(struct ipc_client *client) {
 	LeaveCriticalSection(&client->queue_lock);
 	LeaveCriticalSection(&clients_lock);
 	DisconnectNamedPipe(client->pipe);
-	CancelSynchronousIo(client->writer_thread);
+	CancelIoEx(client->pipe, NULL);
 	WaitForSingleObject(client->writer_thread, INFINITE);
 	CloseHandle(client->writer_thread);
 	struct queued_ipc_event *event = client->queue_head;
@@ -213,6 +243,8 @@ static void remove_client(struct ipc_client *client) {
 		event = next;
 	}
 	CloseHandle(client->event_ready);
+	CloseHandle(client->read_event);
+	CloseHandle(client->write_event);
 	DeleteCriticalSection(&client->queue_lock);
 	DeleteCriticalSection(&client->write_lock);
 	free(client);
@@ -221,9 +253,8 @@ static void remove_client(struct ipc_client *client) {
 static DWORD WINAPI client_thread(LPVOID data) {
 	struct ipc_client *client = data;
 	for (;;) {
-		HANDLE pipe = client->pipe;
 		char header[IPC_HEADER_SIZE];
-		if (!read_exact(pipe, header, IPC_HEADER_SIZE)) {
+		if (!read_exact(client, header, IPC_HEADER_SIZE)) {
 			break;
 		}
 		if (memcmp(header, IPC_MAGIC, IPC_MAGIC_LEN) != 0) {
@@ -237,14 +268,13 @@ static DWORD WINAPI client_thread(LPVOID data) {
 			break;
 		}
 		char *payload = malloc((size_t)length + 1);
-		if (!payload || (length && !read_exact(pipe, payload, length))) {
+		if (!payload || (length && !read_exact(client, payload, length))) {
 			free(payload);
 			break;
 		}
 		payload[length] = '\0';
 		bool subscribed = type == IPC_SUBSCRIBE &&
 			ipc_parse_subscriptions(payload, length, NULL);
-		bool send_tick = type == IPC_SEND_TICK;
 
 		struct win32_ipc_request request = {
 			.type = type, .payload = payload, .length = length,
@@ -261,26 +291,27 @@ static DWORD WINAPI client_thread(LPVOID data) {
 		memcpy(header + IPC_MAGIC_LEN, &reply_len, 4);
 		memcpy(header + IPC_MAGIC_LEN + 4, &request.reply_type, 4);
 		EnterCriticalSection(&client->write_lock);
-		bool ok = write_exact(pipe, header, IPC_HEADER_SIZE) &&
-			write_exact(pipe, request.reply, reply_len);
+		bool ok = write_exact(client, header, IPC_HEADER_SIZE) &&
+			write_exact(client, request.reply, reply_len);
 		LeaveCriticalSection(&client->write_lock);
 		bool success = strcmp(request.reply, "{\"success\":true}") == 0;
 		uint32_t subscriptions = 0;
 		if (subscribed && success) {
 			ipc_parse_subscriptions(payload, length, &subscriptions);
 		}
-		char *tick_event = send_tick && success ?
-			ipc_json_tick_event(payload, length) : NULL;
 		free(request.reply);
 		free(payload);
 		if (subscribed && success) {
+			// As in sway, subscriptions add up, and a new "tick"
+			// subscriber gets a first tick right after the reply.
 			EnterCriticalSection(&clients_lock);
-			client->subscriptions = subscriptions;
+			client->subscriptions |= subscriptions;
+			if (subscriptions & IPC_SUB_TICK) {
+				char *first = ipc_json_tick_event(true, "", 0);
+				queue_event(client, (uint32_t)IPC_EVENT_TICK, first);
+				free(first);
+			}
 			LeaveCriticalSection(&clients_lock);
-		}
-		if (tick_event) {
-			win32_ipc_publish((uint32_t)IPC_EVENT_TICK, tick_event);
-			free(tick_event);
 		}
 		if (!ok) {
 			break;
@@ -293,7 +324,7 @@ static DWORD WINAPI client_thread(LPVOID data) {
 }
 
 static HANDLE create_instance(bool first) {
-	DWORD open_mode = PIPE_ACCESS_DUPLEX |
+	DWORD open_mode = PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED |
 		(first ? FILE_FLAG_FIRST_PIPE_INSTANCE : 0);
 	return CreateNamedPipeW(pipe_name, open_mode,
 		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT |
@@ -307,10 +338,24 @@ static bool start_client(HANDLE pipe) {
 		return false;
 	}
 	client->pipe = pipe;
+	client->read_event = CreateEventW(NULL, TRUE, FALSE, NULL);
+	client->write_event = CreateEventW(NULL, TRUE, FALSE, NULL);
+	if (!client->read_event || !client->write_event) {
+		if (client->read_event) {
+			CloseHandle(client->read_event);
+		}
+		if (client->write_event) {
+			CloseHandle(client->write_event);
+		}
+		free(client);
+		return false;
+	}
 	InitializeCriticalSection(&client->write_lock);
 	InitializeCriticalSection(&client->queue_lock);
 	client->event_ready = CreateEventW(NULL, FALSE, FALSE, NULL);
 	if (!client->event_ready) {
+		CloseHandle(client->read_event);
+		CloseHandle(client->write_event);
 		DeleteCriticalSection(&client->queue_lock);
 		DeleteCriticalSection(&client->write_lock);
 		free(client);
@@ -320,6 +365,8 @@ static bool start_client(HANDLE pipe) {
 		client, 0, NULL);
 	if (!client->writer_thread) {
 		CloseHandle(client->event_ready);
+		CloseHandle(client->read_event);
+		CloseHandle(client->write_event);
 		DeleteCriticalSection(&client->queue_lock);
 		DeleteCriticalSection(&client->write_lock);
 		free(client);
@@ -338,11 +385,33 @@ static bool start_client(HANDLE pipe) {
 	return true;
 }
 
+// ConnectNamedPipe on an overlapped handle needs an OVERLAPPED.
+static bool wait_for_client(HANDLE pipe, HANDLE event) {
+	OVERLAPPED ov = {0};
+	ov.hEvent = event;
+	ResetEvent(event);
+	if (ConnectNamedPipe(pipe, &ov)) {
+		return true;
+	}
+	DWORD error = GetLastError();
+	if (error == ERROR_PIPE_CONNECTED) {
+		return true;
+	}
+	DWORD done = 0;
+	return error == ERROR_IO_PENDING &&
+		GetOverlappedResult(pipe, &ov, &done, TRUE);
+}
+
 static DWORD WINAPI listen_thread(LPVOID data) {
 	HANDLE pipe = data;
+	HANDLE connect_event = CreateEventW(NULL, TRUE, FALSE, NULL);
+	if (!connect_event) {
+		swine_log(SWINE_ERROR, "IPC: unable to create an event");
+		CloseHandle(pipe);
+		return 1;
+	}
 	for (;;) {
-		BOOL connected = ConnectNamedPipe(pipe, NULL) ||
-			GetLastError() == ERROR_PIPE_CONNECTED;
+		bool connected = wait_for_client(pipe, connect_event);
 		if (connected) {
 			if (!start_client(pipe)) {
 				CloseHandle(pipe);
@@ -353,6 +422,7 @@ static DWORD WINAPI listen_thread(LPVOID data) {
 		pipe = create_instance(false);
 		if (pipe == INVALID_HANDLE_VALUE) {
 			swine_log(SWINE_ERROR, "IPC: unable to create pipe instance");
+			CloseHandle(connect_event);
 			return 1;
 		}
 	}
@@ -394,4 +464,25 @@ bool win32_ipc_init(void) {
 void win32_ipc_handle(struct win32_ipc_request *request) {
 	request->reply = ipc_handle_request(request->type, request->payload,
 		request->length, &request->reply_type);
+}
+
+void win32_ipc_flush(DWORD timeout_ms) {
+	if (!clients_lock_initialized) {
+		return;
+	}
+	ULONGLONG deadline = GetTickCount64() + timeout_ms;
+	for (;;) {
+		bool pending = false;
+		EnterCriticalSection(&clients_lock);
+		for (struct ipc_client *client = clients; client; client = client->next) {
+			EnterCriticalSection(&client->queue_lock);
+			pending = pending || (client->queue_length > 0 && !client->stopping);
+			LeaveCriticalSection(&client->queue_lock);
+		}
+		LeaveCriticalSection(&clients_lock);
+		if (!pending || GetTickCount64() >= deadline) {
+			return;
+		}
+		Sleep(10);
+	}
 }

@@ -22,6 +22,12 @@ the MSI and zip with the matching section below as release notes.
 - A companion watchdog restores hidden windows after an unexpected exit or
   after the manager's message loop stops responding; as the login shell it
   also starts Explorer after recovery.
+- `smart_gaps on|off|toggle|inverse_outer`, as in sway (until now accepted
+  and ignored).
+- `show_marks`: marks appear on the tabs of tabbed and stacked containers
+  as `[mark]`, right-aligned; marks starting with `_` stay hidden.
+- `hide_edge_borders both` hides the border of a window that fills its
+  workspace (a Windows border cannot hide single edges).
 - `bindcode` and `unbindcode` accept numeric Windows virtual-key values
   (decimal, 1–255), so key bindings can be specified by code.
 - New-output workspace discovery recognizes `move container to workspace`
@@ -29,6 +35,20 @@ the MSI and zip with the matching section below as release notes.
 
 ### Fixed
 
+- IPC events reached a subscribed client only when it sent another
+  message: the pipe was opened for synchronous I/O, so a waiting read
+  blocked every event written to it. It now uses overlapped I/O, so
+  listening clients (i3ipc scripts, Waybar's sway modules) get events as
+  they happen. Events still queued when swinewm exits are written first.
+- IPC events now match sway: the `mode` event's `change` is the mode's
+  name (with `pango_markup` from `mode --pango_markup`); `SEND_TICK` takes
+  any text and broadcasts it with `"first": false`, and a new tick
+  subscriber first gets `{"first": true, "payload": ""}`; subscriptions add
+  up; the `empty` workspace event reports the workspace as `current`; a new
+  window's `new` event comes before its `focus` event; and nothing is sent
+  after `shutdown` (no `close` events for windows swinewm lets go of).
+- `swinemsg -t subscribe` prints the first event, and every event with
+  `-m`/`--monitor`, as `swaymsg` does.
 - Newly mapped floating windows are raised above their parent without
   activating them, so owned dialogs do not remain obscured.
 - Focus-follows-mouse keeps a visible owned dialog focused rather than

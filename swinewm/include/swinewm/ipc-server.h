@@ -19,8 +19,9 @@ enum ipc_subscription {
 // malformed payloads are rejected.
 bool ipc_parse_subscriptions(const char *payload, uint32_t length,
 		uint32_t *subscriptions);
-// Builds an IPC tick event body from a SEND_TICK payload.
-char *ipc_json_tick_event(const char *payload, uint32_t length);
+// A tick event: {"first": first, "payload": "<payload>"}. SEND_TICK sends
+// first false to every tick subscriber; a new subscriber gets first true.
+char *ipc_json_tick_event(bool first, const char *payload, uint32_t length);
 
 // Portable request handler. The transport (named pipe on Windows) reads one
 // i3-ipc message and calls this on the main thread. Returns a malloc'ed JSON

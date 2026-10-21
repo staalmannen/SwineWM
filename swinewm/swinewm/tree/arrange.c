@@ -186,13 +186,24 @@ static void arrange_workspace(struct swine_workspace *ws) {
 		return;
 	}
 	struct swine_box area = output_get_usable_area(output);
+	// sway's workspace_add_gaps: smart_gaps drops the gaps around a lone
+	// window, inverse_outer the outer gaps when there is more than one.
+	struct side_gaps outer = ws->gaps_outer;
 	int inner = ws->gaps_inner;
-	long long x = (long long)area.x + ws->gaps_outer.left + inner;
-	long long y = (long long)area.y + ws->gaps_outer.top + inner;
-	long long width = (long long)area.width - ws->gaps_outer.left -
-		ws->gaps_outer.right - 2LL * inner;
-	long long height = (long long)area.height - ws->gaps_outer.top -
-		ws->gaps_outer.bottom - 2LL * inner;
+	bool single = config->smart_gaps != SMART_GAPS_OFF &&
+		workspace_has_single_visible_container(ws);
+	if (config->smart_gaps == SMART_GAPS_ON && single) {
+		outer = (struct side_gaps){0, 0, 0, 0};
+		inner = 0;
+	} else if (config->smart_gaps == SMART_GAPS_INVERSE_OUTER && !single) {
+		outer = (struct side_gaps){0, 0, 0, 0};
+	}
+	long long x = (long long)area.x + outer.left + inner;
+	long long y = (long long)area.y + outer.top + inner;
+	long long width = (long long)area.width - outer.left -
+		outer.right - 2LL * inner;
+	long long height = (long long)area.height - outer.top -
+		outer.bottom - 2LL * inner;
 	if (x < INT_MIN || x > INT_MAX || y < INT_MIN || y > INT_MAX ||
 			width < MIN_SANE_W || width > INT_MAX ||
 			height < MIN_SANE_H || height > INT_MAX) {

@@ -9,6 +9,7 @@
 #include "swinewm/ipc-json.h"
 #include "swinewm/ipc-server.h"
 #include "swinewm/notify.h"
+#include "swinewm/platform.h"
 
 static char *simple_reply(bool success) {
 	return swine_strdup(success ? "{\"success\":true}" : "{\"success\":false}");
@@ -65,30 +66,17 @@ bool ipc_parse_subscriptions(const char *payload, uint32_t length,
 	return valid;
 }
 
-char *ipc_json_tick_event(const char *payload, uint32_t length) {
+char *ipc_json_tick_event(bool first, const char *payload, uint32_t length) {
 	char *text = swine_strndup(payload, length);
-	char *error = NULL;
-	struct json_value *value = json_parse(text, &error);
-	free(text);
-	free(error);
-	if (!value || value->type != JSON_OBJECT) {
-		json_value_free(value);
-		return NULL;
-	}
-	struct json_value *tick = json_object_get(value, "payload");
-	if (tick && tick->type != JSON_STRING) {
-		json_value_free(value);
-		return NULL;
-	}
 	struct json_writer w;
 	json_init(&w);
 	json_begin_object(&w);
 	json_key(&w, "first");
-	json_bool(&w, true);
+	json_bool(&w, first);
 	json_key(&w, "payload");
-	json_string(&w, tick ? tick->string : "");
+	json_string(&w, text);
 	json_end_object(&w);
-	json_value_free(value);
+	free(text);
 	return json_finish(&w);
 }
 
@@ -136,10 +124,11 @@ char *ipc_handle_request(uint32_t type, const char *payload, uint32_t length,
 	case SWINE_IPC_GET_NOTIFICATION_HISTORY:
 		return notify_list_json(notify_history());
 	case IPC_SEND_TICK: {
-		char *tick = ipc_json_tick_event(payload, length);
-		bool valid = tick != NULL;
+		// As in sway: the payload is any text, passed on as it is.
+		char *tick = ipc_json_tick_event(false, payload, length);
+		platform_ipc_event((uint32_t)IPC_EVENT_TICK, tick);
 		free(tick);
-		return simple_reply(valid);
+		return simple_reply(true);
 	}
 	case IPC_SUBSCRIBE: {
 		uint32_t subscriptions;

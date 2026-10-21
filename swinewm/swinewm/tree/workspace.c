@@ -122,7 +122,7 @@ struct swine_workspace *workspace_create(struct swine_output *output,
 
 void workspace_destroy(struct swine_workspace *ws) {
 	swine_log(SWINE_DEBUG, "Destroying workspace %s", ws->name);
-	char *event = ipc_json_event_workspace("empty", NULL, ws);
+	char *event = ipc_json_event_workspace("empty", ws, NULL);
 	platform_ipc_event((uint32_t)IPC_EVENT_WORKSPACE, event);
 	free(event);
 	if (ws->output) {
@@ -722,4 +722,12 @@ void workspace_for_each_container(struct swine_workspace *ws,
 		f(con, data);
 		container_for_each_child(con, f, data);
 	}
+}
+
+bool workspace_has_single_visible_container(struct swine_workspace *ws) {
+	struct swine_container *focus = seat_get_focus_inactive_tiling(ws);
+	if (focus && !focus->view) {
+		focus = seat_get_focus_inactive_view(&focus->node);
+	}
+	return focus && focus->view && view_ancestor_is_only_visible(focus->view);
 }

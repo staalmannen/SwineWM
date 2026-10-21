@@ -71,12 +71,12 @@ ignored · ❌ not implemented (error)
 | `border none\|normal\|pixel [<n>]\|toggle`, `default_border`, `default_floating_border` | 🟡 | The border is the window's own DWM border (Windows 11), always 1 px whatever `<n>` says. `normal` keeps the window's own title bar; `pixel` and `none` remove it (for windows that have a standard one). `csd` is refused |
 | `client.focused\|focused_inactive\|unfocused\|urgent <border> <background> <text> [<indicator> [<child_border>]]` | 🟡 | `child_border` colours the window border; with `border normal`, `background` and `text` colour the window's own title bar (standard title bars only, Windows 11). `indicator` colours the drop zone of `tiling_drag`. `client.placeholder` and `client.background` are accepted and ignored, as in sway |
 | `smart_borders on\|off\|no_gaps`, `hide_edge_borders smart\|smart_no_gaps` | ✅ | |
-| `hide_edge_borders none\|vertical\|horizontal\|both` | 🟡 | Stored; a DWM border cannot hide single edges |
-| `smart_gaps` | ⚪ | |
+| `hide_edge_borders none\|vertical\|horizontal\|both` | 🟡 | A DWM border cannot hide single edges, so it goes only when every edge would: with `both`, for a window that fills its workspace |
+| `smart_gaps on\|off\|toggle\|inverse_outer` | ✅ | As in sway: no gaps around a lone visible window (`on`), or outer gaps only around one (`inverse_outer`); the other tabs of a tabbed or stacked container do not count |
 | `font`, `title_align`, `titlebar_padding`, `titlebar_border_thickness`, `client.focused_tab_title` | ✅ | For the tabs of tabbed and stacked containers. `font` takes a Pango description (`pango:DejaVu Sans Mono 10`); generic families map to Segoe UI, Times New Roman and Consolas |
 | `title_format <format>` | 🟡 | Tab titles: `%title`, `%app_id`, `%class`, `%instance` (the class) and `%shell` (`win32`); no Pango markup |
 | `hide_edge_borders --i3` | ✅ | No tab for a lone child |
-| `show_marks` | ⚪ | |
+| `show_marks yes\|no\|toggle` | ✅ | On the tabs swinewm draws (tabbed and stacked containers), right-aligned as `[mark]`; marks starting with `_` are hidden, as in sway. A window's own title bar cannot show them |
 | `for_window`, `assign` (`workspace`, `number`, `output`, `→`), `no_focus` | ✅ | As in sway: rules run when a window appears and again when its title changes (once per rule and window); `assign` picks the workspace, `no_focus` keeps the focus where it was |
 | Criteria `[…] <commands>` | ✅ | All tokens; what they match on Windows is listed under "Criteria" below. Regular expressions use a built-in PCRE-like engine (no look-around or back-references) |
 | `output <name\|*> bg <file> <stretch\|fill\|fit\|center\|tile> [<#color>]`, `output … bg <#color> solid_color` | ✅ | swaybg's options; PNG, JPEG, BMP, GIF, TIFF (anything the Windows Imaging Component reads). `~`, `%VAR%` and paths relative to the config file |
@@ -87,7 +87,7 @@ ignored · ❌ not implemented (error)
 | `xwayland`, `swaybg_command`, `swaynag_command`, `max_render_time`, `allow_tearing`, `primary_selection`, `inhibit_idle`, `shortcuts_inhibitor`, `popup_during_fullscreen`, `focus_on_window_activation`, `force_display_urgency_hint`, `new_window`, `new_float`, `floating_minimum_size`, `floating_maximum_size` | ⚪ | |
 | `urgent enable\|disable\|allow\|deny` | ✅ | Windows' own "urgency" is a flashing taskbar button (`FlashWindowEx`); it marks the view and its workspace urgent until focused |
 | Application-requested fullscreen | ✅ | A window that makes itself fullscreen (F11) becomes a sway fullscreen container and returns when it leaves fullscreen |
-| `mark [--add\|--replace] [--toggle] <id>`, `unmark [<id>]` | ✅ | Marks are not drawn yet (`show_marks`) |
+| `mark [--add\|--replace] [--toggle] <id>`, `unmark [<id>]` | ✅ | Drawn on tabs (`show_marks`) |
 | `swap container with id\|con_id\|mark <arg>` | ✅ | `id` is the window handle |
 | `sticky enable\|disable\|toggle` | ✅ | Floating windows follow workspace switches |
 | `rename workspace [<old>\|number <n>] to <new>` | ✅ | |
@@ -220,8 +220,8 @@ same cause.
 | `GET_INPUTS`, `GET_SEATS` | ✅ Reports each successfully installed aggregate keyboard/pointer hook and one seat (`seat0`) with the corresponding capabilities. Physical devices and Windows keyboard layouts are not exposed |
 | `GET_NOTIFICATIONS` (1000), `GET_NOTIFICATION_HISTORY` (1001) | ✅ swinewm extensions |
 | `IPC_SYNC` | ✅ Returns the unsupported response, as sway does |
-| `SEND_TICK` | ✅ replies success and broadcasts a tick event |
-| `SUBSCRIBE` and events | 🟡 Validates subscriptions and streams events asynchronously; workspace focus/init/empty/move/rename/urgent, window new/close/focus/title/move/fullscreen_mode, mode, output, binding, barconfig, shutdown and tick are covered. Some sway event types and state changes remain unimplemented |
+| `SEND_TICK` | ✅ As in sway: the payload is any text, sent to tick subscribers as `{"first": false, "payload": …}`; a new tick subscriber first gets `{"first": true, "payload": ""}` |
+| `SUBSCRIBE` and events | 🟡 Validates subscriptions (they add up, as in sway) and streams events asynchronously; workspace focus/init/empty/move/rename/urgent, window new/close/focus/title/move/fullscreen_mode, mode (`change` is the mode's name), output, binding, barconfig, shutdown and tick are covered; nothing is sent after shutdown. Some sway event types (`input`, `bar_state_update`) and state changes remain unimplemented. `swinemsg -t subscribe [-m] '["window"]'` prints events as `swaymsg` does |
 | Watchdog | ✅ A companion process probes the manager's hidden window and process. After three missed probes it terminates an unresponsive manager and runs `--recover`; an unexpected exit also runs recovery. If SwineWM is the login shell, it starts Explorer afterward |
 
 `get_tree` reports native window properties as `app_id` (the executable
