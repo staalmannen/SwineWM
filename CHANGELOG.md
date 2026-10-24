@@ -10,6 +10,13 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- IPC trees, workspaces, outputs and window/workspace events now carry all
+  of sway's and i3's node fields (`urgent`, `floating`, `scratchpad_state`,
+  `orientation`, `deco_rect`, `window_rect`, `geometry`, `shell`,
+  `representation`, `window_properties.instance`, …) in sway's order, so
+  i3 and sway IPC scripts find what they expect. `percent` is now worked
+  out as in sway.
+
 - A native config-error nag window with the complete error list and reload
   and dismiss actions.
 - IPC `SUBSCRIBE` support for workspace, window, mode, output, binding,

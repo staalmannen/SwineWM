@@ -37,14 +37,12 @@ static const char *view_identifier(struct swine_view *view) {
 		view->class_name ? view->class_name : NULL;
 }
 
-char *container_representation(struct swine_container *con) {
-	if (con->view) {
-		return swine_strdup(con->view->title ? con->view->title : "");
-	}
+char *container_build_representation(enum swine_container_layout layout,
+		list_t *children) {
 	size_t len = 0, cap = 64;
 	char *buf = malloc(cap);
 	buf[0] = '\0';
-	switch (con->layout) {
+	switch (layout) {
 	case L_VERT:
 		append(&buf, &len, &cap, "V[");
 		break;
@@ -61,11 +59,11 @@ char *container_representation(struct swine_container *con) {
 		append(&buf, &len, &cap, "D[");
 		break;
 	}
-	for (int i = 0; i < con->children->length; ++i) {
+	for (int i = 0; children && i < children->length; ++i) {
 		if (i != 0) {
 			append(&buf, &len, &cap, " ");
 		}
-		struct swine_container *child = con->children->items[i];
+		struct swine_container *child = children->items[i];
 		if (child->view) {
 			const char *identifier = view_identifier(child->view);
 			append(&buf, &len, &cap, identifier ? identifier : "(null)");
@@ -77,6 +75,13 @@ char *container_representation(struct swine_container *con) {
 	}
 	append(&buf, &len, &cap, "]");
 	return buf;
+}
+
+char *container_representation(struct swine_container *con) {
+	if (con->view) {
+		return swine_strdup(con->view->title ? con->view->title : "");
+	}
+	return container_build_representation(con->layout, con->children);
 }
 
 char *container_formatted_title(struct swine_container *con) {

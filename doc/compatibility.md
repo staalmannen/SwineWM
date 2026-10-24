@@ -213,7 +213,7 @@ same cause.
 | Message | Status |
 | --- | --- |
 | `RUN_COMMAND` | ✅ |
-| `GET_WORKSPACES`, `GET_OUTPUTS`, `GET_TREE`, `GET_VERSION` | ✅ (subset of sway's fields) |
+| `GET_WORKSPACES`, `GET_OUTPUTS`, `GET_TREE`, `GET_VERSION` | ✅ Every node has sway's and i3's fields (`urgent`, `floating`, `scratchpad_state`, `orientation`, `deco_rect`, `window_rect`, `geometry`, `representation`, …), in sway's order; window and workspace events carry the same nodes. Windows-specific values: `window` is the HWND, `shell` is `win32`, `window_properties.instance` is the window class, `deco_rect` covers only the tabs of tabbed and stacked containers (Windows draws a window's own title bar inside the window), and Wayland-only fields (`sandbox_*`, `tag`, `foreign_toplevel_identifier`) are `null` |
 | `GET_BINDING_MODES`, `GET_BINDING_STATE`, `GET_CONFIG` | ✅ |
 | `GET_MARKS` | ✅ |
 | `GET_BAR_CONFIG` | ✅ one bar, `bar-0`: position, height, and `colors`/`font` computed from the Waybar `style.css` (window, workspace buttons) |
