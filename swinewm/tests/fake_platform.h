@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "swinewm/platform.h"
+#include "swinewm/sysinfo.h"
 #include "swinewm/tree/node.h"
 #include "swinewm/tree/output.h"
 #include "swinewm/tree/view.h"
@@ -52,6 +53,20 @@ struct fake_platform_state {
 	char ipc_last_event[8192];
 	// The "change" of every event, in order: "new,focus,"
 	char ipc_changes[1024];
+	// sysinfo for the network, pulseaudio, disk, temperature, idle_inhibitor
+	// and keyboard-state modules
+	bool has_disk;
+	struct sysinfo_disk disk;
+	char last_disk_path[64];
+	bool has_temperature;
+	double temperature;
+	struct sysinfo_network network;
+	struct sysinfo_audio audio;
+	double last_volume_set;
+	bool last_volume_source;
+	int mute_calls;
+	bool idle_inhibited;
+	bool caps_lock, num_lock, scroll_lock;
 	// bar scripts: platform_script_start returns 1, 2, ...
 	int script_starts;
 	int script_stops;

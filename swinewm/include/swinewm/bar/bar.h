@@ -83,9 +83,14 @@ bool bar_get_rect(struct swine_output *output, struct swine_box *out);
 
 struct bar_model *bar_build(struct swine_output *output, time_t now);
 void bar_model_free(struct bar_model *model);
+// Reads the system again for every module (after a volume change).
+void bar_refresh_readings(void);
 // Module-level click handling (e.g. clock "format-alt"); a left click.
 void bar_module_clicked(int module_index);
 // Another click or a scroll on a module (custom scripts run again).
 void bar_module_event(int module_index);
+// A scroll on a module without on-scroll-up/down: its own action (the
+// pulseaudio volume). Returns true if there was one.
+bool bar_module_scroll(int module_index, bool up);
 
 #endif

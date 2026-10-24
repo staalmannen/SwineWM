@@ -160,7 +160,7 @@ static void test_bar_model(void) {
 	bar_load_from_strings(
 		"{\n"
 		"  \"height\": 24,\n"
-		"  \"modules-left\": [\"sway/workspaces\", \"sway/mode\", \"pulseaudio\"],\n"
+		"  \"modules-left\": [\"sway/workspaces\", \"sway/mode\", \"mpd\"],\n"
 		"  \"modules-center\": [\"sway/window\"],\n"
 		"  \"modules-right\": [\"cpu\", \"battery#bat0\", \"clock\", \"custom/hello\"],\n"
 		"  \"sway/window\": { \"max-length\": 5 },\n"
@@ -185,7 +185,7 @@ static void test_bar_model(void) {
 	run("workspace 2");
 	fake.cpu_usage = 70;
 	struct bar_model *model = bar_build(output, 0);
-	// "pulseaudio" is unsupported, so the indexes are 0 ws, 1 mode, 2 window, ...
+	// "mpd" is unsupported, so the indexes are 0 ws, 1 mode, 2 window, ...
 	struct bar_module_view *ws = find_view(model, 0);
 	CHECK(ws && ws->is_box && ws->items->length == 2);
 	if (ws && ws->items->length == 2) {
@@ -584,6 +584,166 @@ static void test_custom_scripts(void) {
 	fake_teardown();
 }
 
+// Waybar's pow_format: SI and binary prefixes, with its specs.
+static void test_pow_format(void) {
+	struct fmt_arg args[] = {
+		{"bits", FMT_POW, "b/s", 1234567},
+		{"size", FMT_POW_BINARY, "B", 256.0 * 1024 * 1024 * 1024},
+		{"small", FMT_POW, "B/s", 12},
+		{"speed", FMT_POW_SKIP_DECIMAL, "b/s", 1e9},
+		{"compact", FMT_POW_COMPACT, "B", 2500},
+	};
+	char *out = format_waybar("{bits} {size} {small} {speed} {compact}", args, 5, NULL);
+	CHECK_STR(out, "1.2Mb/s 256.0GiB 12.0B/s 1Gb/s 2kB");
+	free(out);
+	out = format_waybar("[{bits:>}] [{small:=}] [{bits:k}] [{size:Gi}] [{bits:Mu}]",
+		args, 5, NULL);
+	CHECK_STR(out, "[  1.2Mb/s] [12.0  B/s] [1234.6] [256] [1.2]");
+	free(out);
+}
+
+// network, pulseaudio, disk, temperature, idle_inhibitor, keyboard-state.
+static void test_system_modules(void) {
+	fake_setup();
+	config->bar_enabled = true;
+	fake.now_ms = 10000;
+	fake.network = (struct sysinfo_network){
+		.found = true, .connected = true, .wireless = true,
+		.ifname = "Wi-Fi", .ipaddr = "192.168.1.20", .cidr = 24,
+		.essid = "home", .signal_strength = 70, .signal_dbm = -55,
+		.frequency = 5.18, .rx_bytes = 1000, .tx_bytes = 500,
+	};
+	fake.audio = (struct sysinfo_audio){
+		.present = true, .volume = 40, .desc = "Speakers",
+		.port = "speaker", .source_present = true, .source_volume = 80,
+		.source_desc = "Microphone",
+	};
+	fake.has_disk = true;
+	fake.disk = (struct sysinfo_disk){
+		.total = 100.0 * 1073741824.0, .free = 25.0 * 1073741824.0,
+		.avail = 20.0 * 1073741824.0,
+	};
+	fake.has_temperature = true;
+	fake.temperature = 81.4;
+	fake.caps_lock = true;
+	bar_load_from_strings(
+		"{ \"modules-right\": [\"network\", \"pulseaudio\", \"disk\","
+		"   \"temperature\", \"idle_inhibitor\", \"keyboard-state\", \"wireplumber\"],\n"
+		"  \"network\": { \"interval\": 2, \"format-wifi\": \"{essid} {signalStrength}% {icon}\","
+		"     \"format-ethernet\": \"{ipaddr}/{cidr}\", \"format-disconnected\": \"off\","
+		"     \"format-icons\": [\"w0\", \"w1\", \"w2\"],"
+		"     \"format-alt\": \"{bandwidthDownBytes} {bandwidthUpBytes}\" },\n"
+		"  \"pulseaudio\": { \"format\": \"{volume}% {icon} {format_source}\","
+		"     \"format-muted\": \"M {format_source}\", \"format-source\": \"mic {volume}%\","
+		"     \"format-icons\": { \"speaker\": [\"s0\", \"s1\"], \"default\": \"d\" },"
+		"     \"scroll-step\": 5, \"max-volume\": 50 },\n"
+		"  \"disk\": { \"format\": \"{percentage_used}% {used}/{total} {path}\","
+		"     \"states\": { \"full\": 70 } },\n"
+		"  \"temperature\": { \"critical-threshold\": 80, \"format-critical\": \"HOT {temperatureC}\" },\n"
+		"  \"idle_inhibitor\": { \"format\": \"{icon}\","
+		"     \"format-icons\": { \"activated\": \"ON\", \"deactivated\": \"off\" },"
+		"     \"timeout\": 1 },\n"
+		"  \"keyboard-state\": { \"capslock\": true, \"numlock\": true,"
+		"     \"format\": \"{name}{icon}\","
+		"     \"format-icons\": { \"locked\": \"+\", \"unlocked\": \"-\" } },\n"
+		"  \"wireplumber\": { \"format\": \"{node_name} {volume}\" } }", NULL);
+	struct swine_output *output = root->outputs->items[0];
+	struct bar_model *model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "home 70% w2");
+	CHECK_STR(item_text(model, 1), "40% s0 mic 80%");
+	CHECK_STR(item_text(model, 2), "75% 75.0GiB/100.0GiB /");
+	CHECK_STR(fake.last_disk_path, "%SystemDrive%\\");
+	CHECK_STR(item_text(model, 3), "HOT 81");
+	CHECK_STR(item_text(model, 4), "off");
+	CHECK_STR(item_text(model, 6), "Speakers 40");
+	struct bar_module_view *kb = find_view(model, 5);
+	CHECK(kb && kb->is_box && kb->items->length == 2);
+	if (kb && kb->items->length == 2) {
+		CHECK_STR(((struct bar_item *)kb->items->items[0])->text, "Num-");
+		CHECK_STR(((struct bar_item *)kb->items->items[1])->text, "Caps+");
+	}
+	bar_model_free(model);
+
+	// Readings are kept until "interval" has passed.
+	fake.network.connected = false;
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "home 70% w2");
+	bar_model_free(model);
+	fake.now_ms = 12000;
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "off");
+	bar_model_free(model);
+	// Ethernet, and the bandwidth over the interval (format-alt).
+	fake.network = (struct sysinfo_network){ .found = true, .connected = true,
+		.ifname = "Ethernet", .ipaddr = "10.0.0.2", .cidr = 8,
+		.rx_bytes = 1000 + 4000, .tx_bytes = 500 + 2000 };
+	fake.now_ms = 14000;
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "10.0.0.2/8");
+	bar_model_free(model);
+	bar_module_clicked(0);   // format-alt
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "2.0kB/s 1.0kB/s");   // over 2 s
+	bar_model_free(model);
+
+	// Scrolling changes the volume (scroll-step, max-volume); muted format.
+	CHECK(bar_module_scroll(1, true));
+	CHECK(fake.last_volume_set == 45);
+	CHECK(bar_module_scroll(1, true));
+	CHECK(bar_module_scroll(1, true));
+	CHECK(fake.last_volume_set == 50);
+	fake.audio.muted = true;
+	bar_refresh_readings();
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 1), "M mic 80%");
+	bar_model_free(model);
+	CHECK(!bar_module_scroll(2, true));   // disk has no scroll action
+
+	// idle_inhibitor: a click switches it, "timeout" ends it.
+	bar_module_clicked(4);
+	CHECK(fake.idle_inhibited);
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 4), "ON");
+	bar_model_free(model);
+	fake.now_ms += 61000;
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 4), "off");
+	CHECK(!fake.idle_inhibited);
+	bar_model_free(model);
+
+	// The Linux volume tools of on-clicks work on Windows' volume.
+	fake.audio.muted = false;
+	CHECK(run("exec pactl set-sink-volume @DEFAULT_SINK@ -10%"));
+	CHECK(fake.last_volume_set == 40);
+	CHECK(run("exec pactl set-sink-mute @DEFAULT_SINK@ toggle"));
+	CHECK(fake.audio.muted);
+	CHECK(run("exec wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+"));
+	CHECK(fake.last_volume_set == 45);
+	CHECK(run("exec wpctl set-volume @DEFAULT_AUDIO_SOURCE@ 0.25"));
+	CHECK(fake.last_volume_source && fake.last_volume_set == 25);
+	CHECK(run("exec wpctl set-mute @DEFAULT_AUDIO_SINK@ 0"));
+	CHECK(!fake.audio.muted);
+	CHECK(run("exec pamixer -d 5"));
+	CHECK(fake.last_volume_set == 40);
+	CHECK(run("exec pamixer --default-source -t"));
+	CHECK(fake.audio.source_muted);
+	CHECK(run("exec pamixer --set-volume 150 --allow-boost"));
+	CHECK(fake.last_volume_set == 100);
+	CHECK_INT(fake.spawn_calls, 0);
+	CHECK(run("exec pavucontrol"));   // a program
+	CHECK_INT(fake.spawn_calls, 1);
+
+	// A missing reading hides the module.
+	fake.has_temperature = false;
+	fake.has_disk = false;
+	fake.now_ms += 100000;
+	model = bar_build(output, 0);
+	CHECK(find_view(model, 2) == NULL);
+	CHECK(find_view(model, 3) == NULL);
+	bar_model_free(model);
+	fake_teardown();
+}
+
 void test_bar_all(void) {
 	test_bar_config_ipc();
 	test_json_parse();
@@ -595,4 +755,6 @@ void test_bar_all(void) {
 	test_language();
 	test_script_parse();
 	test_custom_scripts();
+	test_pow_format();
+	test_system_modules();
 }

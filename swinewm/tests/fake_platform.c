@@ -293,6 +293,48 @@ bool sysinfo_memory(struct sysinfo_memory *out) {
 	return true;
 }
 
+bool sysinfo_disk(const char *path, struct sysinfo_disk *out) {
+	snprintf(fake.last_disk_path, sizeof(fake.last_disk_path), "%s", path);
+	*out = fake.disk;
+	return fake.has_disk;
+}
+bool sysinfo_temperature(int zone, double *celsius) {
+	(void)zone;
+	*celsius = fake.temperature;
+	return fake.has_temperature;
+}
+bool sysinfo_network(const char *pattern, struct sysinfo_network *out) {
+	(void)pattern;
+	*out = fake.network;
+	return true;
+}
+bool sysinfo_audio(struct sysinfo_audio *out) {
+	*out = fake.audio;
+	return fake.audio.present;
+}
+void sysinfo_audio_set_volume(bool source, double percent) {
+	fake.last_volume_set = percent;
+	fake.last_volume_source = source;
+	if (source) {
+		fake.audio.source_volume = (int)percent;
+	} else {
+		fake.audio.volume = (int)percent;
+	}
+}
+void sysinfo_audio_set_mute(bool source, int mode) {
+	fake.mute_calls++;
+	bool *muted = source ? &fake.audio.source_muted : &fake.audio.muted;
+	*muted = mode < 0 ? !*muted : mode == 1;
+}
+void sysinfo_inhibit_idle(bool enable) {
+	fake.idle_inhibited = enable;
+}
+bool sysinfo_keyboard_locks(bool *caps, bool *num, bool *scroll) {
+	*caps = fake.caps_lock;
+	*num = fake.num_lock;
+	*scroll = fake.scroll_lock;
+	return true;
+}
 bool sysinfo_cpu(int *usage) {
 	*usage = fake.cpu_usage;
 	return true;

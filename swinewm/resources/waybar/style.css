@@ -42,7 +42,13 @@ window#waybar {
 #battery,
 #cpu,
 #memory,
+#disk,
+#temperature,
+#network,
+#pulseaudio,
+#wireplumber,
 #mode,
+#idle_inhibitor,
 #tray,
 #scratchpad {
     padding: 0 10px;
@@ -80,6 +86,75 @@ window#waybar {
 
 #memory {
     background-color: #9b59b6;
+}
+
+#disk {
+    background-color: #964B00;
+}
+
+#network {
+    background-color: #2980b9;
+}
+
+#network.disconnected {
+    background-color: #f53c3c;
+}
+
+#pulseaudio {
+    background-color: #f1c40f;
+    color: #000000;
+}
+
+#pulseaudio.muted {
+    background-color: #90b1b1;
+    color: #2a5c45;
+}
+
+#wireplumber {
+    background-color: #fff0f5;
+    color: #000000;
+}
+
+#wireplumber.muted {
+    background-color: #f53c3c;
+}
+
+#temperature {
+    background-color: #f0932b;
+}
+
+#temperature.critical {
+    background-color: #eb4d4b;
+}
+
+#idle_inhibitor {
+    background-color: #2d3436;
+}
+
+#idle_inhibitor.activated {
+    background-color: #ecf0f1;
+    color: #2d3436;
+}
+
+#language {
+    background: #00b093;
+    color: #740864;
+    padding: 0 5px;
+    margin: 0 5px;
+}
+
+#keyboard-state {
+    background: #97e1ad;
+    color: #000000;
+    margin: 0 5px;
+}
+
+#keyboard-state > label {
+    padding: 0 5px;
+}
+
+#keyboard-state > label.locked {
+    background: rgba(0, 0, 0, 0.2);
 }
 
 #scratchpad {

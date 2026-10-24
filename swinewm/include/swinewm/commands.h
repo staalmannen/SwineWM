@@ -115,6 +115,9 @@ swine_cmd cmd_mode;
 swine_cmd cmd_move;
 swine_cmd cmd_nop;
 swine_cmd cmd_input;
+// pactl, wpctl and pamixer volume commands in exec (commands/audio.c), or
+// NULL if the line is not one of them.
+struct cmd_results *audio_builtin(const char *name, int argc, char **argv);
 swine_cmd cmd_output;
 swine_cmd cmd_notify_send;
 swine_cmd cmd_grim;

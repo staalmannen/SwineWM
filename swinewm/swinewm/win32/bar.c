@@ -389,9 +389,9 @@ static LRESULT CALLBACK bar_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 			char *copy = swine_strdup(command);
 			win32_run_command(copy);
 			free(copy);
-		}
-		if (index >= 0) {
 			bar_module_event(index);
+		} else if (index >= 0 && bar_module_scroll(index, delta > 0)) {
+			win32_bar_refresh();
 		}
 		return 0;
 	}

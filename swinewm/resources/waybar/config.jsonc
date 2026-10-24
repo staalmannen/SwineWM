@@ -19,9 +19,12 @@
         "sway/window"
     ],
     "modules-right": [
+        "pulseaudio",
+        "network",
         "sway/language",
         "cpu",
         "memory",
+        "temperature",
         "battery",
         "clock",
         "tray"
@@ -59,6 +62,27 @@
         "spacing": 10
         // "icons": { "Spotify.exe": false },
         // "show-passive-items": true
+    },
+    "pulseaudio": {
+        // Scroll to change the volume; click for Windows' Sound panel
+        "format": "VOL {volume}%",
+        "format-bluetooth": "VOL {volume}% BT",
+        "format-muted": "MUTE",
+        "on-click": "control mmsys.cpl"
+    },
+    "network": {
+        // Click to show the address instead
+        "format-wifi": "{essid} ({signalStrength}%)",
+        "format-ethernet": "{ipaddr}/{cidr}",
+        "format-linked": "{ifname} (No IP)",
+        "format-disconnected": "Disconnected",
+        "format-alt": "{ifname}: {ipaddr}/{cidr}",
+        "interval": 5
+    },
+    "temperature": {
+        // Shown when Windows reports an ACPI thermal zone
+        "critical-threshold": 80,
+        "format": "{temperatureC}°C"
     },
     "cpu": {
         "format": "CPU {usage}%"

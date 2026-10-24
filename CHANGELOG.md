@@ -25,6 +25,18 @@ the MSI and zip with the matching section below as release notes.
   swinewm. `pkill -RTMIN+8 waybar` (in `exec`, an `on-click` or
   `swinemsg exec`) runs the modules with `"signal": 8`; `-USR1` shows or
   hides the bar and `-USR2` reloads it, as in Waybar.
+- Waybar modules `network` (IP Helper and the WLAN API: addresses,
+  Wi-Fi name and signal, bandwidth), `pulseaudio`/`wireplumber` (the
+  default Windows output and input; scroll for the volume), `disk`,
+  `temperature` (ACPI thermal zones, where Windows reports them),
+  `idle_inhibitor` (keeps the display on) and `keyboard-state`. The default
+  bar shows the volume, the network and, where available, the temperature.
+- Waybar's unit formatting (`pow_format`) for bandwidth and disk sizes,
+  with its specs (`{bandwidthDownBits:>}`, `{used:=}`, `{total:Gi}`), and
+  `format-icons` thresholds (`{"icon": …, "max": n}`).
+- `pactl`, `wpctl` and `pamixer` volume and mute commands in `exec` (an
+  `on-click`, a binding) change the Windows volume, so volume bindings from
+  Linux configs work.
 - Bar modules take `on-click-middle` and `on-click-right`.
 - `exec swaymsg <command>` (and `swinemsg`) runs the command in swinewm
   without starting a process, so Waybar `on-click`s and bindings from

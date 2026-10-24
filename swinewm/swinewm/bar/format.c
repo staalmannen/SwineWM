@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,9 +39,115 @@ static const struct fmt_arg *find_arg(const struct fmt_arg *args, int nargs,
 	return NULL;
 }
 
+// Waybar's fmt::formatter<pow_format> (include/util/format.hpp).
+static void format_pow(struct buf *b, const struct fmt_arg *arg,
+		const char *spec, size_t spec_len) {
+	static const char *const units[] = {"", "k", "M", "G", "T", "P"};
+	const int max_pow = 5;
+	char align = 0, scale = 0, unit_pref = 0, base_pref = 0;
+	bool force_int = false;
+	int width = 0;
+	size_t i = 0;
+	if (i < spec_len && (spec[i] == '>' || spec[i] == '<' || spec[i] == '=')) {
+		align = spec[i++];
+	}
+	for (; i < spec_len; ++i) {
+		char c = spec[i];
+		if (c == '#' || c == 'k' || c == 'M' || c == 'G' || c == 'T' || c == 'P') {
+			scale = c;
+		} else if (c == 'u' || c == 'U') {
+			unit_pref = c;
+		} else if (c == 'b' || c == 'B') {
+			base_pref = c;
+		} else if (c == 'i') {
+			force_int = true;
+		} else if (c >= '0' && c <= '9') {
+			width = width * 10 + (c - '0');
+		} else {
+			break;
+		}
+	}
+	bool binary = base_pref == 'B' ? true : base_pref == 'b' ? false :
+		arg->type == FMT_POW_BINARY;
+	double base = binary ? 1024.0 : 1000.0;
+	double value = arg->num < 0 ? 0 : arg->num;
+	double fraction = value, div = 1;
+	int pow = 0;
+	if (scale) {
+		const char *scales = "#kMGTP";
+		pow = (int)(strchr(scales, scale) - scales);
+		for (int k = 0; k < pow; ++k) {
+			div *= base;
+		}
+		fraction /= div;
+	} else {
+		while (pow < max_pow && fraction / base >= 1) {
+			fraction /= base;
+			div *= base;
+			pow++;
+		}
+	}
+	int precision = 1;
+	if (force_int) {
+		precision = 0;
+	} else if (arg->type == FMT_POW_SKIP_DECIMAL &&
+			fmod(value, div) == 0) {
+		precision = 0;
+	} else if (arg->type == FMT_POW_COMPACT && !scale && pow < 2) {
+		precision = 0;
+	}
+	bool hide_unit = unit_pref == 'u' || (unit_pref == 0 && scale != 0);
+	char prefix[4] = "";
+	if (!scale) {
+		snprintf(prefix, sizeof(prefix), "%s%s", units[pow],
+			binary && pow ? "i" : "");
+	}
+	const char *unit = hide_unit || !arg->str ? "" : arg->str;
+	int number_width = 3 + precision + (precision != 0) + (binary ? 1 : 0);
+	int prefix_col = scale ? 0 : 1 + (binary ? 1 : 0);
+	int max_width = number_width + prefix_col + (int)strlen(unit);
+	bool fixed_num = scale && width > 0;
+	char number[64];
+	snprintf(number, sizeof(number), "%.*f", precision, fraction);
+	if (fixed_num && (int)strlen(number) > width) {
+		int w = width < 63 ? width : 63;
+		memset(number, '#', (size_t)w);
+		number[w] = '\0';
+	}
+	char text[160];
+	if (align == '=') {
+		// Column-align: the number left-justified in its column, then the
+		// prefix and unit, padded so that columns line up.
+		const char *padding = !scale && pow == 0 ? (binary ? "  " : " ") : "";
+		snprintf(text, sizeof(text), "%-*s%s%s%s",
+			fixed_num ? width : number_width, number, padding, prefix, unit);
+		buf_str(b, text);
+		return;
+	}
+	char body[128];
+	if (fixed_num) {
+		snprintf(body, sizeof(body), "%*s%s%s", width, number, prefix, unit);
+	} else {
+		snprintf(body, sizeof(body), "%s%s%s", number, prefix, unit);
+	}
+	if (align == '>') {
+		snprintf(text, sizeof(text), "%*s", max_width, body);
+	} else if (align == '<') {
+		snprintf(text, sizeof(text), "%-*s", max_width, body);
+	} else {
+		snprintf(text, sizeof(text), "%s", body);
+	}
+	buf_str(b, text);
+}
+
 // Applies a {fmt} spec such as "0.1f", ">3", "3" or "" to an argument.
 static void format_arg(struct buf *b, const struct fmt_arg *arg,
 		const char *spec, size_t spec_len) {
+	if (arg->type >= FMT_POW) {
+		format_pow(b, arg, spec, spec_len);
+		return;
+	}
+	bool is_number = arg->type == FMT_NUMBER;
 	char align = 0;
 	int width = 0, precision = -1;
 	char type = 0;
@@ -62,7 +169,7 @@ static void format_arg(struct buf *b, const struct fmt_arg *arg,
 		type = spec[i];
 	}
 	char text[128];
-	if (arg->is_number) {
+	if (is_number) {
 		if (precision >= 0 || type == 'f') {
 			snprintf(text, sizeof(text), "%.*f", precision >= 0 ? precision : 6,
 				arg->num);
@@ -76,7 +183,7 @@ static void format_arg(struct buf *b, const struct fmt_arg *arg,
 	int pad = width > len ? width - len : 0;
 	// fmt right-aligns numbers and left-aligns strings by default
 	if (!align) {
-		align = arg->is_number ? '>' : '<';
+		align = is_number ? '>' : '<';
 	}
 	int left = align == '>' ? pad : align == '^' ? pad / 2 : 0;
 	int right = pad - left;

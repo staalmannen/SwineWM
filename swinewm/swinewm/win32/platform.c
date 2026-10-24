@@ -14,6 +14,7 @@
 #include "swinewm/notify.h"
 #include "swinewm/platform.h"
 #include "swinewm/server.h"
+#include "swinewm/sysinfo.h"
 #include "win32.h"
 #include <objbase.h>
 
@@ -350,6 +351,9 @@ void platform_finish(void) {
 	win32_wallpaper_finish();
 	win32_outputs_finish();
 	win32_recover_display_done();
+	win32_network_finish();
+	win32_audio_finish();   // COM objects: before CoUninitialize
+	sysinfo_inhibit_idle(false);
 	CoUninitialize();
 	win32_fonts_clear();
 	win32_layouts_finish();

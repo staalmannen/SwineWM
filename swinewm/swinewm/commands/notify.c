@@ -294,6 +294,8 @@ static struct cmd_results *run_builtin(int argc, char **argv,
 			waybar_signal(argc, argv, false)) {
 		waybar_signal(argc, argv, true);
 		res = cmd_results_new(CMD_SUCCESS, NULL);
+	} else if ((res = audio_builtin(name, argc, argv)) != NULL) {
+		// pactl, wpctl or pamixer changed the Windows volume
 	} else if (is_msg_command(name, argc, argv)) {
 		// "swaymsg <command>" (a Waybar on-click, a binding): run the
 		// command here instead of starting a process to send it back.

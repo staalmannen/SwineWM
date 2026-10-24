@@ -36,6 +36,10 @@ void win32_run_command(const char *command);
 #define WIN32_TIMER_LAYOUT 4
 void win32_layouts_finish(void);
 
+// network.c and audio.c: readings for the bar.
+void win32_network_finish(void);
+void win32_audio_finish(void);
+
 // script.c: bar scripts (platform_script_start).
 void win32_script_message(LPARAM lparam);
 void win32_scripts_finish(void);
