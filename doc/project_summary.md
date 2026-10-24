@@ -152,7 +152,7 @@ What an existing sway config needs to load and behave.
   title bar, and `opacity` with layered-window alpha; all undone on exit,
   crash and `--recover` (see [`research/glazewm.md`](research/glazewm.md)).
 
-### 0.4.0 — IPC parity (implemented, being tested)
+### 0.4.0 — IPC parity (released)
 
 - `SUBSCRIBE` with workspace, window, mode, output, binding, shutdown and
   tick events, matching sway-ipc(7), so i3/sway IPC libraries and scripts

@@ -8,6 +8,8 @@ the MSI and zip with the matching section below as release notes.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-24
+
 ### Added
 
 - IPC trees, workspaces, outputs and window/workspace events now carry all
@@ -265,7 +267,8 @@ built-in Waybar (config.jsonc, CSS subset, common modules) and Mako
 (config, criteria, modes, `notify-send`, `makoctl`), wallpapers,
 running as the Windows shell (`--set-shell`), and an MSI installer.
 
-[Unreleased]: https://github.com/staalmannen/SwineWM/compare/0.3.0...HEAD
+[Unreleased]: https://github.com/staalmannen/SwineWM/compare/0.4.0...HEAD
+[0.4.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.4.0
 [0.3.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.3.0
 [0.2.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.2.0
 [0.1.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.1.0
