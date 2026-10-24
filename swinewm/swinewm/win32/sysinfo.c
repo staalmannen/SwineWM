@@ -70,7 +70,7 @@ bool sysinfo_cpu(int *usage) {
 
 bool sysinfo_disk(const char *path, struct sysinfo_disk *out) {
 	wchar_t *wide = utf8_to_utf16(path);
-	ULARGE_INTEGER avail, total, free_bytes;
+	ULARGE_INTEGER avail = {0}, total = {0}, free_bytes = {0};
 	BOOL ok = wide && GetDiskFreeSpaceExW(wide, &avail, &total, &free_bytes);
 	free(wide);
 	if (!ok) {

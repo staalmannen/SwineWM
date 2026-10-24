@@ -1111,7 +1111,7 @@ static double disk_divisor(const char *unit) {
 static char *disk_text(struct bar_module *m, const char *path,
 		const char *format, const char **state_out, struct tm *tm) {
 	char *real = disk_path(path);
-	struct sysinfo_disk d;
+	struct sysinfo_disk d = {0};
 	bool ok = real && sysinfo_disk(real, &d) && d.total > 0;
 	free(real);
 	if (!ok) {

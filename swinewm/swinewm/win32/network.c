@@ -8,6 +8,7 @@
 #include <ws2ipdef.h>
 #include <iphlpapi.h>
 #include <wlanapi.h>
+#include <objbase.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
