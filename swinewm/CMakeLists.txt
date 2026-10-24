@@ -21,6 +21,7 @@ endif()
 
 add_library(swine_common STATIC
   common/fileutil.c
+  common/ipc-client.c
   common/json.c
   common/json-parse.c
   common/list.c
@@ -31,7 +32,6 @@ add_library(swine_common STATIC
 )
 target_include_directories(swine_common PUBLIC include)
 if(WIN32)
-  target_sources(swine_common PRIVATE common/ipc-client.c)
   target_compile_definitions(swine_common PRIVATE UNICODE _UNICODE)
   target_link_libraries(swine_common PUBLIC advapi32)
 endif()

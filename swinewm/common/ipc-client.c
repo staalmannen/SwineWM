@@ -1,11 +1,39 @@
 #ifdef _WIN32
 #include <windows.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "ipc.h"
 #include "ipc-client.h"
+#include "json.h"
 #include "stringop.h"
+
+char *ipc_subscribe_payload(const char *text) {
+	char *error = NULL;
+	struct json_value *value = json_parse(text, &error);
+	free(error);
+	bool is_array = value && value->type == JSON_ARRAY;
+	json_value_free(value);
+	if (is_array) {
+		return swine_strdup(text);
+	}
+	// Event names, however they arrived: "window workspace",
+	// "window,workspace", or "[window,workspace]" (what Windows PowerShell
+	// before 7.3 passes for '["window","workspace"]').
+	struct json_writer w;
+	json_init(&w);
+	json_begin_array(&w);
+	list_t *names = split_string(text, " ,[]\"'\\\t");
+	for (int i = 0; i < names->length; ++i) {
+		json_string(&w, names->items[i]);
+	}
+	list_free_items_and_destroy(names);
+	json_end_array(&w);
+	return json_finish(&w);
+}
+
+#ifdef _WIN32
 
 static char *narrow(const wchar_t *w) {
 	int n = WideCharToMultiByte(CP_UTF8, 0, w, -1, NULL, 0, NULL, NULL);

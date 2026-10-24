@@ -35,6 +35,11 @@ the MSI and zip with the matching section below as release notes.
 
 ### Fixed
 
+- `swinemsg -t subscribe -m '["window","workspace"]'` failed with
+  `{"success":false}` in Windows PowerShell, which drops the inner quotes
+  before 7.3. swinemsg now turns `[window,workspace]` into JSON, and also
+  takes plain event names: `swinemsg -t subscribe -m window workspace`.
+
 - IPC events reached a subscribed client only when it sent another
   message: the pipe was opened for synchronous I/O, so a waiting read
   blocked every event written to it. It now uses overlapped I/O, so

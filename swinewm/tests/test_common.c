@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include "ipc-client.h"
 #include "json.h"
 #include "list.h"
 #include "log.h"
@@ -172,6 +173,30 @@ static void test_json(void) {
 	free(out);
 }
 
+// swinemsg -t subscribe: JSON arrays pass unchanged; plain names and what
+// Windows PowerShell before 7.3 makes of '["window","workspace"]' become one.
+static void test_subscribe_payload(void) {
+	const char *inputs[] = {
+		"[window,workspace]",
+		"window workspace",
+		"window,workspace",
+		"[\"window\",\"workspace\"]",
+		"[ \"window\", \"workspace\" ]",
+	};
+	const char *expected[] = {
+		"[\"window\",\"workspace\"]",
+		"[\"window\",\"workspace\"]",
+		"[\"window\",\"workspace\"]",
+		"[\"window\",\"workspace\"]",
+		"[ \"window\", \"workspace\" ]",
+	};
+	for (size_t i = 0; i < sizeof(inputs) / sizeof(inputs[0]); ++i) {
+		char *out = ipc_subscribe_payload(inputs[i]);
+		CHECK_STR(out, expected[i]);
+		free(out);
+	}
+}
+
 static void test_keys(void) {
 	uint32_t code = 0;
 	CHECK(keyname_to_keycode("Return", &code) && code == 0x0D);
@@ -246,6 +271,7 @@ void test_common_all(void) {
 	test_argsep();
 	test_strings();
 	test_json();
+	test_subscribe_payload();
 	test_log_levels();
 	test_regex();
 	test_keys();
