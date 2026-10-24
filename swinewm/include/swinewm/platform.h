@@ -95,6 +95,14 @@ void platform_drop_indicator(const struct swine_box *box);
 
 // Starts a process from a command line. Returns false on failure.
 bool platform_spawn(const char *cmdline);
+// Starts a command line in the background for a bar script (on Windows
+// through cmd.exe, without a window), with %WAYBAR_OUTPUT_NAME% set to
+// output_name. Each line it prints reaches bar_script_line and its end
+// bar_script_exited (bar/custom.h), on the main thread. Returns an id, or 0
+// if it could not be started.
+uint64_t platform_script_start(const char *cmdline, const char *output_name);
+// Ends the script and every process it started; it reports nothing more.
+void platform_script_stop(uint64_t id);
 
 // Candidate paths for a config file in priority order (char *, caller
 // frees). name is relative, with '/' separators: "config",

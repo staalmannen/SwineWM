@@ -26,6 +26,8 @@ enum bar_section {
 struct bar_item {
 	char *text;              // markup already stripped
 	char *on_click;          // swinewm command for a left click, or NULL
+	char *on_click_middle;
+	char *on_click_right;
 	char *on_scroll_up;
 	char *on_scroll_down;
 	struct swine_style style;
@@ -81,7 +83,9 @@ bool bar_get_rect(struct swine_output *output, struct swine_box *out);
 
 struct bar_model *bar_build(struct swine_output *output, time_t now);
 void bar_model_free(struct bar_model *model);
-// Module-level click handling (e.g. clock "format-alt").
+// Module-level click handling (e.g. clock "format-alt"); a left click.
 void bar_module_clicked(int module_index);
+// Another click or a scroll on a module (custom scripts run again).
+void bar_module_event(int module_index);
 
 #endif

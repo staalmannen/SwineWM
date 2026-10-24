@@ -18,6 +18,9 @@ struct fmt_arg {
 char *format_waybar(const char *fmt, const struct fmt_arg *args, int nargs,
 		const struct tm *tm);
 
+// Escapes text for Pango markup (&amp; &lt; &gt; &quot; &apos;).
+char *markup_escape(const char *text);
+
 // Removes Pango markup tags and decodes the XML entities Pango accepts.
 char *markup_strip(const char *text);
 

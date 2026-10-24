@@ -17,6 +17,15 @@ the MSI and zip with the matching section below as release notes.
   layouts, bound to `$mod+Ctrl+space` in the default config. `get_inputs`
   lists the layouts as sway does, and an `input` event (`xkb_layout`) is
   sent when the layout changes, also through Windows' own hotkeys.
+- Waybar `custom/*` modules run scripts: `exec` with `interval`,
+  `signal` or as a continuous script, `exec-if`, `restart-interval`,
+  `return-type: json`, `format-icons` by `alt` or percentage, `escape`,
+  `hide-empty-text`, `on-update`. Scripts run through `cmd.exe` without a
+  window, each in a job object so nothing they start outlives them or
+  swinewm. `pkill -RTMIN+8 waybar` (in `exec`, an `on-click` or
+  `swinemsg exec`) runs the modules with `"signal": 8`; `-USR1` shows or
+  hides the bar and `-USR2` reloads it, as in Waybar.
+- Bar modules take `on-click-middle` and `on-click-right`.
 - `exec swaymsg <command>` (and `swinemsg`) runs the command in swinewm
   without starting a process, so Waybar `on-click`s and bindings from
   Linux configs work as they are.

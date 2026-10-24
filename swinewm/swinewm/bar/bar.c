@@ -13,6 +13,7 @@
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/bar/bar.h"
+#include "swinewm/bar/custom.h"
 #include "swinewm/bar/format.h"
 #include "swinewm/bar/tray.h"
 #include "swinewm/config.h"
@@ -53,6 +54,7 @@ struct bar_module {
 	char *css_class;     // "bat2", or NULL
 	struct json_value *cfg;  // borrowed from the config; may be NULL
 	bool alt;            // showing format-alt
+	struct bar_script *script;  // custom/* with "exec" or "exec-if"
 };
 
 static struct {
@@ -75,6 +77,7 @@ static void free_modules(void) {
 		free(m->name);
 		free(m->css_id);
 		free(m->css_class);
+		bar_script_destroy(m->script);
 		free(m);
 	}
 	list_free(bar.modules);
@@ -149,6 +152,13 @@ static void add_modules(const char *key, enum bar_section section) {
 			free(base);
 		}
 		m->cfg = json_object_get(bar.bar, v->string);
+		if (kind == MOD_CUSTOM && config->bar_enabled) {
+			// Waybar runs a module per bar; swinewm one per module, with
+			// the first monitor's name.
+			struct swine_output *first = root && root->outputs->length ?
+				root->outputs->items[0] : NULL;
+			m->script = bar_script_create(m->cfg, first ? first->name : NULL);
+		}
 		list_add(bar.modules, m);
 	}
 }
@@ -416,6 +426,10 @@ static void add_label(struct build_ctx *ctx, struct bar_module *m, int index,
 	if (on_click) {
 		item->on_click = format_str("exec %s", on_click);
 	}
+	const char *middle = json_get_string(m->cfg, "on-click-middle", NULL);
+	const char *right = json_get_string(m->cfg, "on-click-right", NULL);
+	item->on_click_middle = middle ? format_str("exec %s", middle) : NULL;
+	item->on_click_right = right ? format_str("exec %s", right) : NULL;
 	const char *up = json_get_string(m->cfg, "on-scroll-up", NULL);
 	const char *down = json_get_string(m->cfg, "on-scroll-down", NULL);
 	item->on_scroll_up = up ? format_str("exec %s", up) : NULL;
@@ -714,6 +728,77 @@ static void build_tray(struct build_ctx *ctx, struct bar_module *m,
 	list_add(ctx->model->modules, view);
 }
 
+// Waybar's getIcon(percentage, alt) for custom modules: "format-icons" as
+// a string, an array by percentage, or an object by alt (whose values may be
+// arrays by percentage again).
+static const char *custom_icon(struct bar_module *m, int percentage,
+		const char *alt) {
+	struct json_value *icons = json_object_get(m->cfg, "format-icons");
+	if (!icons) {
+		return "";
+	}
+	if (icons->type == JSON_STRING) {
+		return icons->string;
+	}
+	if (icons->type == JSON_OBJECT) {
+		struct json_value *v = json_object_get(icons, alt && *alt ? alt :
+			"default");
+		if (!v) {
+			v = json_object_get(icons, "default");
+		}
+		icons = v;
+		if (icons && icons->type == JSON_STRING) {
+			return icons->string;
+		}
+	}
+	if (icons && icons->type == JSON_ARRAY && icons->items->length) {
+		int n = icons->items->length;
+		int i = percentage * n / 100;
+		if (i >= n) i = n - 1;
+		if (i < 0) i = 0;
+		struct json_value *v = icons->items->items[i];
+		return v->type == JSON_STRING ? v->string : "";
+	}
+	return "";
+}
+
+// Waybar's Custom::update.
+static void build_custom(struct build_ctx *ctx, struct bar_module *m,
+		int index) {
+	if (!m->script) {
+		if (!json_object_get(m->cfg, "exec") &&
+				!json_object_get(m->cfg, "exec-if")) {
+			struct fmt_arg args[] = {{NULL, false, "", 0}};
+			add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL,
+				"{}"), args, 1, &ctx->tm), NULL);
+		}
+		return;
+	}
+	struct bar_script_result r;
+	bar_script_result(m->script, &r);
+	if (r.hidden || (json_get_bool(m->cfg, "hide-empty-text", false) &&
+			!r.text[0])) {
+		bar_script_result_finish(&r);
+		return;
+	}
+	struct fmt_arg args[] = {
+		{NULL, false, r.text, 0},
+		{"text", false, r.text, 0},
+		{"alt", false, r.alt, 0},
+		{"icon", false, custom_icon(m, r.percentage, r.alt), 0},
+		{"percentage", true, NULL, r.percentage},
+	};
+	const char *classes[MAX_CLASSES + 1];
+	int n = 0;
+	for (int i = 0; i < r.classes->length && n < MAX_CLASSES; ++i) {
+		classes[n++] = r.classes->items[i];
+	}
+	classes[n] = NULL;
+	add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL, "{}"),
+		args, 5, &ctx->tm), classes);
+	bar_script_result_finish(&r);
+}
+
 // Waybar's {flag}: the regional indicator symbols of a two-letter region.
 static void layout_flag(const char *region, char *out, size_t size) {
 	out[0] = '\0';
@@ -884,16 +969,9 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 	case MOD_LANGUAGE:
 		build_language(ctx, m, index);
 		return;
-	case MOD_CUSTOM: {
-		if (json_object_get(m->cfg, "exec")) {
-			// Running scripts and reading their output is not implemented.
-			return;
-		}
-		struct fmt_arg args[] = {{NULL, false, "", 0}};
-		add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL,
-			"{}"), args, 1, &ctx->tm), NULL);
+	case MOD_CUSTOM:
+		build_custom(ctx, m, index);
 		return;
-	}
 	}
 }
 
@@ -927,6 +1005,8 @@ void bar_model_free(struct bar_model *model) {
 			struct bar_item *item = view->items->items[j];
 			free(item->text);
 			free(item->on_click);
+			free(item->on_click_middle);
+			free(item->on_click_right);
 			free(item->on_scroll_up);
 			free(item->on_scroll_down);
 			free(item->icon_path);
@@ -947,4 +1027,13 @@ void bar_module_clicked(int module_index) {
 	if (json_object_get(m->cfg, "format-alt")) {
 		m->alt = !m->alt;
 	}
+	bar_script_event(m->script);
+}
+
+void bar_module_event(int module_index) {
+	if (!bar.modules || module_index < 0 || module_index >= bar.modules->length) {
+		return;
+	}
+	struct bar_module *m = bar.modules->items[module_index];
+	bar_script_event(m->script);
 }

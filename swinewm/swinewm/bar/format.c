@@ -175,6 +175,22 @@ char *format_waybar(const char *fmt, const struct fmt_arg *args, int nargs,
 	return b.data;
 }
 
+char *markup_escape(const char *text) {
+	struct buf b = {0};
+	buf_add(&b, "", 0);
+	for (const char *p = text ? text : ""; *p; ++p) {
+		switch (*p) {
+		case '&': buf_str(&b, "&amp;"); break;
+		case '<': buf_str(&b, "&lt;"); break;
+		case '>': buf_str(&b, "&gt;"); break;
+		case '"': buf_str(&b, "&quot;"); break;
+		case '\'': buf_str(&b, "&apos;"); break;
+		default: buf_add(&b, p, 1); break;
+		}
+	}
+	return b.data;
+}
+
 char *markup_strip(const char *text) {
 	struct buf b = {0};
 	buf_add(&b, "", 0);

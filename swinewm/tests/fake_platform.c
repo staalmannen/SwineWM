@@ -117,6 +117,21 @@ bool platform_view_has_visible_owned_window(struct swine_view *view) {
 	return fake.has_visible_owned_window;
 }
 
+uint64_t platform_script_start(const char *cmdline, const char *output_name) {
+	if (fake.script_start_fails) {
+		return 0;
+	}
+	fake.script_starts++;
+	snprintf(fake.last_script, sizeof(fake.last_script), "%s", cmdline);
+	snprintf(fake.last_script_output, sizeof(fake.last_script_output), "%s",
+		output_name ? output_name : "");
+	fake.last_script_id = (uint64_t)fake.script_starts;
+	return fake.last_script_id;
+}
+void platform_script_stop(uint64_t id) {
+	fake.script_stops++;
+	fake.last_stopped_script = id;
+}
 int platform_keyboard_layouts(list_t *layouts) {
 	static const char *const table[][4] = {
 		{"English (United States)", "us", "en", ""},

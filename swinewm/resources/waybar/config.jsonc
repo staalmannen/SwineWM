@@ -66,6 +66,12 @@
     "memory": {
         "format": "RAM {}%"
     },
+    // A module from a script (see doc/compatibility.md): add
+    // "custom/hello" to a modules list above to show it.
+    "custom/hello": {
+        "exec": "echo Hello %USERNAME%",
+        "interval": "once"
+    },
     "battery": {
         "states": {
             "warning": 30,

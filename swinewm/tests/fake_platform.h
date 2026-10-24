@@ -2,6 +2,7 @@
 #define _SWINE_FAKE_PLATFORM_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "swinewm/platform.h"
 #include "swinewm/tree/node.h"
 #include "swinewm/tree/output.h"
@@ -51,6 +52,14 @@ struct fake_platform_state {
 	char ipc_last_event[8192];
 	// The "change" of every event, in order: "new,focus,"
 	char ipc_changes[1024];
+	// bar scripts: platform_script_start returns 1, 2, ...
+	int script_starts;
+	int script_stops;
+	uint64_t last_script_id;
+	uint64_t last_stopped_script;
+	char last_script[256];
+	char last_script_output[32];
+	bool script_start_fails;
 	// keyboard layouts: the first kb_layout_count of fake_platform.c's list
 	int kb_layout_count;
 	int kb_active;

@@ -59,6 +59,7 @@ add_library(swinewm_core STATIC
   ${SWINEWM_EMBEDDED}
   swinewm/bar/bar.c
   swinewm/bar/css.c
+  swinewm/bar/custom.c
   swinewm/bar/format.c
   swinewm/bar/tray.c
   swinewm/commands.c
@@ -137,6 +138,7 @@ if(WIN32)
     swinewm/win32/platform.c
     swinewm/win32/recover.c
     swinewm/win32/screenshot.c
+    swinewm/win32/script.c
     swinewm/win32/shell.c
     swinewm/win32/sysinfo.c
     swinewm/win32/swaynag.c

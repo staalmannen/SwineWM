@@ -4,6 +4,7 @@
 #include "json.h"
 #include "swinewm/bar/bar.h"
 #include "swinewm/bar/css.h"
+#include "swinewm/bar/custom.h"
 #include "swinewm/bar/format.h"
 #include "swinewm/bar/tray.h"
 #include "swinewm/config.h"
@@ -422,6 +423,167 @@ static void test_language(void) {
 	fake_teardown();
 }
 
+static void test_script_parse(void) {
+	struct bar_script_result r;
+	bar_script_parse("hello\ntip\nwarn\nignored", false, false, &r);
+	CHECK_STR(r.text, "hello");
+	CHECK_STR(r.tooltip, "tip");
+	CHECK_INT(r.classes->length, 1);
+	CHECK_STR(r.classes->items[0], "warn");
+	bar_script_result_finish(&r);
+	bar_script_parse("a & <b>", false, true, &r);
+	CHECK_STR(r.text, "a &amp; &lt;b&gt;");
+	bar_script_result_finish(&r);
+	bar_script_parse("{\"text\": \"5\", \"alt\": \"muted\", \"tooltip\": \"t\","
+		" \"class\": [\"x\", \"y\"], \"percentage\": 42.6}\n{\"text\": \"6\"}",
+		true, false, &r);
+	CHECK_STR(r.text, "5");
+	CHECK_STR(r.alt, "muted");
+	CHECK_STR(r.tooltip, "t");
+	CHECK_INT(r.classes->length, 2);
+	CHECK_INT(r.percentage, 43);
+	bar_script_result_finish(&r);
+	bar_script_parse("not json", true, false, &r);
+	CHECK_STR(r.text, "");
+	bar_script_result_finish(&r);
+}
+
+static struct bar_item *first_item(struct bar_model *model, int index) {
+	struct bar_module_view *v = find_view(model, index);
+	return v && v->items->length ? v->items->items[0] : NULL;
+}
+
+// Waybar's custom/* scripts: when they run, and what the module shows.
+static void test_custom_scripts(void) {
+	fake_setup();
+	config->bar_enabled = true;
+	fake.now_ms = 1000;
+	bar_load_from_strings(
+		"{ \"modules-right\": [\"custom/interval\", \"custom/if\","
+		"   \"custom/loop\", \"custom/signal\", \"custom/json\"],\n"
+		"  \"custom/interval\": { \"exec\": \"date.bat\", \"interval\": 5,"
+		"     \"format\": \"[{}]\", \"on-click-right\": \"notepad.exe\" },\n"
+		"  \"custom/if\": { \"exec-if\": \"check.bat\", \"exec\": \"run.bat\","
+		"     \"interval\": \"once\" },\n"
+		"  \"custom/loop\": { \"exec\": \"loop.bat\", \"restart-interval\": 2 },\n"
+		"  \"custom/signal\": { \"exec\": \"count.bat\", \"signal\": 8,"
+		"     \"hide-empty-text\": true },\n"
+		"  \"custom/json\": { \"exec\": \"vol.ps1\", \"interval\": 1,"
+		"     \"return-type\": \"json\", \"format\": \"{icon} {text} {percentage}\","
+		"     \"format-icons\": { \"muted\": \"M\", \"default\": [\"lo\", \"hi\"] } } }",
+		NULL);
+	struct swine_output *output = root->outputs->items[0];
+	// Nothing has run yet: every script module is hidden.
+	struct bar_model *model = bar_build(output, 0);
+	CHECK_INT(model->modules->length, 0);
+	bar_model_free(model);
+	CHECK(bar_scripts_next_due() == 1000);
+	bar_scripts_tick(1000);
+	// interval, exec-if, loop, signal and json start; exec-if first.
+	CHECK_INT(fake.script_starts, 5);
+	CHECK_STR(fake.last_script_output, "DISPLAY1");
+	CHECK(bar_scripts_next_due() == 0);   // all running
+
+	// 1: interval. A run's whole output, then again after the interval.
+	bar_script_line(1, "12:00");
+	bar_script_line(1, "tooltip");
+	bar_script_exited(1, 0);
+	CHECK(bar_scripts_next_due() == 6000);
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "[12:00]");
+	struct bar_item *item = first_item(model, 0);
+	CHECK(item && item->on_click_right &&
+		strcmp(item->on_click_right, "exec notepad.exe") == 0);
+	bar_model_free(model);
+
+	// 2: exec-if fails: hidden, and "once" does not try again.
+	bar_script_exited(2, 1);
+	model = bar_build(output, 0);
+	CHECK(find_view(model, 1) == NULL);
+	bar_model_free(model);
+
+	// 3: a continuous script: each line is an update.
+	bar_script_line(3, "first");
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 2), "first");
+	bar_model_free(model);
+	bar_script_line(3, "second");
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 2), "second");
+	bar_model_free(model);
+	fake.now_ms = 1500;
+	bar_script_exited(3, 1);   // it stopped: hidden, restarted in 2 s
+	model = bar_build(output, 0);
+	CHECK(find_view(model, 2) == NULL);
+	bar_model_free(model);
+	CHECK(bar_scripts_next_due() == 3500);
+
+	// 4: signal. Once at startup, then on "pkill -RTMIN+8 waybar".
+	bar_script_line(4, "");
+	bar_script_exited(4, 0);
+	model = bar_build(output, 0);
+	CHECK(find_view(model, 3) == NULL);   // empty output
+	bar_model_free(model);
+	int starts = fake.script_starts;
+	CHECK(run("exec pkill -RTMIN+8 waybar"));
+	CHECK_INT(fake.script_starts, starts + 1);
+	CHECK_STR(fake.last_script, "count.bat");
+	uint64_t id = fake.last_script_id;
+	CHECK(run("exec pkill -SIGRTMIN+8 waybar"));   // still running: no second
+	CHECK_INT(fake.script_starts, starts + 1);
+	bar_script_line(id, "3");
+	bar_script_exited(id, 0);
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 3), "3");
+	bar_model_free(model);
+	CHECK(run("exec killall -s RTMIN+8 waybar"));
+	CHECK_INT(fake.script_starts, starts + 2);
+	bar_script_exited(fake.last_script_id, 0);
+	CHECK_INT(fake.spawn_calls, 0);
+	CHECK(run("exec pkill -RTMIN+8 notepad"));   // not waybar: a program
+	CHECK_INT(fake.spawn_calls, 1);
+
+	// 5: JSON with format-icons by alt, then by percentage.
+	bar_script_line(5, "{\"text\": \"50%\", \"percentage\": 80, \"class\": \"loud\"}");
+	bar_script_exited(5, 0);
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 4), "hi 50% 80");
+	bar_model_free(model);
+
+	// A click runs an idle interval script again (exec-on-event).
+	fake.now_ms = 2000;
+	starts = fake.script_starts;
+	bar_module_clicked(0);
+	CHECK_INT(fake.script_starts, starts + 1);
+	CHECK_STR(fake.last_script, "date.bat");
+	bar_module_event(0);   // already running
+	CHECK_INT(fake.script_starts, starts + 1);
+
+	// exec-if succeeds: exec runs after it.
+	bar_module_event(1);
+	CHECK_STR(fake.last_script, "check.bat");
+	bar_script_exited(fake.last_script_id, 0);
+	CHECK_STR(fake.last_script, "run.bat");
+
+	// A reload stops what is running.
+	int stops = fake.script_stops;
+	bar_load_from_strings("{ \"modules-right\": [\"clock\"] }", NULL);
+	CHECK(fake.script_stops >= stops + 2);
+	CHECK(bar_scripts_next_due() == 0);
+
+	// A script that cannot start is hidden and tried again later.
+	fake.script_start_fails = true;
+	bar_load_from_strings("{ \"modules-right\": [\"custom/x\"],"
+		" \"custom/x\": { \"exec\": \"missing\", \"interval\": 3 } }", NULL);
+	bar_scripts_tick(2000);
+	CHECK(bar_scripts_next_due() == 5000);
+	model = bar_build(output, 0);
+	CHECK_INT(model->modules->length, 0);
+	bar_model_free(model);
+	fake.script_start_fails = false;
+	fake_teardown();
+}
+
 void test_bar_all(void) {
 	test_bar_config_ipc();
 	test_json_parse();
@@ -431,4 +593,6 @@ void test_bar_all(void) {
 	test_bar_config_enabling();
 	test_tray();
 	test_language();
+	test_script_parse();
+	test_custom_scripts();
 }

@@ -5,6 +5,7 @@
 #include "ipc.h"
 #include "log.h"
 #include "stringop.h"
+#include "swinewm/bar/custom.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
 #include "swinewm/desktop/transaction.h"
@@ -26,6 +27,7 @@ static UINT shell_hook_message = 0;
 #define TIMER_TICK 1
 #define TIMER_NOTIFY 2
 #define TIMER_DISPLAY 3
+#define TIMER_SCRIPTS 5   // the next bar script that is due (4: layout.c)
 
 // Display settings can produce a burst of notifications while Windows and
 // the display driver settle on the final monitor geometry and DPI.
@@ -92,6 +94,9 @@ static LRESULT handle_shell_message(HWND hwnd, UINT msg, WPARAM wparam,
 	case WM_SWINE_MOTION:
 		win32_mouse_handle_motion();
 		return 0;
+	case WM_SWINE_SCRIPT:
+		win32_script_message(lparam);
+		return 0;
 	case WM_DISPLAYCHANGE:
 	case WM_DPICHANGED:
 		schedule_display_refresh();
@@ -107,6 +112,10 @@ static LRESULT handle_shell_message(HWND hwnd, UINT msg, WPARAM wparam,
 		if (wparam == TIMER_DISPLAY) {
 			KillTimer(hwnd, TIMER_DISPLAY);
 			refresh_display_state();
+		} else if (wparam == TIMER_SCRIPTS) {
+			KillTimer(hwnd, TIMER_SCRIPTS);
+			bar_scripts_tick(platform_now_ms());
+			platform_ui_refresh();
 		} else if (wparam == WIN32_TIMER_LAYOUT) {
 			KillTimer(hwnd, WIN32_TIMER_LAYOUT);
 			keyboard_layouts_refresh();
@@ -240,6 +249,15 @@ void platform_ui_refresh(void) {
 	} else {
 		KillTimer(win32_shell_hwnd, TIMER_NOTIFY);
 	}
+	// Bar scripts (the bar above may just have loaded them).
+	long long due = bar_scripts_next_due();
+	if (due) {
+		long long delay = due - platform_now_ms();
+		SetTimer(win32_shell_hwnd, TIMER_SCRIPTS,
+			(UINT)(delay < 1 ? 1 : delay > 0x7FFFFFFF ? 0x7FFFFFFF : delay), NULL);
+	} else {
+		KillTimer(win32_shell_hwnd, TIMER_SCRIPTS);
+	}
 }
 
 void platform_swaynag_show(const char *details) {
@@ -326,6 +344,7 @@ void platform_finish(void) {
 	win32_tray_finish();
 	win32_titlebars_finish();
 	win32_bar_finish();
+	win32_scripts_finish();
 	win32_notify_finish();
 	win32_swaynag_finish();
 	win32_wallpaper_finish();
