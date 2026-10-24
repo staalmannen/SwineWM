@@ -8,6 +8,19 @@ the MSI and zip with the matching section below as release notes.
 
 ## [Unreleased]
 
+### Added
+
+- Keyboard layouts: Waybar's `sway/language` module shows the active
+  Windows keyboard layout (in the default bar when more than one is
+  installed; a click switches to the next), and sway's
+  `input type:keyboard xkb_switch_layout next|prev|<index>` switches
+  layouts, bound to `$mod+Ctrl+space` in the default config. `get_inputs`
+  lists the layouts as sway does, and an `input` event (`xkb_layout`) is
+  sent when the layout changes, also through Windows' own hotkeys.
+- `exec swaymsg <command>` (and `swinemsg`) runs the command in swinewm
+  without starting a process, so Waybar `on-click`s and bindings from
+  Linux configs work as they are.
+
 ## [0.4.0] - 2026-10-24
 
 ### Added

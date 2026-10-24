@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "list.h"
 
 // Modifier bits use the same values as wlroots' enum wlr_keyboard_modifier.
 enum swine_modifier {
@@ -24,6 +25,17 @@ const char *get_modifier_name_by_mask(uint32_t mask);
 // "XF86AudioMute", ...). Returns false for unknown names.
 bool keyname_to_keycode(const char *name, uint32_t *keycode);
 const char *keycode_to_name(uint32_t keycode);
+
+// Keyboard layouts (struct platform_keyboard_layout *), cached from the
+// platform: sway's xkb layouts, here the layouts installed in Windows.
+list_t *keyboard_layouts_get(void);
+// Index of the active layout in keyboard_layouts_get(), or -1.
+int keyboard_layouts_active(void);
+// Reads the layouts again. When the active layout or the list changed, sends
+// the "xkb_layout" input event and repaints the bar; returns true then.
+bool keyboard_layouts_refresh(void);
+void keyboard_layouts_free(list_t *layouts);
+void keyboard_layouts_finish(void);
 
 struct swine_binding;
 // Looks up a binding in the current mode. Returns NULL if none matches.

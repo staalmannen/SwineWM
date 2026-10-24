@@ -117,6 +117,26 @@ bool platform_view_has_visible_owned_window(struct swine_view *view) {
 	return fake.has_visible_owned_window;
 }
 
+int platform_keyboard_layouts(list_t *layouts) {
+	static const char *const table[][4] = {
+		{"English (United States)", "us", "en", ""},
+		{"Swedish (Sweden)", "se", "sv", ""},
+		{"English (United States, Dvorak)", "us", "en", "Dvorak"},
+	};
+	for (int i = 0; i < fake.kb_layout_count && i < 3; ++i) {
+		struct platform_keyboard_layout *l = calloc(1, sizeof(*l));
+		l->name = swine_strdup(table[i][0]);
+		l->short_name = swine_strdup(table[i][1]);
+		l->description = swine_strdup(table[i][2]);
+		l->variant = swine_strdup(table[i][3]);
+		list_add(layouts, l);
+	}
+	return fake.kb_layout_count ? fake.kb_active : -1;
+}
+void platform_keyboard_set_layout(int index) {
+	fake.kb_set_calls++;
+	fake.kb_active = index;
+}
 void platform_queue_command(const char *command) {
 	run(command);
 }

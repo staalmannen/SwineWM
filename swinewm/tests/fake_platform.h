@@ -51,6 +51,10 @@ struct fake_platform_state {
 	char ipc_last_event[8192];
 	// The "change" of every event, in order: "new,focus,"
 	char ipc_changes[1024];
+	// keyboard layouts: the first kb_layout_count of fake_platform.c's list
+	int kb_layout_count;
+	int kb_active;
+	int kb_set_calls;
 	int swaynag_show_calls;
 	bool swaynag_visible;
 	char swaynag_details[2048];

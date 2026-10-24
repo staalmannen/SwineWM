@@ -48,6 +48,22 @@ void platform_finish(void);
 void platform_ipc_event(uint32_t type, const char *payload);
 uint32_t platform_ipc_input_capabilities(void);
 
+// A keyboard layout installed in Windows' language settings, described as
+// sway describes the layouts of its xkb keymap.
+struct platform_keyboard_layout {
+	char *name;          // xkb's long name: "English (United States)"
+	char *short_name;    // xkb's layout: "us", the region in lower case
+	char *description;   // Waybar's {shortDescription}: "en", the language
+	char *variant;       // "Dvorak" for a layout other than the language's
+	                     // default, else ""
+};
+// Fills layouts (struct platform_keyboard_layout *, freed with
+// keyboard_layouts_free) in Windows' order. Returns the index of the active
+// layout, or -1 if it is not known.
+int platform_keyboard_layouts(list_t *layouts);
+// Switches the active layout (an index into platform_keyboard_layouts).
+void platform_keyboard_set_layout(int index);
+
 void platform_view_set_geometry(struct swine_view *view,
 		const struct swine_box *box);
 void platform_view_set_visible(struct swine_view *view, bool visible);

@@ -150,6 +150,10 @@ output * bg %SWINEWM_DATA%\wallpapers\swinewm-default.png fill
 
     # Move focus to the parent container
     bindsym $mod+a focus parent
+
+    # Switch to the next keyboard layout (the layouts installed in Windows'
+    # language settings; Windows' own Alt+Shift switches them too)
+    bindsym $mod+Ctrl+space input type:keyboard xkb_switch_layout next
 #
 # Scratchpad:
 #

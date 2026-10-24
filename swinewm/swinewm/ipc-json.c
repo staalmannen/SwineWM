@@ -745,11 +745,38 @@ static void write_input(struct json_writer *w, const char *identifier,
 	json_key(w, "type");
 	json_string(w, type);
 	if (strcmp(type, "keyboard") == 0) {
+		// sway's xkb layouts: the layouts installed in Windows
+		list_t *layouts = keyboard_layouts_get();
+		int active = keyboard_layouts_active();
 		json_key(w, "xkb_layout_names");
 		json_begin_array(w);
+		for (int i = 0; layouts && i < layouts->length; ++i) {
+			struct platform_keyboard_layout *l = layouts->items[i];
+			json_string(w, l->name);
+		}
 		json_end_array(w);
+		if (active >= 0) {
+			struct platform_keyboard_layout *l = layouts->items[active];
+			json_key(w, "xkb_active_layout_index");
+			json_int(w, active);
+			json_key(w, "xkb_active_layout_name");
+			json_string(w, l->name);
+		}
 	}
 	json_end_object(w);
+}
+
+// sway's input event: the keyboard after its layout changed.
+char *ipc_json_event_input(const char *change) {
+	struct json_writer w;
+	json_init(&w);
+	json_begin_object(&w);
+	json_key(&w, "change");
+	json_string(&w, change);
+	json_key(&w, "input");
+	write_input(&w, "swinewm:keyboard", "Windows keyboard hook", "keyboard");
+	json_end_object(&w);
+	return json_finish(&w);
 }
 
 char *ipc_json_get_inputs(void) {

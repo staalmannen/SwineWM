@@ -211,6 +211,13 @@ static char *program_name(const char *arg) {
 	return name;
 }
 
+// swaymsg or swinemsg with a command and no options (those print replies
+// or query state, so they still run as a program).
+static bool is_msg_command(const char *name, int argc, char **argv) {
+	return (strcmp(name, "swaymsg") == 0 || strcmp(name, "swinemsg") == 0) &&
+		argc > 1 && argv[1][0] != '-';
+}
+
 static struct cmd_results *run_builtin(int argc, char **argv,
 		bool persistent_only) {
 	if (argc == 0) {
@@ -233,6 +240,13 @@ static struct cmd_results *run_builtin(int argc, char **argv,
 		res = cmd_notify_send(argc - 1, argv + 1);
 	} else if (strcmp(name, "grim") == 0) {
 		res = cmd_grim(argc - 1, argv + 1);
+	} else if (is_msg_command(name, argc, argv)) {
+		// "swaymsg <command>" (a Waybar on-click, a binding): run the
+		// command here instead of starting a process to send it back.
+		char *command = join_args(argv + 1, argc - 1);
+		platform_queue_command(command);
+		free(command);
+		res = cmd_results_new(CMD_SUCCESS, NULL);
 	}
 	free(name);
 	return res;
@@ -265,7 +279,8 @@ struct cmd_results *exec_builtin(const char *cmdline, bool persistent_only) {
 			}
 			char *name = program_name(argv[start]);
 			bool builtin = strcmp(name, "makoctl") == 0 ||
-				strcmp(name, "notify-send") == 0 || strcmp(name, "grim") == 0;
+				strcmp(name, "notify-send") == 0 || strcmp(name, "grim") == 0 ||
+				is_msg_command(name, i - start, argv + start);
 			free(name);
 			if (!builtin) {
 				free_argv(argc, argv);

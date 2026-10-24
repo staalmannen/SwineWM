@@ -30,6 +30,11 @@ extern HWND win32_shell_hwnd;
 // Runs a swinewm command line (bindings, bar clicks) and commits.
 void win32_run_command(const char *command);
 
+// layout.c: keyboard layouts. The shell window's WIN32_TIMER_LAYOUT fires
+// shortly after a switch to read the new layout.
+#define WIN32_TIMER_LAYOUT 4
+void win32_layouts_finish(void);
+
 // draw.c: GDI helpers shared by the bar and notification popups
 // Picks the first installed family from a CSS/Pango family list.
 HFONT win32_font(const char *families, int px, bool bold, bool italic);

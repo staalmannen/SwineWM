@@ -8,6 +8,7 @@
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
 #include "swinewm/desktop/transaction.h"
+#include "swinewm/input/keyboard.h"
 #include "swinewm/ipc-json.h"
 #include "swinewm/notify.h"
 #include "swinewm/platform.h"
@@ -106,7 +107,15 @@ static LRESULT handle_shell_message(HWND hwnd, UINT msg, WPARAM wparam,
 		if (wparam == TIMER_DISPLAY) {
 			KillTimer(hwnd, TIMER_DISPLAY);
 			refresh_display_state();
+		} else if (wparam == WIN32_TIMER_LAYOUT) {
+			KillTimer(hwnd, WIN32_TIMER_LAYOUT);
+			keyboard_layouts_refresh();
 		} else if (wparam == TIMER_TICK || wparam == TIMER_NOTIFY) {
+			if (wparam == TIMER_TICK) {
+				// Windows has no event for a layout switched with its own
+				// hotkey (Alt+Shift, Win+Space): look once a second.
+				keyboard_layouts_refresh();
+			}
 			notify_tick(platform_now_ms());
 			platform_ui_refresh();
 		}
@@ -324,6 +333,7 @@ void platform_finish(void) {
 	win32_recover_display_done();
 	CoUninitialize();
 	win32_fonts_clear();
+	win32_layouts_finish();
 	win32_recover_clear();
 	if (win32_shell_hwnd) {
 		DestroyWindow(win32_shell_hwnd);

@@ -7,6 +7,7 @@
 #include "swinewm/bar/format.h"
 #include "swinewm/bar/tray.h"
 #include "swinewm/config.h"
+#include "swinewm/input/keyboard.h"
 #include "swinewm/ipc-json.h"
 #include "swinewm/tree/root.h"
 #include "test.h"
@@ -376,6 +377,51 @@ static void test_bar_config_ipc(void) {
 	fake_teardown();
 }
 
+// Waybar's sway/language: the active keyboard layout.
+static void test_language(void) {
+	fake_setup();
+	config->bar_enabled = true;
+	fake.kb_layout_count = 3;
+	fake.kb_active = 1;
+	bar_load_from_strings(
+		"{ \"modules-right\": [\"sway/language\", \"sway/language#long\","
+		"   \"sway/language#flag\"],\n"
+		"  \"sway/language#long\": { \"format\": \"{long} {shortDescription}\","
+		"     \"on-click\": \"swaymsg input type:keyboard xkb_switch_layout next\" },\n"
+		"  \"sway/language#flag\": { \"format\": \"{flag}{variant}\" } }", NULL);
+	struct swine_output *output = root->outputs->items[0];
+	struct bar_model *model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "se");
+	CHECK_STR(item_text(model, 1), "Swedish (Sweden) sv");
+	// U+1F1F8 U+1F1EA: the Swedish flag
+	CHECK_STR(item_text(model, 2), "\xF0\x9F\x87\xB8\xF0\x9F\x87\xAA");
+	struct bar_module_view *v = find_view(model, 1);
+	if (v && v->items->length) {
+		struct bar_item *item = v->items->items[0];
+		CHECK_STR(item->on_click,
+			"exec swaymsg input type:keyboard xkb_switch_layout next");
+		// Clicking it runs the command in swinewm (no swaymsg process).
+		CHECK(run(item->on_click));
+		CHECK_INT(fake.kb_active, 2);
+		CHECK_INT(fake.spawn_calls, 0);
+	}
+	bar_model_free(model);
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 2), "\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8" "Dvorak");
+	bar_model_free(model);
+
+	// hide-single-layout
+	bar_load_from_strings("{ \"modules-right\": [\"sway/language\"],"
+		" \"sway/language\": { \"hide-single-layout\": true } }", NULL);
+	fake.kb_layout_count = 1;
+	fake.kb_active = 0;
+	keyboard_layouts_refresh();
+	model = bar_build(output, 0);
+	CHECK(find_view(model, 0) == NULL);
+	bar_model_free(model);
+	fake_teardown();
+}
+
 void test_bar_all(void) {
 	test_bar_config_ipc();
 	test_json_parse();
@@ -384,4 +430,5 @@ void test_bar_all(void) {
 	test_bar_model();
 	test_bar_config_enabling();
 	test_tray();
+	test_language();
 }

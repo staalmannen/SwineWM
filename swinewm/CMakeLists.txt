@@ -72,6 +72,7 @@ add_library(swinewm_core STATIC
   swinewm/commands/for_window.c
   swinewm/commands/gaps.c
   swinewm/commands/grim.c
+  swinewm/commands/input.c
   swinewm/commands/layout.c
   swinewm/commands/mark.c
   swinewm/commands/mode.c
@@ -129,6 +130,7 @@ if(WIN32)
     swinewm/win32/draw.c
     swinewm/win32/ipc.c
     swinewm/win32/keyboard.c
+    swinewm/win32/layout.c
     swinewm/win32/mouse.c
     swinewm/win32/notify.c
     swinewm/win32/output.c

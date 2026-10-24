@@ -8,6 +8,7 @@
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
 #include "swinewm/desktop/transaction.h"
+#include "swinewm/input/keyboard.h"
 #include "swinewm/ipc-json.h"
 #include "swinewm/ipc-server.h"
 #include "swinewm/notify.h"
@@ -122,6 +123,67 @@ static void test_ipc_node_fields(void) {
 	}
 	json_value_free(root_json);
 	free(tree);
+	fake_teardown();
+}
+
+// input <id> xkb_switch_layout, get_inputs and the xkb_layout input event.
+static void test_keyboard_layouts(void) {
+	fake_setup();
+	fake.kb_layout_count = 3;
+	fake.kb_active = 0;
+	uint32_t type;
+	char *reply = ipc_handle_request(IPC_GET_INPUTS, "", 0, &type);
+	CHECK(strstr(reply, "\"xkb_layout_names\":[\"English (United States)\","
+		"\"Swedish (Sweden)\",\"English (United States, Dvorak)\"],"
+		"\"xkb_active_layout_index\":0,"
+		"\"xkb_active_layout_name\":\"English (United States)\"") != NULL);
+	free(reply);
+
+	fake.ipc_event_count = 0;
+	CHECK(run("input type:keyboard xkb_switch_layout next"));
+	CHECK_INT(fake.kb_active, 1);
+	CHECK_INT(fake.ipc_last_event_type, (uint32_t)IPC_EVENT_INPUT);
+	CHECK(strstr(fake.ipc_last_event, "{\"change\":\"xkb_layout\",\"input\":{"
+		"\"identifier\":\"swinewm:keyboard\"") != NULL);
+	CHECK(strstr(fake.ipc_last_event, "\"xkb_active_layout_index\":1") != NULL);
+	CHECK(run("input * xkb_switch_layout prev"));
+	CHECK(run("input swinewm:keyboard xkb_switch_layout prev"));
+	CHECK_INT(fake.kb_active, 2);   // wraps around
+	CHECK(run("input * xkb_switch_layout 0"));
+	CHECK_INT(fake.kb_active, 0);
+	int calls = fake.kb_set_calls;
+	CHECK(run("input * xkb_switch_layout 7"));   // no such layout
+	CHECK(run("input type:touchpad xkb_switch_layout next"));
+	CHECK_INT(fake.kb_set_calls, calls);
+	CHECK(!run("input * xkb_switch_layout sideways"));
+	CHECK(!run("input * xkb_switch_layout -1"));
+	CHECK(!run("input * xkb_switch_layout"));
+	// Everything else Windows owns: accepted and ignored.
+	CHECK(run("input type:keyboard xkb_layout us"));
+	CHECK_INT(fake.kb_set_calls, calls);
+
+	// A switch with Windows' own hotkey is noticed by the next refresh.
+	fake.ipc_event_count = 0;
+	fake.kb_active = 2;
+	CHECK(keyboard_layouts_refresh());
+	CHECK_INT(fake.ipc_event_count, 1);
+	CHECK(!keyboard_layouts_refresh());
+	CHECK_INT(fake.ipc_event_count, 1);
+
+	// From a binding or a Waybar on-click, as in sway.
+	CHECK(run("exec swaymsg input type:keyboard xkb_switch_layout 1"));
+	CHECK_INT(fake.kb_active, 1);
+	CHECK(run("exec swinemsg.exe input type:keyboard xkb_switch_layout next"));
+	CHECK_INT(fake.kb_active, 2);
+	CHECK_INT(fake.spawn_calls, 0);
+	CHECK(run("exec swaymsg -t get_inputs"));   // options: a real program
+	CHECK_INT(fake.spawn_calls, 1);
+
+	uint32_t subscriptions = 0;
+	const char *events = "[\"input\"]";
+	CHECK(ipc_parse_subscriptions(events, (uint32_t)strlen(events),
+		&subscriptions));
+	CHECK(subscriptions & IPC_SUB_INPUT);
 	fake_teardown();
 }
 
@@ -389,6 +451,7 @@ void test_commands_all(void) {
 	test_every_command_is_found();
 	test_chains_and_errors();
 	test_ipc();
+	test_keyboard_layouts();
 	test_ipc_node_fields();
 	test_grim();
 	test_restart();

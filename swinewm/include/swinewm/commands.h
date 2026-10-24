@@ -114,6 +114,7 @@ swine_cmd cmd_mark;
 swine_cmd cmd_mode;
 swine_cmd cmd_move;
 swine_cmd cmd_nop;
+swine_cmd cmd_input;
 swine_cmd cmd_output;
 swine_cmd cmd_notify_send;
 swine_cmd cmd_grim;

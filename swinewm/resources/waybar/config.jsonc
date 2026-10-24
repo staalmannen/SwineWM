@@ -19,6 +19,7 @@
         "sway/window"
     ],
     "modules-right": [
+        "sway/language",
         "cpu",
         "memory",
         "battery",
@@ -40,6 +41,13 @@
     },
     "sway/window": {
         "max-length": 80
+    },
+    "sway/language": {
+        // The keyboard layouts installed in Windows' language settings.
+        // Click for the next one ($mod+Ctrl+space in the default config).
+        "format": "{}",
+        "hide-single-layout": true,
+        "on-click": "swaymsg input type:keyboard xkb_switch_layout next"
     },
     "clock": {
         // Click to toggle between the time and the date

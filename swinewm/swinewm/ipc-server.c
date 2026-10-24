@@ -38,6 +38,7 @@ bool ipc_parse_subscriptions(const char *payload, uint32_t length,
 		{"binding", IPC_SUB_BINDING},
 		{"shutdown", IPC_SUB_SHUTDOWN},
 		{"tick", IPC_SUB_TICK},
+		{"input", IPC_SUB_INPUT},
 	};
 	uint32_t mask = 0;
 	bool valid = true;

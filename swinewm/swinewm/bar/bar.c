@@ -16,6 +16,7 @@
 #include "swinewm/bar/format.h"
 #include "swinewm/bar/tray.h"
 #include "swinewm/config.h"
+#include "swinewm/input/keyboard.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/platform.h"
 #include "swinewm/sysinfo.h"
@@ -40,6 +41,7 @@ enum module_kind {
 	MOD_MEMORY,
 	MOD_BATTERY,
 	MOD_TRAY,
+	MOD_LANGUAGE,
 	MOD_CUSTOM,
 };
 
@@ -92,6 +94,7 @@ static bool module_kind_from_name(const char *name, enum module_kind *kind) {
 		{"sway/window", MOD_WINDOW}, {"sway/scratchpad", MOD_SCRATCHPAD},
 		{"clock", MOD_CLOCK}, {"cpu", MOD_CPU}, {"memory", MOD_MEMORY},
 		{"battery", MOD_BATTERY}, {"tray", MOD_TRAY},
+		{"sway/language", MOD_LANGUAGE},
 	};
 	if (has_prefix(name, "custom/")) {
 		*kind = MOD_CUSTOM;
@@ -711,6 +714,60 @@ static void build_tray(struct build_ctx *ctx, struct bar_module *m,
 	list_add(ctx->model->modules, view);
 }
 
+// Waybar's {flag}: the regional indicator symbols of a two-letter region.
+static void layout_flag(const char *region, char *out, size_t size) {
+	out[0] = '\0';
+	if (!region || strlen(region) != 2 || size < 9) {
+		return;
+	}
+	char *o = out;
+	for (int i = 0; i < 2; ++i) {
+		char c = region[i];
+		if (c >= 'A' && c <= 'Z') {
+			c = (char)(c - 'A' + 'a');
+		}
+		if (c < 'a' || c > 'z') {
+			out[0] = '\0';
+			return;
+		}
+		// U+1F1E6 REGIONAL INDICATOR SYMBOL LETTER A + n, in UTF-8
+		unsigned cp = 0x1F1E6u + (unsigned)(c - 'a');
+		*o++ = (char)(0xF0 | (cp >> 18));
+		*o++ = (char)(0x80 | ((cp >> 12) & 0x3F));
+		*o++ = (char)(0x80 | ((cp >> 6) & 0x3F));
+		*o++ = (char)(0x80 | (cp & 0x3F));
+	}
+	*o = '\0';
+}
+
+// Waybar's sway/language: the active keyboard layout.
+static void build_language(struct build_ctx *ctx, struct bar_module *m,
+		int index) {
+	list_t *layouts = keyboard_layouts_get();
+	int active = keyboard_layouts_active();
+	if (!layouts || active < 0 || active >= layouts->length) {
+		return;
+	}
+	if (layouts->length == 1 &&
+			json_get_bool(m->cfg, "hide-single-layout", false)) {
+		return;
+	}
+	struct platform_keyboard_layout *l = layouts->items[active];
+	char flag[9];
+	layout_flag(l->short_name, flag, sizeof(flag));
+	struct fmt_arg args[] = {
+		{NULL, false, l->short_name, 0},
+		{"short", false, l->short_name, 0},
+		{"shortDescription", false, l->description, 0},
+		{"long", false, l->name, 0},
+		{"variant", false, l->variant, 0},
+		{"flag", false, flag, 0},
+	};
+	const char *classes[] = {l->short_name, NULL};
+	add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL, "{}"),
+		args, 6, &ctx->tm), classes);
+}
+
 static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		int index) {
 	switch (m->kind) {
@@ -823,6 +880,9 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 	}
 	case MOD_TRAY:
 		build_tray(ctx, m, index);
+		return;
+	case MOD_LANGUAGE:
+		build_language(ctx, m, index);
 		return;
 	case MOD_CUSTOM: {
 		if (json_object_get(m->cfg, "exec")) {
