@@ -265,7 +265,7 @@ static void write_container(struct json_writer *w, struct swine_container *con) 
 	}
 	if (con->view) {
 		json_key(w, "visible");
-		json_bool(w, con->view->pending.visible);
+		json_bool(w, view_is_visible(con->view));
 		json_key(w, "app_id");
 		json_string(w, con->view->app_id);
 		json_key(w, "pid");

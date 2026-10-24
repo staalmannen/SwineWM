@@ -35,6 +35,11 @@ the MSI and zip with the matching section below as release notes.
 
 ### Fixed
 
+- Switching workspace sent the window `focus` event before the workspace
+  `focus` event, and reported the newly focused window as `"visible":false`.
+  The order is now sway's (workspace first), and `visible` is worked out
+  from the tree as in sway.
+
 - `swinemsg -t subscribe -m '["window","workspace"]'` failed with
   `{"success":false}` in Windows PowerShell, which drops the inner quotes
   before 7.3. swinemsg now turns `[window,workspace]` into JSON, and also

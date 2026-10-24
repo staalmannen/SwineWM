@@ -51,6 +51,16 @@ static void test_ipc(void) {
 	CHECK(strstr(fake.ipc_changes, "init,focus,") != NULL);
 	CHECK(strstr(fake.ipc_last_event, "\"change\":\"empty\",\"current\":{") != NULL);
 	CHECK(strstr(fake.ipc_last_event, "\"name\":\"7\"") != NULL);
+	// Switching to a workspace: its focus event first, then the window's,
+	// which is already visible (sway's order).
+	fake_map_view("other");
+	CHECK(run("move container to workspace 2; workspace 2"));
+	fake.ipc_changes[0] = '\0';
+	CHECK(run("workspace 1"));
+	CHECK_STR(fake.ipc_changes, "focus,focus,");
+	CHECK_INT(fake.ipc_last_event_type, (uint32_t)IPC_EVENT_WINDOW);
+	CHECK(strstr(fake.ipc_last_event, "\"name\":\"hello\"") != NULL);
+	CHECK(strstr(fake.ipc_last_event, "\"visible\":true") != NULL);
 	uint32_t type;
 	const char *cmd = "workspace 4";
 	char *reply = ipc_handle_request(IPC_COMMAND, cmd, (uint32_t)strlen(cmd), &type);

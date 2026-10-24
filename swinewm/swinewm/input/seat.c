@@ -82,16 +82,6 @@ void seat_set_focus(struct swine_node *node) {
 		old_focus->container : NULL;
 	struct swine_container *new_con = node->type == N_CONTAINER ?
 		node->container : NULL;
-	if (new_con && new_con->view &&
-			(!old_con || old_con->view != new_con->view)) {
-		char *event = ipc_json_event_window("focus", new_con);
-		platform_ipc_event((uint32_t)IPC_EVENT_WINDOW, event);
-		free(event);
-	}
-	if (node->type == N_CONTAINER && node->container->view &&
-			node->container->view->urgent) {
-		view_set_urgent(node->container->view, false);
-	}
 	// Move sticky containers to the new workspace
 	if (ws && old_ws && ws != old_ws) {
 		for (int i = 0; i < old_ws->floating->length; ++i) {
@@ -103,10 +93,21 @@ void seat_set_focus(struct swine_node *node) {
 			}
 		}
 	}
+	// As in sway: the workspace event first, then the window's.
 	if (ws && old_ws && ws != old_ws) {
 		char *event = ipc_json_event_workspace("focus", ws, old_ws);
 		platform_ipc_event((uint32_t)IPC_EVENT_WORKSPACE, event);
 		free(event);
+	}
+	if (new_con && new_con->view &&
+			(!old_con || old_con->view != new_con->view)) {
+		char *event = ipc_json_event_window("focus", new_con);
+		platform_ipc_event((uint32_t)IPC_EVENT_WINDOW, event);
+		free(event);
+	}
+	if (node->type == N_CONTAINER && node->container->view &&
+			node->container->view->urgent) {
+		view_set_urgent(node->container->view, false);
 	}
 	if (old_ws && old_ws != ws) {
 		workspace_consider_destroy(old_ws);
