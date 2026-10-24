@@ -115,8 +115,10 @@ PATH entry in [`swinewm/cmake/wix-patch.xml`](../swinewm/cmake/wix-patch.xml).
   change.
 - **Code signing.** Unsigned installers trigger a Windows SmartScreen
   warning ("Windows protected your PC"; users click *More info → Run
-  anyway*). Avoiding it requires a code-signing certificate; that can wait
-  until there are users.
+  anyway*), and unsigned programs are more likely to be flagged by
+  Microsoft Defender (see [Antivirus warnings](#antivirus-warnings-microsoft-defender)
+  below). Avoiding both requires a code-signing certificate; that is
+  planned for 1.0 (`project_summary.md`).
 - **Per-machine install.** The MSI installs for all users into Program
   Files and therefore asks for administrator rights.
 - **Starting at login.** The installer does not make SwineWM start
@@ -132,6 +134,70 @@ PATH entry in [`swinewm/cmake/wix-patch.xml`](../swinewm/cmake/wix-patch.xml).
     `--unset-autostart` removes it), with Explorer as the shell behind it
     and its taskbar hidden. In first tests Explorer still took many key
     combinations and swinewm broke easily.
+
+## Antivirus warnings (Microsoft Defender)
+
+Microsoft Defender (Windows Security) may report `swinewm.exe` as a threat,
+quarantine it, or stop it from starting. This is a false positive: SwineWM
+is not signed, and to do its job it does several things that malware does
+too, which is what Defender's heuristic and machine-learning detections
+look for (their names often look like `Trojan:Win32/Wacatac…` or end in
+`!ml`):
+
+- it watches every key press and mouse click (low-level keyboard and mouse
+  hooks), to find its key bindings and mouse moves;
+- it sends synthetic input, which Windows requires before a program may
+  bring another program's window to the front;
+- it hides, moves and restyles other programs' windows;
+- it can replace Explorer as the logon shell (`swinewm --set-shell`
+  writes the Winlogon `Shell` value for your user) and start at logon;
+- its watchdog may end a hung swinewm process.
+
+### Before allowing it
+
+Make sure the file is the one you meant to install: an MSI or zip from the
+project's GitHub Releases page, or a `build` run's artifacts in the
+Actions tab, or your own build. In **Windows Security → Virus & threat
+protection → Protection history**, check that the detection names
+`swinewm.exe` (or `swinemenu.exe`, `swinemsg.exe`) in the SwineWM folder.
+
+### Allowing it
+
+1. If it was quarantined: **Protection history** → open the entry →
+   **Actions** → **Restore** (or **Allow on device**).
+2. Add an exclusion so it is not flagged again: **Windows Security →
+   Virus & threat protection → Virus & threat protection settings: Manage
+   settings → Exclusions: Add or remove exclusions → Add an exclusion →
+   Folder**, and choose `C:\Program Files\SwineWM` (or wherever you unpacked
+   the zip). This needs administrator rights.
+
+The folder exclusion covers `swinewm.exe`, `swinemenu.exe` and
+`swinemsg.exe`, and stays valid when an update replaces the files, so a
+separate file exclusion is not needed. Exclude only SwineWM's own folder:
+Defender no longer scans anything in it.
+
+The same from an administrator PowerShell:
+
+```powershell
+Add-MpPreference -ExclusionPath "C:\Program Files\SwineWM"
+# to undo it:
+Remove-MpPreference -ExclusionPath "C:\Program Files\SwineWM"
+```
+
+Other antivirus programs have similar exclusion settings.
+
+If SwineWM is your shell and Defender removed `swinewm.exe`, logging on
+gives a black screen: press **Ctrl+Alt+Del → Task Manager → Run new task**,
+start `explorer.exe`, then restore the file and add the exclusion as above
+(see also [`linux-users.md`](linux-users.md#the-most-important-thing-getting-unstuck)).
+
+### Reporting the false positive
+
+Reports help Defender stop flagging SwineWM for everybody: submit the
+detected file at <https://www.microsoft.com/wdsi/filesubmission> as an
+incorrectly detected file (a false positive). Microsoft usually updates its
+definitions within a few days. Signing the executables (planned for 1.0)
+is the lasting fix.
 
 ## Making a release
 

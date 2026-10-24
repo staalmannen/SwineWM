@@ -23,6 +23,10 @@ Other rescues:
 - `swinewm --recover` shows windows that a crashed swinewm left hidden on
   other workspaces, and puts Explorer's taskbar setting back.
 - If swinewm crashes as the shell, it starts Explorer by itself.
+- A black screen at logon can also mean that Microsoft Defender
+  quarantined `swinewm.exe` (a false positive; it is unsigned and watches
+  the keyboard): start `explorer.exe` from Task Manager as above, then see
+  [Antivirus warnings](packaging.md#antivirus-warnings-microsoft-defender).
 - Its log is `%LOCALAPPDATA%\swinewm\swinewm.log`, the previous session's
   `swinewm.old.log`. For more detail: `setx SWINEWM_LOG debug` and log on
   again.
