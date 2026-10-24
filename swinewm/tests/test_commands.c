@@ -3,9 +3,12 @@
 #include <string.h>
 #include "fake_platform.h"
 #include "ipc.h"
+#include "json.h"
 #include "stringop.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
+#include "swinewm/desktop/transaction.h"
+#include "swinewm/ipc-json.h"
 #include "swinewm/ipc-server.h"
 #include "swinewm/notify.h"
 #include "swinewm/server.h"
@@ -36,6 +39,92 @@ static void test_chains_and_errors(void) {
 	fake_teardown();
 }
 
+static const struct json_value *find_node(const struct json_value *node,
+		const char *name) {
+	const char *node_name = json_get_string(node, "name", NULL);
+	if (node_name && strcmp(node_name, name) == 0) {
+		return node;
+	}
+	const char *lists[] = {"nodes", "floating_nodes"};
+	for (int k = 0; k < 2; ++k) {
+		const struct json_value *list = json_object_get(node, lists[k]);
+		for (int i = 0; list && list->items && i < list->items->length; ++i) {
+			const struct json_value *found = find_node(list->items->items[i], name);
+			if (found) {
+				return found;
+			}
+		}
+	}
+	return NULL;
+}
+
+// i3's node fields, as sway fills them (ipc_json_describe_node).
+static void test_ipc_node_fields(void) {
+	fake_setup();
+	fake_map_view("a");
+	fake_map_view("b");
+	CHECK(run("layout tabbed"));
+	transaction_commit_dirty();
+	char *tree = ipc_json_get_tree();
+	char *error = NULL;
+	struct json_value *root_json = json_parse(tree, &error);
+	CHECK(root_json != NULL);
+	free(error);
+	if (!root_json) {
+		free(tree);
+		fake_teardown();
+		return;
+	}
+	CHECK_STR(json_get_string(root_json, "type", NULL), "root");
+	CHECK(json_object_get(root_json, "deco_rect") != NULL);
+	const struct json_value *scratch_out = find_node(root_json, "__i3");
+	CHECK(scratch_out && json_get_number(scratch_out, "id", 0) == 2147483647.0);
+	const struct json_value *scratch = find_node(root_json, "__i3_scratch");
+	CHECK(scratch && json_get_number(scratch, "fullscreen_mode", 0) == 1);
+
+	const struct json_value *a = find_node(root_json, "a");
+	const struct json_value *b = find_node(root_json, "b");
+	CHECK(a && b);
+	if (a && b) {
+		CHECK_STR(json_get_string(b, "type", NULL), "con");
+		CHECK_STR(json_get_string(b, "orientation", NULL), "none");
+		CHECK_STR(json_get_string(b, "floating", NULL), "auto_off");
+		CHECK_STR(json_get_string(b, "scratchpad_state", NULL), "none");
+		CHECK_STR(json_get_string(b, "shell", NULL), "win32");
+		CHECK(!json_get_bool(b, "urgent", true));
+		CHECK(json_get_bool(b, "visible", false));
+		CHECK(!json_get_bool(a, "visible", true));   // an inactive tab
+		CHECK(json_get_number(b, "percent", 0) == 1.0);
+		CHECK(json_object_get(b, "geometry") != NULL);
+		CHECK(json_object_get(b, "window_rect") != NULL);
+		const struct json_value *props = json_object_get(b, "window_properties");
+		CHECK(props && json_object_get(props, "transient_for") != NULL);
+		CHECK_STR(json_get_string(props, "title", NULL), "b");
+		// The tabs: side by side, relative to the parent.
+		const struct json_value *deco_a = json_object_get(a, "deco_rect");
+		const struct json_value *deco_b = json_object_get(b, "deco_rect");
+		CHECK(deco_a && deco_b);
+		if (deco_a && deco_b) {
+			double width = json_get_number(deco_a, "width", 0);
+			CHECK(width > 0);
+			CHECK(json_get_number(deco_a, "height", 0) > 0);
+			CHECK(json_get_number(deco_a, "x", -1) == 0);
+			CHECK(json_get_number(deco_b, "x", -1) == width);
+		}
+	}
+	const struct json_value *ws = find_node(root_json, "1");
+	CHECK(ws != NULL);
+	if (ws) {
+		CHECK_STR(json_get_string(ws, "type", NULL), "workspace");
+		const char *repr = json_get_string(ws, "representation", "");
+		CHECK(strstr(repr, "T[test.exe test.exe]") != NULL);
+		CHECK(json_object_get(ws, "urgent") != NULL);
+	}
+	json_value_free(root_json);
+	free(tree);
+	fake_teardown();
+}
+
 static void test_ipc(void) {
 	fake_setup();
 	fake.ipc_event_count = 0;
@@ -51,6 +140,16 @@ static void test_ipc(void) {
 	CHECK(strstr(fake.ipc_changes, "init,focus,") != NULL);
 	CHECK(strstr(fake.ipc_last_event, "\"change\":\"empty\",\"current\":{") != NULL);
 	CHECK(strstr(fake.ipc_last_event, "\"name\":\"7\"") != NULL);
+	// Switching to a workspace: its focus event first, then the window's,
+	// which is already visible (sway's order).
+	fake_map_view("other");
+	CHECK(run("move container to workspace 2; workspace 2"));
+	fake.ipc_changes[0] = '\0';
+	CHECK(run("workspace 1"));
+	CHECK_STR(fake.ipc_changes, "focus,focus,");
+	CHECK_INT(fake.ipc_last_event_type, (uint32_t)IPC_EVENT_WINDOW);
+	CHECK(strstr(fake.ipc_last_event, "\"name\":\"hello\"") != NULL);
+	CHECK(strstr(fake.ipc_last_event, "\"visible\":true") != NULL);
 	uint32_t type;
 	const char *cmd = "workspace 4";
 	char *reply = ipc_handle_request(IPC_COMMAND, cmd, (uint32_t)strlen(cmd), &type);
@@ -60,7 +159,11 @@ static void test_ipc(void) {
 
 	reply = ipc_handle_request(IPC_GET_WORKSPACES, "", 0, &type);
 	CHECK(strstr(reply, "\"name\":\"1\"") != NULL);
-	CHECK(strstr(reply, "\"name\":\"4\",\"visible\":true,\"focused\":true") != NULL);
+	// sway's order: "focused" and "visible" come last in GET_WORKSPACES.
+	CHECK(strstr(reply, "\"name\":\"4\",\"window\":null,") != NULL);
+	CHECK(strstr(reply, "\"num\":4,\"output\":\"") != NULL);
+	CHECK(strstr(reply, "\"representation\":\"H[]\",\"focused\":true,"
+		"\"visible\":true}") != NULL);
 	free(reply);
 
 	reply = ipc_handle_request(IPC_GET_TREE, "", 0, &type);
@@ -286,6 +389,7 @@ void test_commands_all(void) {
 	test_every_command_is_found();
 	test_chains_and_errors();
 	test_ipc();
+	test_ipc_node_fields();
 	test_grim();
 	test_restart();
 }

@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include "list.h"
 #include "swinewm/config.h"
+#include "swinewm/tree/container.h"
 #include "swinewm/tree/node.h"
 
 struct swine_container;
@@ -40,8 +41,11 @@ void titlebars_add(struct swine_node *parent, list_t *children,
 		const struct swine_box *box, bool stacked, int tab_height,
 		double scale);
 
-// sway's container_build_representation: "H[app1 app2]" (a window: its
-// title). Caller frees.
+// sway's container_build_representation: "H[app1 app2]" for a layout and
+// its children (a workspace's representation). Caller frees.
+char *container_build_representation(enum swine_container_layout layout,
+		list_t *children);
+// The same for a container (a window: its title). Caller frees.
 char *container_representation(struct swine_container *con);
 // The title shown on a tab: title_format with %title, %app_id, %class,
 // %instance and %shell filled in (sway's parse_title_format; no Pango

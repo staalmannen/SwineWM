@@ -213,7 +213,7 @@ same cause.
 | Message | Status |
 | --- | --- |
 | `RUN_COMMAND` | ✅ |
-| `GET_WORKSPACES`, `GET_OUTPUTS`, `GET_TREE`, `GET_VERSION` | ✅ (subset of sway's fields) |
+| `GET_WORKSPACES`, `GET_OUTPUTS`, `GET_TREE`, `GET_VERSION` | ✅ Every node has sway's and i3's fields (`urgent`, `floating`, `scratchpad_state`, `orientation`, `deco_rect`, `window_rect`, `geometry`, `representation`, …), in sway's order; window and workspace events carry the same nodes. Windows-specific values: `window` is the HWND, `shell` is `win32`, `window_properties.instance` is the window class, `deco_rect` covers only the tabs of tabbed and stacked containers (Windows draws a window's own title bar inside the window), and Wayland-only fields (`sandbox_*`, `tag`, `foreign_toplevel_identifier`) are `null` |
 | `GET_BINDING_MODES`, `GET_BINDING_STATE`, `GET_CONFIG` | ✅ |
 | `GET_MARKS` | ✅ |
 | `GET_BAR_CONFIG` | ✅ one bar, `bar-0`: position, height, and `colors`/`font` computed from the Waybar `style.css` (window, workspace buttons) |
@@ -221,7 +221,7 @@ same cause.
 | `GET_NOTIFICATIONS` (1000), `GET_NOTIFICATION_HISTORY` (1001) | ✅ swinewm extensions |
 | `IPC_SYNC` | ✅ Returns the unsupported response, as sway does |
 | `SEND_TICK` | ✅ As in sway: the payload is any text, sent to tick subscribers as `{"first": false, "payload": …}`; a new tick subscriber first gets `{"first": true, "payload": ""}` |
-| `SUBSCRIBE` and events | 🟡 Validates subscriptions (they add up, as in sway) and streams events asynchronously; workspace focus/init/empty/move/rename/urgent, window new/close/focus/title/move/fullscreen_mode, mode (`change` is the mode's name), output, binding, barconfig, shutdown and tick are covered; nothing is sent after shutdown. Some sway event types (`input`, `bar_state_update`) and state changes remain unimplemented. `swinemsg -t subscribe [-m] '["window"]'` prints events as `swaymsg` does |
+| `SUBSCRIBE` and events | 🟡 Validates subscriptions (they add up, as in sway) and streams events asynchronously; workspace focus/init/empty/move/rename/urgent, window new/close/focus/title/move/fullscreen_mode, mode (`change` is the mode's name), output, binding, barconfig, shutdown and tick are covered; nothing is sent after shutdown. Some sway event types (`input`, `bar_state_update`) and state changes remain unimplemented. `swinemsg -t subscribe [-m] '["window"]'` prints events as `swaymsg` does; it also accepts plain names (`-m window workspace`) and the `[window,workspace]` that Windows PowerShell before 7.3 makes of the quoted array |
 | Watchdog | ✅ A companion process probes the manager's hidden window and process. After three missed probes it terminates an unresponsive manager and runs `--recover`; an unexpected exit also runs recovery. If SwineWM is the login shell, it starts Explorer afterward |
 
 `get_tree` reports native window properties as `app_id` (the executable

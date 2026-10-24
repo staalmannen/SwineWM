@@ -10,6 +10,13 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- IPC trees, workspaces, outputs and window/workspace events now carry all
+  of sway's and i3's node fields (`urgent`, `floating`, `scratchpad_state`,
+  `orientation`, `deco_rect`, `window_rect`, `geometry`, `shell`,
+  `representation`, `window_properties.instance`, …) in sway's order, so
+  i3 and sway IPC scripts find what they expect. `percent` is now worked
+  out as in sway.
+
 - A native config-error nag window with the complete error list and reload
   and dismiss actions.
 - IPC `SUBSCRIBE` support for workspace, window, mode, output, binding,
@@ -34,6 +41,16 @@ the MSI and zip with the matching section below as release notes.
   bindings as well as `workspace` bindings.
 
 ### Fixed
+
+- Switching workspace sent the window `focus` event before the workspace
+  `focus` event, and reported the newly focused window as `"visible":false`.
+  The order is now sway's (workspace first), and `visible` is worked out
+  from the tree as in sway.
+
+- `swinemsg -t subscribe -m '["window","workspace"]'` failed with
+  `{"success":false}` in Windows PowerShell, which drops the inner quotes
+  before 7.3. swinemsg now turns `[window,workspace]` into JSON, and also
+  takes plain event names: `swinemsg -t subscribe -m window workspace`.
 
 - IPC events reached a subscribed client only when it sent another
   message: the pipe was opened for synchronous I/O, so a waiting read

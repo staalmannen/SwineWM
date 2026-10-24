@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -12,6 +13,7 @@
 #include "swinewm/tree/container.h"
 #include "swinewm/tree/output.h"
 #include "swinewm/tree/root.h"
+#include "swinewm/tree/titlebar.h"
 #include "swinewm/tree/view.h"
 #include "swinewm/tree/workspace.h"
 
@@ -29,6 +31,512 @@ static void write_rect(struct json_writer *w, const char *key,
 	json_int(w, box->width);
 	json_key(w, "height");
 	json_int(w, box->height);
+	json_end_object(w);
+}
+
+// Tree nodes, as sway's ipc_json_describe_node (Copyright (c) 2016-2017
+// Drew DeVault, MIT): every node has i3's fields, filled with i3's defaults
+// where they mean nothing for its type, then the fields of its type.
+
+static const int i3_output_id = INT32_MAX;
+static const int i3_scratch_id = INT32_MAX - 1;
+
+static const char *orientation_to_str(enum swine_container_layout layout) {
+	switch (layout) {
+	case L_VERT:
+	case L_STACKED:
+		return "vertical";
+	case L_HORIZ:
+	case L_TABBED:
+		return "horizontal";
+	case L_NONE:
+		break;
+	}
+	return "none";
+}
+
+static const char *border_to_str(enum swine_container_border border) {
+	switch (border) {
+	case B_NONE:
+		return "none";
+	case B_PIXEL:
+		return "pixel";
+	case B_NORMAL:
+		return "normal";
+	case B_CSD:
+		return "csd";
+	}
+	return "none";
+}
+
+// The fields of sway's ipc_json_create_node. They are written in two parts
+// around "nodes", "floating_nodes" and "focus", which keep their place.
+struct node_json {
+	long long id;
+	const char *type;
+	const char *orientation;
+	bool has_percent;
+	double percent;
+	bool urgent;
+	list_t *marks;               // char *, or NULL for none
+	bool skip_focused;           // GET_WORKSPACES puts "focused" last
+	bool focused;
+	const char *layout;
+	const char *border;
+	int border_width;
+	struct swine_box rect;
+	struct swine_box deco_rect;
+	struct swine_box window_rect;
+	struct swine_box geometry;
+	const char *name;
+	bool has_window;
+	long long window;
+	int fullscreen_mode;
+	bool sticky;
+	const char *floating;        // NULL: null
+	const char *scratchpad_state;
+};
+
+static void node_json_init(struct node_json *n, long long id, const char *type,
+		const char *name, struct swine_node *node) {
+	*n = (struct node_json){0};
+	n->id = id;
+	n->type = type;
+	n->name = name;
+	n->orientation = orientation_to_str(L_HORIZ);
+	n->layout = container_layout_to_str(L_HORIZ);
+	n->border = border_to_str(B_NONE);
+	n->focused = node && seat_get_focus() == node;
+}
+
+static void write_node_head(struct json_writer *w, const struct node_json *n) {
+	json_key(w, "id");
+	json_int(w, n->id);
+	json_key(w, "type");
+	json_string(w, n->type);
+	json_key(w, "orientation");
+	json_string(w, n->orientation);
+	json_key(w, "percent");
+	if (n->has_percent) {
+		json_double(w, n->percent);
+	} else {
+		json_null(w);
+	}
+	json_key(w, "urgent");
+	json_bool(w, n->urgent);
+	json_key(w, "marks");
+	json_begin_array(w);
+	for (int i = 0; n->marks && i < n->marks->length; ++i) {
+		json_string(w, n->marks->items[i]);
+	}
+	json_end_array(w);
+	if (!n->skip_focused) {
+		json_key(w, "focused");
+		json_bool(w, n->focused);
+	}
+	json_key(w, "layout");
+	json_string(w, n->layout);
+	json_key(w, "border");
+	json_string(w, n->border);
+	json_key(w, "current_border_width");
+	json_int(w, n->border_width);
+	write_rect(w, "rect", &n->rect);
+	write_rect(w, "deco_rect", &n->deco_rect);
+	write_rect(w, "window_rect", &n->window_rect);
+	write_rect(w, "geometry", &n->geometry);
+	json_key(w, "name");
+	json_string(w, n->name);
+	json_key(w, "window");
+	if (n->has_window) {
+		json_int(w, n->window);
+	} else {
+		json_null(w);
+	}
+}
+
+static void write_node_tail(struct json_writer *w, const struct node_json *n) {
+	json_key(w, "fullscreen_mode");
+	json_int(w, n->fullscreen_mode);
+	json_key(w, "sticky");
+	json_bool(w, n->sticky);
+	json_key(w, "floating");
+	json_string(w, n->floating);
+	json_key(w, "scratchpad_state");
+	json_string(w, n->scratchpad_state);
+}
+
+static void write_focus_list(struct json_writer *w, struct swine_node *node) {
+	// Children ids ordered by focus recency, like sway's "focus" array.
+	json_key(w, "focus");
+	json_begin_array(w);
+	for (int i = 0; i < seat->focus_stack->length; ++i) {
+		struct swine_node *cand = seat->focus_stack->items[i];
+		if (node_get_parent(cand) == node) {
+			json_int(w, (long long)cand->id);
+		}
+	}
+	json_end_array(w);
+}
+
+static void write_empty_list(struct json_writer *w, const char *key) {
+	json_key(w, key);
+	json_begin_array(w);
+	json_end_array(w);
+}
+
+static void write_container_list(struct json_writer *w, const char *key,
+		list_t *list) {
+	json_key(w, key);
+	json_begin_array(w);
+	for (int i = 0; list && i < list->length; ++i) {
+		write_container(w, list->items[i]);
+	}
+	json_end_array(w);
+}
+
+static bool container_has_urgent_child(struct swine_container *con) {
+	for (int i = 0; con->children && i < con->children->length; ++i) {
+		struct swine_container *child = con->children->items[i];
+		if ((child->view && child->view->urgent) ||
+				container_has_urgent_child(child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// The box of a container's parent, below the tabs if it is tabbed or
+// stacked (swinewm's child boxes start below them).
+static bool parent_content_box(struct swine_container *con,
+		struct swine_box *box) {
+	if (con->parent) {
+		*box = con->parent->box;
+	} else if (con->workspace) {
+		*box = con->workspace->box;
+	} else {
+		return false;
+	}
+	enum swine_container_layout layout = container_parent_layout(con);
+	if (!container_is_floating(con) &&
+			(layout == L_TABBED || layout == L_STACKED)) {
+		const struct swine_box *tabs = con->parent ? &con->parent->title_box :
+			&con->workspace->title_box;
+		box->y += tabs->height;
+		box->height -= tabs->height;
+	}
+	return box->width != 0 && box->height != 0;
+}
+
+// sway's get_deco_rect: the title bar relative to the parent. Windows keeps
+// a window's own title bar inside the window, so only the tabs of tabbed and
+// stacked containers count.
+static struct swine_box container_deco_rect(struct swine_container *con) {
+	struct swine_box deco = {0};
+	enum swine_container_layout layout = container_parent_layout(con);
+	if (container_is_floating(con) || !con->workspace ||
+			con->fullscreen_mode != FULLSCREEN_NONE ||
+			(layout != L_TABBED && layout != L_STACKED)) {
+		return deco;
+	}
+	const struct swine_box *tabs = con->parent ? &con->parent->title_box :
+		&con->workspace->title_box;
+	list_t *siblings = container_get_siblings(con);
+	int count = siblings ? siblings->length : 0;
+	if (tabs->height <= 0 || count == 0) {
+		return deco;
+	}
+	int index = container_sibling_index(con);
+	if (layout == L_TABBED) {
+		deco.width = tabs->width / count;
+		deco.height = tabs->height;
+		deco.x = deco.width * index;
+	} else {
+		deco.width = tabs->width;
+		deco.height = tabs->height / count;
+		deco.y = deco.height * index;
+	}
+	return deco;
+}
+
+static void write_container(struct json_writer *w, struct swine_container *con) {
+	struct swine_view *view = con->view;
+	bool floating = container_is_floating(con);
+	struct node_json n;
+	node_json_init(&n, (long long)con->node.id, floating ? "floating_con" : "con",
+		view ? view->title : NULL, &con->node);
+	enum swine_container_layout layout = view ? L_NONE : con->layout;
+	n.layout = container_layout_to_str(layout);
+	n.orientation = orientation_to_str(layout);
+	n.urgent = view ? view->urgent : container_has_urgent_child(con);
+	n.sticky = con->is_sticky;
+	// Like sway, the reason for floating is not tracked.
+	n.floating = floating ? "user_on" : "auto_off";
+	n.fullscreen_mode = con->fullscreen_mode;
+	n.scratchpad_state = con->scratchpad ? "fresh" : "none";
+	struct swine_box parent;
+	if (parent_content_box(con, &parent)) {
+		n.has_percent = true;
+		n.percent = ((double)con->box.width / parent.width) *
+			((double)con->box.height / parent.height);
+	}
+	n.border = border_to_str(con->border);
+	n.border_width = con->border_thickness;
+	n.rect = con->box;
+	n.deco_rect = container_deco_rect(con);
+	n.marks = con->marks;
+	if (view) {
+		n.window_rect = (struct swine_box){
+			view->pending.box.x - con->box.x, view->pending.box.y - con->box.y,
+			view->pending.box.width, view->pending.box.height};
+		n.geometry = (struct swine_box){0, 0, view->natural.width,
+			view->natural.height};
+		// The HWND stands in for the X11 window id.
+		n.has_window = true;
+		n.window = (long long)(size_t)view->handle;
+	}
+	json_begin_object(w);
+	write_node_head(w, &n);
+	write_container_list(w, "nodes", con->children);
+	write_empty_list(w, "floating_nodes");
+	write_focus_list(w, &con->node);
+	write_node_tail(w, &n);
+	if (view) {
+		// sway's ipc_json_describe_view
+		json_key(w, "pid");
+		json_int(w, (long long)view->pid);
+		json_key(w, "app_id");
+		json_string(w, view->app_id);
+		json_key(w, "foreign_toplevel_identifier");
+		json_null(w);
+		json_key(w, "visible");
+		json_bool(w, view_is_visible(view));
+		json_key(w, "max_render_time");
+		json_int(w, 0);
+		json_key(w, "allow_tearing");
+		json_bool(w, false);
+		json_key(w, "shell");
+		json_string(w, "win32");
+		json_key(w, "inhibit_idle");
+		json_bool(w, false);
+		json_key(w, "sandbox_engine");
+		json_null(w);
+		json_key(w, "sandbox_app_id");
+		json_null(w);
+		json_key(w, "sandbox_instance_id");
+		json_null(w);
+		json_key(w, "tag");
+		json_null(w);
+		json_key(w, "idle_inhibitors");
+		json_begin_object(w);
+		json_key(w, "user");
+		json_string(w, "none");
+		json_key(w, "application");
+		json_string(w, "none");
+		json_end_object(w);
+		// As sway does for Xwayland windows; Windows has no instance, so it
+		// is the class, as for criteria.
+		json_key(w, "window_properties");
+		json_begin_object(w);
+		if (view->class_name) {
+			json_key(w, "class");
+			json_string(w, view->class_name);
+			json_key(w, "instance");
+			json_string(w, view->class_name);
+		}
+		if (view->title) {
+			json_key(w, "title");
+			json_string(w, view->title);
+		}
+		json_key(w, "transient_for");
+		json_null(w);
+		json_end_object(w);
+	}
+	json_end_object(w);
+}
+
+// sway's ipc_json_describe_workspace. GET_WORKSPACES leaves out the
+// children and adds "focused" (the focused workspace) and "visible" last.
+static void write_workspace(struct json_writer *w, struct swine_workspace *ws,
+		bool recursive) {
+	struct node_json n;
+	node_json_init(&n, (long long)ws->node.id, "workspace", ws->name, &ws->node);
+	n.skip_focused = !recursive;
+	n.urgent = ws->urgent;
+	n.layout = container_layout_to_str(ws->layout);
+	n.orientation = orientation_to_str(ws->layout);
+	n.rect = ws->box;
+	n.fullscreen_mode = 1;
+	json_begin_object(w);
+	write_node_head(w, &n);
+	if (recursive) {
+		write_container_list(w, "nodes", ws->tiling);
+	} else {
+		write_empty_list(w, "nodes");
+	}
+	write_container_list(w, "floating_nodes", ws->floating);
+	write_focus_list(w, &ws->node);
+	write_node_tail(w, &n);
+	json_key(w, "num");
+	json_int(w, workspace_number(ws->name));
+	json_key(w, "output");
+	json_string(w, ws->output && ws->output->enabled ? ws->output->name : NULL);
+	json_key(w, "representation");
+	char *representation = container_build_representation(ws->layout,
+		ws->tiling);
+	json_string(w, representation);
+	free(representation);
+	if (!recursive) {
+		json_key(w, "focused");
+		json_bool(w, seat_get_focused_workspace() == ws);
+		json_key(w, "visible");
+		json_bool(w, workspace_is_visible(ws));
+	}
+	json_end_object(w);
+}
+
+// sway's ipc_json_describe_enabled_output; GET_OUTPUTS leaves out the
+// workspaces and adds swinewm's "description" and "usable_rect".
+static void write_output(struct json_writer *w, struct swine_output *output,
+		bool recursive) {
+	struct swine_workspace *ws = output_get_active_workspace(output);
+	struct node_json n;
+	node_json_init(&n, (long long)output->node.id, "output", output->name,
+		&output->node);
+	n.orientation = orientation_to_str(L_NONE);
+	n.layout = "output";
+	n.rect = output->box;
+	if (root->box.width != 0 && root->box.height != 0) {
+		n.has_percent = true;
+		n.percent = ((double)output->box.width / root->box.width) *
+			((double)output->box.height / root->box.height);
+	}
+	json_begin_object(w);
+	write_node_head(w, &n);
+	json_key(w, "nodes");
+	json_begin_array(w);
+	for (int i = 0; recursive && i < output->workspaces->length; ++i) {
+		write_workspace(w, output->workspaces->items[i], true);
+	}
+	json_end_array(w);
+	write_empty_list(w, "floating_nodes");
+	write_focus_list(w, &output->node);
+	write_node_tail(w, &n);
+	json_key(w, "primary");
+	json_bool(w, output->primary);
+	json_key(w, "make");
+	json_string(w, "Unknown");
+	json_key(w, "model");
+	json_string(w, output->identifier ? output->identifier : "Unknown");
+	json_key(w, "serial");
+	json_string(w, "Unknown");
+	json_key(w, "features");
+	json_begin_object(w);
+	json_key(w, "adaptive_sync");
+	json_bool(w, false);
+	json_key(w, "hdr");
+	json_bool(w, false);
+	json_end_object(w);
+	json_key(w, "non_desktop");
+	json_bool(w, false);
+	json_key(w, "active");
+	json_bool(w, true);
+	json_key(w, "dpms");
+	json_bool(w, true);
+	json_key(w, "power");
+	json_bool(w, true);
+	json_key(w, "scale");
+	json_double(w, output->scale);
+	json_key(w, "scale_filter");
+	json_string(w, "linear");
+	json_key(w, "transform");
+	static const char *const transforms[] = {"normal", "90", "180", "270"};
+	json_string(w, transforms[output->transform & 3]);
+	json_key(w, "adaptive_sync_status");
+	json_string(w, "disabled");
+	json_key(w, "current_workspace");
+	json_string(w, ws ? ws->name : NULL);
+	struct swine_box mode = {0, 0,
+		output->transform & 1 ? output->box.height : output->box.width,
+		output->transform & 1 ? output->box.width : output->box.height};
+	json_key(w, "modes");
+	json_begin_array(w);
+	json_begin_object(w);
+	json_key(w, "width");
+	json_int(w, mode.width);
+	json_key(w, "height");
+	json_int(w, mode.height);
+	json_key(w, "refresh");
+	json_int(w, output->refresh_mhz);
+	json_end_object(w);
+	json_end_array(w);
+	json_key(w, "current_mode");
+	json_begin_object(w);
+	json_key(w, "width");
+	json_int(w, mode.width);
+	json_key(w, "height");
+	json_int(w, mode.height);
+	json_key(w, "refresh");
+	json_int(w, output->refresh_mhz);
+	json_end_object(w);
+	json_key(w, "max_render_time");
+	json_int(w, 0);
+	json_key(w, "allow_tearing");
+	json_bool(w, false);
+	json_key(w, "hdr");
+	json_bool(w, false);
+	if (!recursive) {
+		json_key(w, "description");
+		json_string(w, output->description ? output->description : "Unknown");
+		struct swine_box usable = output_get_usable_area(output);
+		write_rect(w, "usable_rect", &usable);
+	}
+	json_end_object(w);
+}
+
+// sway's ipc_json_describe_scratchpad_output: the __i3 output with the
+// __i3_scratch workspace, whose floating nodes are the hidden scratchpad.
+static void write_scratchpad_output(struct json_writer *w) {
+	struct node_json n;
+	node_json_init(&n, i3_scratch_id, "workspace", "__i3_scratch", NULL);
+	n.rect = root->box;
+	n.fullscreen_mode = 1;
+	struct node_json out;
+	node_json_init(&out, i3_output_id, "output", "__i3", NULL);
+	out.layout = "output";
+	out.rect = root->box;
+
+	json_begin_object(w);
+	write_node_head(w, &out);
+	json_key(w, "nodes");
+	json_begin_array(w);
+	json_begin_object(w);
+	write_node_head(w, &n);
+	write_empty_list(w, "nodes");
+	json_key(w, "floating_nodes");
+	json_begin_array(w);
+	for (int i = 0; i < root->scratchpad->length; ++i) {
+		struct swine_container *con = root->scratchpad->items[i];
+		if (container_is_scratchpad_hidden(con)) {
+			write_container(w, con);
+		}
+	}
+	json_end_array(w);
+	json_key(w, "focus");
+	json_begin_array(w);
+	for (int i = root->scratchpad->length - 1; i >= 0; --i) {
+		struct swine_container *con = root->scratchpad->items[i];
+		json_int(w, (long long)con->node.id);
+	}
+	json_end_array(w);
+	write_node_tail(w, &n);
+	json_end_object(w);
+	json_end_array(w);
+	write_empty_list(w, "floating_nodes");
+	json_key(w, "focus");
+	json_begin_array(w);
+	json_int(w, i3_scratch_id);
+	json_end_array(w);
+	write_node_tail(w, &out);
 	json_end_object(w);
 }
 
@@ -53,31 +561,9 @@ char *ipc_json_get_version(void) {
 }
 
 static void write_workspace_summary(struct swine_workspace *ws, void *data) {
-	struct json_writer *w = data;
-	if (!ws->output || !ws->output->enabled) {
-		return;
+	if (ws->output && ws->output->enabled) {
+		write_workspace(data, ws, false);
 	}
-	json_begin_object(w);
-	json_key(w, "id");
-	json_int(w, (long long)ws->node.id);
-	json_key(w, "type");
-	json_string(w, "workspace");
-	json_key(w, "num");
-	json_int(w, workspace_number(ws->name));
-	json_key(w, "name");
-	json_string(w, ws->name);
-	json_key(w, "visible");
-	json_bool(w, workspace_is_visible(ws));
-	json_key(w, "focused");
-	json_bool(w, seat_get_focused_workspace() == ws);
-	json_key(w, "urgent");
-	json_bool(w, ws->urgent);
-	json_key(w, "layout");
-	json_string(w, container_layout_to_str(ws->layout));
-	json_key(w, "output");
-	json_string(w, ws->output->name);
-	write_rect(w, "rect", &ws->box);
-	json_end_object(w);
 }
 
 char *ipc_json_get_workspaces(void) {
@@ -98,13 +584,13 @@ char *ipc_json_event_workspace(const char *change,
 	json_string(&w, change);
 	json_key(&w, "current");
 	if (current && current->output && current->output->enabled) {
-		write_workspace_summary(current, &w);
+		write_workspace(&w, current, true);
 	} else {
 		json_null(&w);
 	}
 	json_key(&w, "old");
 	if (old && old->output && old->output->enabled) {
-		write_workspace_summary(old, &w);
+		write_workspace(&w, old, true);
 	} else {
 		json_null(&w);
 	}
@@ -117,52 +603,7 @@ char *ipc_json_get_outputs(void) {
 	json_init(&w);
 	json_begin_array(&w);
 	for (int i = 0; i < root->outputs->length; ++i) {
-		struct swine_output *output = root->outputs->items[i];
-		struct swine_workspace *ws = output_get_active_workspace(output);
-		json_begin_object(&w);
-		json_key(&w, "id");
-		json_int(&w, (long long)output->node.id);
-		json_key(&w, "type");
-		json_string(&w, "output");
-		json_key(&w, "name");
-		json_string(&w, output->name);
-		json_key(&w, "make");
-		json_string(&w, "Unknown");
-		json_key(&w, "model");
-		json_string(&w, output->identifier ? output->identifier : "Unknown");
-		json_key(&w, "serial");
-		json_string(&w, "Unknown");
-		json_key(&w, "description");
-		json_string(&w, output->description ? output->description : "Unknown");
-		json_key(&w, "active");
-		json_bool(&w, true);
-		json_key(&w, "primary");
-		json_bool(&w, output->primary);
-		json_key(&w, "focused");
-		json_bool(&w, seat_get_focused_workspace() &&
-			seat_get_focused_workspace()->output == output);
-		json_key(&w, "scale");
-		json_double(&w, output->scale);
-		json_key(&w, "transform");
-		static const char *transforms[] = {"normal", "90", "180", "270"};
-		json_string(&w, transforms[output->transform & 3]);
-		json_key(&w, "current_mode");
-		json_begin_object(&w);
-		json_key(&w, "width");
-		json_int(&w, output->transform & 1 ?
-			output->box.height : output->box.width);
-		json_key(&w, "height");
-		json_int(&w, output->transform & 1 ?
-			output->box.width : output->box.height);
-		json_key(&w, "refresh");
-		json_int(&w, output->refresh_mhz);
-		json_end_object(&w);
-		json_key(&w, "current_workspace");
-		json_string(&w, ws ? ws->name : NULL);
-		write_rect(&w, "rect", &output->box);
-		struct swine_box usable = output_get_usable_area(output);
-		write_rect(&w, "usable_rect", &usable);
-		json_end_object(&w);
+		write_output(&w, root->outputs->items[i], false);
 	}
 	json_end_array(&w);
 	return json_finish(&w);
@@ -207,126 +648,6 @@ char *ipc_json_event_output(const char *change) {
 	return json_finish(&w);
 }
 
-static void write_focus_list(struct json_writer *w, struct swine_node *node) {
-	// Children ids ordered by focus recency, like sway's "focus" array.
-	json_key(w, "focus");
-	json_begin_array(w);
-	for (int i = 0; i < seat->focus_stack->length; ++i) {
-		struct swine_node *cand = seat->focus_stack->items[i];
-		if (node_get_parent(cand) == node) {
-			json_int(w, (long long)cand->id);
-		}
-	}
-	json_end_array(w);
-}
-
-static void write_container_list(struct json_writer *w, const char *key,
-		list_t *list) {
-	json_key(w, key);
-	json_begin_array(w);
-	for (int i = 0; list && i < list->length; ++i) {
-		write_container(w, list->items[i]);
-	}
-	json_end_array(w);
-}
-
-static void write_container(struct json_writer *w, struct swine_container *con) {
-	json_begin_object(w);
-	json_key(w, "id");
-	json_int(w, (long long)con->node.id);
-	json_key(w, "type");
-	json_string(w, container_is_floating(con) ? "floating_con" : "con");
-	json_key(w, "name");
-	json_string(w, con->view ? con->view->title : NULL);
-	json_key(w, "layout");
-	json_string(w, con->view ? "none" : container_layout_to_str(con->layout));
-	json_key(w, "focused");
-	json_bool(w, seat_get_focus() == &con->node);
-	json_key(w, "fullscreen_mode");
-	json_int(w, con->fullscreen_mode);
-	json_key(w, "percent");
-	json_double(w, container_parent_layout(con) == L_VERT ?
-		con->height_fraction : con->width_fraction);
-	write_rect(w, "rect", &con->box);
-	json_key(w, "marks");
-	json_begin_array(w);
-	for (int i = 0; i < con->marks->length; ++i) {
-		json_string(w, con->marks->items[i]);
-	}
-	json_end_array(w);
-	json_key(w, "sticky");
-	json_bool(w, con->is_sticky);
-	if (con->view) {
-		static const char *const borders[] = {"none", "pixel", "normal", "csd"};
-		json_key(w, "border");
-		json_string(w, borders[con->border]);
-		json_key(w, "current_border_width");
-		json_int(w, con->border == B_NONE ? 0 : con->border_thickness);
-	}
-	if (con->view) {
-		json_key(w, "visible");
-		json_bool(w, con->view->pending.visible);
-		json_key(w, "app_id");
-		json_string(w, con->view->app_id);
-		json_key(w, "pid");
-		json_int(w, (long long)con->view->pid);
-		json_key(w, "window");
-		json_int(w, (long long)(size_t)con->view->handle);
-		json_key(w, "window_properties");
-		json_begin_object(w);
-		json_key(w, "class");
-		json_string(w, con->view->class_name);
-		json_key(w, "title");
-		json_string(w, con->view->title);
-		json_end_object(w);
-	}
-	write_focus_list(w, &con->node);
-	write_container_list(w, "nodes", con->children);
-	json_key(w, "floating_nodes");
-	json_begin_array(w);
-	json_end_array(w);
-	json_end_object(w);
-}
-
-static void write_workspace(struct json_writer *w, struct swine_workspace *ws) {
-	json_begin_object(w);
-	json_key(w, "id");
-	json_int(w, (long long)ws->node.id);
-	json_key(w, "type");
-	json_string(w, "workspace");
-	json_key(w, "name");
-	json_string(w, ws->name);
-	json_key(w, "num");
-	json_int(w, workspace_number(ws->name));
-	json_key(w, "layout");
-	json_string(w, container_layout_to_str(ws->layout));
-	json_key(w, "focused");
-	json_bool(w, seat_get_focus() == &ws->node);
-	write_rect(w, "rect", &ws->box);
-	write_focus_list(w, &ws->node);
-	write_container_list(w, "nodes", ws->tiling);
-	write_container_list(w, "floating_nodes", ws->floating);
-	json_end_object(w);
-}
-
-static void write_output(struct json_writer *w, struct swine_output *output) {
-	json_begin_object(w);
-	json_key(w, "id");
-	json_int(w, (long long)output->node.id);
-	json_key(w, "type");
-	json_string(w, "output");
-	json_key(w, "name");
-	json_string(w, output->name);
-	write_rect(w, "rect", &output->box);
-	json_key(w, "nodes");
-	json_begin_array(w);
-	for (int i = 0; i < output->workspaces->length; ++i) {
-		write_workspace(w, output->workspaces->items[i]);
-	}
-	json_end_array(w);
-	json_end_object(w);
-}
-
 char *ipc_json_event_binding(const struct swine_binding *binding,
 		const char *event) {
 	static const uint32_t modifier_bits[] = {
@@ -367,39 +688,23 @@ char *ipc_json_event_binding(const struct swine_binding *binding,
 }
 
 char *ipc_json_get_tree(void) {
+	struct node_json n;
+	node_json_init(&n, (long long)root->node.id, "root", "root", &root->node);
+	n.rect = root->box;
 	struct json_writer w;
 	json_init(&w);
 	json_begin_object(&w);
-	json_key(&w, "id");
-	json_int(&w, (long long)root->node.id);
-	json_key(&w, "type");
-	json_string(&w, "root");
-	json_key(&w, "name");
-	json_string(&w, "root");
-	write_rect(&w, "rect", &root->box);
+	write_node_head(&w, &n);
 	json_key(&w, "nodes");
 	json_begin_array(&w);
-	// sway exposes the scratchpad as the __i3 output; mirror that.
-	json_begin_object(&w);
-	json_key(&w, "type");
-	json_string(&w, "output");
-	json_key(&w, "name");
-	json_string(&w, "__i3");
-	json_key(&w, "nodes");
-	json_begin_array(&w);
-	json_begin_object(&w);
-	json_key(&w, "type");
-	json_string(&w, "workspace");
-	json_key(&w, "name");
-	json_string(&w, "__i3_scratch");
-	write_container_list(&w, "floating_nodes", root->scratchpad);
-	json_end_object(&w);
-	json_end_array(&w);
-	json_end_object(&w);
+	write_scratchpad_output(&w);
 	for (int i = 0; i < root->outputs->length; ++i) {
-		write_output(&w, root->outputs->items[i]);
+		write_output(&w, root->outputs->items[i], true);
 	}
 	json_end_array(&w);
+	write_empty_list(&w, "floating_nodes");
+	write_focus_list(&w, &root->node);
+	write_node_tail(&w, &n);
 	json_end_object(&w);
 	return json_finish(&w);
 }

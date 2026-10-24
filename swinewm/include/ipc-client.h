@@ -4,6 +4,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// The payload of a SUBSCRIBE message from what the user typed: a JSON array
+// as it is, otherwise event names separated by spaces or commas, with or
+// without brackets and quotes. Windows PowerShell before 7.3 drops the inner
+// quotes of '["window","workspace"]', which leaves "[window,workspace]".
+// Caller frees.
+char *ipc_subscribe_payload(const char *text);
+
 // Windows only. Returns the pipe name to use: $SWINESOCK if set, otherwise
 // the per-user default. Caller frees.
 char *get_ipc_pipe_name(void);

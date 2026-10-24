@@ -300,8 +300,48 @@ void view_request_fullscreen(struct swine_view *view, bool enable) {
 	}
 }
 
+// sway's view_is_visible, worked out from the tree: pending.visible only
+// changes at the next arrange, after focus events have already been sent.
 bool view_is_visible(struct swine_view *view) {
-	return view->pending.visible;
+	struct swine_container *con = view->container;
+	if (!con || !con->workspace) {
+		return false;
+	}
+	if (!container_is_sticky_or_child(con) &&
+			!workspace_is_visible(con->workspace)) {
+		return false;
+	}
+	// Check view isn't in a tabbed or stacked container on an inactive tab
+	for (struct swine_container *it = con; it; it = it->parent) {
+		enum swine_container_layout layout = container_parent_layout(it);
+		if ((layout == L_TABBED || layout == L_STACKED) &&
+				!container_is_floating(it)) {
+			struct swine_node *parent = it->parent ?
+				&it->parent->node : &it->workspace->node;
+			struct swine_node *active = seat_get_active_tiling_child(parent);
+			if (!active) {
+				// arrange shows the first child then
+				list_t *siblings = container_get_siblings(it);
+				active = siblings && siblings->length ?
+					&((struct swine_container *)siblings->items[0])->node : NULL;
+			}
+			if (active != &it->node) {
+				return false;
+			}
+		}
+	}
+	// Check view isn't hidden by a fullscreen view
+	struct swine_container *fs = con->workspace->fullscreen;
+	if (fs) {
+		struct swine_container *it = con;
+		while (it && it != fs) {
+			it = it->parent;
+		}
+		if (!it) {
+			return false;
+		}
+	}
+	return true;
 }
 
 // sway's view_is_only_visible: no sibling on the way up, except in tabbed

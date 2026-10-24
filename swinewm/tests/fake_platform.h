@@ -48,7 +48,7 @@ struct fake_platform_state {
 	int ipc_event_count;
 	uint32_t ipc_last_event_type;
 	uint32_t ipc_input_capabilities;
-	char ipc_last_event[512];
+	char ipc_last_event[8192];
 	// The "change" of every event, in order: "new,focus,"
 	char ipc_changes[1024];
 	int swaynag_show_calls;

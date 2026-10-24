@@ -127,6 +127,11 @@ int main(int argc, char **argv) {
 	// arguments with spaces so that `swinemsg notify-send "Hello there"`
 	// keeps its meaning when swinewm splits the command again.
 	char *payload = quote_args(argv + i, argc - i);
+	if (type == IPC_SUBSCRIBE) {
+		char *events = ipc_subscribe_payload(payload);
+		free(payload);
+		payload = events;
+	}
 	if (monitor && type != IPC_SUBSCRIBE) {
 		fprintf(stderr, "Monitor can only be used with -t SUBSCRIBE\n");
 		free(payload);

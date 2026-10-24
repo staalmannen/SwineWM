@@ -23,6 +23,11 @@ every push also builds them (Actions tab → a `build` run → Artifacts). The i
 the PATH. See [`../doc/packaging.md`](../doc/packaging.md), which also
 explains building the MSI yourself.
 
+If Microsoft Defender flags or quarantines `swinewm.exe`, that is a false
+positive (it is unsigned and uses keyboard and mouse hooks):
+[`../doc/packaging.md`](../doc/packaging.md#antivirus-warnings-microsoft-defender)
+explains how to check it and add an exclusion for the SwineWM folder.
+
 ## Building on Windows
 
 With Visual Studio 2022 (Developer PowerShell):
