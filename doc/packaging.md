@@ -186,6 +186,37 @@ Remove-MpPreference -ExclusionPath "C:\Program Files\SwineWM"
 
 Other antivirus programs have similar exclusion settings.
 
+A folder exclusion stops Defender from scanning the files in the folder,
+but it can still flag what a program does (detections whose names start
+with `Behavior:`), and a detection made before the exclusion stays. If a
+SwineWM program is still blocked, open its entry in **Protection history**
+and choose **Actions → Allow on device**: Defender then allows that
+detection everywhere.
+
+### Without Explorer (from a terminal)
+
+When SwineWM is the shell, open Windows Security from a terminal or with
+`exec` in swinewm:
+
+| Command | Opens |
+| --- | --- |
+| `start windowsdefender:` (cmd) or `Start-Process windowsdefender:` (PowerShell) | Windows Security |
+| `start windowsdefender://threat` | Virus & threat protection, with the link to Protection history |
+| `start windowsdefender://threatsettings` | Virus & threat protection settings, with Exclusions |
+
+The same from an administrator PowerShell, without the window:
+
+```powershell
+# What Defender detected, and which files
+Get-MpThreatDetection | Format-List ThreatID, Resources, InitialDetectionTime
+Get-MpThreat | Format-List ThreatID, ThreatName
+# Allow one detection on this device (ThreatID from above)
+Add-MpPreference -ThreatIDDefaultAction_Ids <ThreatID> -ThreatIDDefaultAction_Actions Allow
+# Restore quarantined files
+& "$env:ProgramFiles\Windows Defender\MpCmdRun.exe" -Restore -ListAll
+& "$env:ProgramFiles\Windows Defender\MpCmdRun.exe" -Restore -Name "<ThreatName>"
+```
+
 If SwineWM is your shell and Defender removed `swinewm.exe`, logging on
 gives a black screen: press **Ctrl+Alt+Del → Task Manager → Run new task**,
 start `explorer.exe`, then restore the file and add the exclusion as above

@@ -19,8 +19,12 @@
         "sway/window"
     ],
     "modules-right": [
+        "pulseaudio",
+        "network",
+        "sway/language",
         "cpu",
         "memory",
+        "temperature",
         "battery",
         "clock",
         "tray"
@@ -41,6 +45,13 @@
     "sway/window": {
         "max-length": 80
     },
+    "sway/language": {
+        // The keyboard layouts installed in Windows' language settings.
+        // Click for the next one ($mod+Ctrl+space in the default config).
+        "format": "{}",
+        "hide-single-layout": true,
+        "on-click": "swaymsg input type:keyboard xkb_switch_layout next"
+    },
     "clock": {
         // Click to toggle between the time and the date
         "format": "{:%H:%M}",
@@ -52,11 +63,38 @@
         // "icons": { "Spotify.exe": false },
         // "show-passive-items": true
     },
+    "pulseaudio": {
+        // Scroll to change the volume; click for Windows' Sound panel
+        "format": "VOL {volume}%",
+        "format-bluetooth": "VOL {volume}% BT",
+        "format-muted": "MUTE",
+        "on-click": "control mmsys.cpl"
+    },
+    "network": {
+        // Click to show the address instead
+        "format-wifi": "{essid} ({signalStrength}%)",
+        "format-ethernet": "{ipaddr}/{cidr}",
+        "format-linked": "{ifname} (No IP)",
+        "format-disconnected": "Disconnected",
+        "format-alt": "{ifname}: {ipaddr}/{cidr}",
+        "interval": 5
+    },
+    "temperature": {
+        // Shown when Windows reports an ACPI thermal zone
+        "critical-threshold": 80,
+        "format": "{temperatureC}°C"
+    },
     "cpu": {
         "format": "CPU {usage}%"
     },
     "memory": {
         "format": "RAM {}%"
+    },
+    // A module from a script (see doc/compatibility.md): add
+    // "custom/hello" to a modules list above to show it.
+    "custom/hello": {
+        "exec": "echo Hello %USERNAME%",
+        "interval": "once"
     },
     "battery": {
         "states": {

@@ -8,6 +8,40 @@ the MSI and zip with the matching section below as release notes.
 
 ## [Unreleased]
 
+### Added
+
+- Keyboard layouts: Waybar's `sway/language` module shows the active
+  Windows keyboard layout (in the default bar when more than one is
+  installed; a click switches to the next), and sway's
+  `input type:keyboard xkb_switch_layout next|prev|<index>` switches
+  layouts, bound to `$mod+Ctrl+space` in the default config. `get_inputs`
+  lists the layouts as sway does, and an `input` event (`xkb_layout`) is
+  sent when the layout changes, also through Windows' own hotkeys.
+- Waybar `custom/*` modules run scripts: `exec` with `interval`,
+  `signal` or as a continuous script, `exec-if`, `restart-interval`,
+  `return-type: json`, `format-icons` by `alt` or percentage, `escape`,
+  `hide-empty-text`, `on-update`. Scripts run through `cmd.exe` without a
+  window, each in a job object so nothing they start outlives them or
+  swinewm. `pkill -RTMIN+8 waybar` (in `exec`, an `on-click` or
+  `swinemsg exec`) runs the modules with `"signal": 8`; `-USR1` shows or
+  hides the bar and `-USR2` reloads it, as in Waybar.
+- Waybar modules `network` (IP Helper and the WLAN API: addresses,
+  Wi-Fi name and signal, bandwidth), `pulseaudio`/`wireplumber` (the
+  default Windows output and input; scroll for the volume), `disk`,
+  `temperature` (ACPI thermal zones, where Windows reports them),
+  `idle_inhibitor` (keeps the display on) and `keyboard-state`. The default
+  bar shows the volume, the network and, where available, the temperature.
+- Waybar's unit formatting (`pow_format`) for bandwidth and disk sizes,
+  with its specs (`{bandwidthDownBits:>}`, `{used:=}`, `{total:Gi}`), and
+  `format-icons` thresholds (`{"icon": …, "max": n}`).
+- `pactl`, `wpctl` and `pamixer` volume and mute commands in `exec` (an
+  `on-click`, a binding) change the Windows volume, so volume bindings from
+  Linux configs work.
+- Bar modules take `on-click-middle` and `on-click-right`.
+- `exec swaymsg <command>` (and `swinemsg`) runs the command in swinewm
+  without starting a process, so Waybar `on-click`s and bindings from
+  Linux configs work as they are.
+
 ## [0.4.0] - 2026-10-24
 
 ### Added

@@ -1,8 +1,12 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include "ipc.h"
 #include "stringop.h"
 #include "swinewm/config.h"
 #include "swinewm/input/keyboard.h"
+#include "swinewm/ipc-json.h"
+#include "swinewm/platform.h"
 
 struct modifier_name {
 	const char *name;
@@ -152,4 +156,82 @@ struct swine_binding *keyboard_find_binding(uint32_t modifiers,
 		}
 	}
 	return NULL;
+}
+
+static struct {
+	list_t *layouts;   // struct platform_keyboard_layout *
+	int active;
+	bool loaded;
+} kb_layouts = { NULL, -1, false };
+
+void keyboard_layouts_free(list_t *layouts) {
+	if (!layouts) {
+		return;
+	}
+	for (int i = 0; i < layouts->length; ++i) {
+		struct platform_keyboard_layout *l = layouts->items[i];
+		free(l->name);
+		free(l->short_name);
+		free(l->description);
+		free(l->variant);
+		free(l);
+	}
+	list_free(layouts);
+}
+
+static bool same_layouts(list_t *a, list_t *b) {
+	if (!a || !b || a->length != b->length) {
+		return false;
+	}
+	for (int i = 0; i < a->length; ++i) {
+		struct platform_keyboard_layout *x = a->items[i], *y = b->items[i];
+		if (strcmp(x->name, y->name) != 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool keyboard_layouts_refresh(void) {
+	list_t *layouts = create_list();
+	int active = platform_keyboard_layouts(layouts);
+	if (active >= layouts->length) {
+		active = -1;
+	}
+	bool changed = !kb_layouts.loaded || active != kb_layouts.active ||
+		!same_layouts(layouts, kb_layouts.layouts);
+	keyboard_layouts_free(kb_layouts.layouts);
+	kb_layouts.layouts = layouts;
+	kb_layouts.active = active;
+	bool first = !kb_layouts.loaded;
+	kb_layouts.loaded = true;
+	if (changed && !first) {
+		// sway's ipc_event_input(..., "xkb_layout")
+		char *event = ipc_json_event_input("xkb_layout");
+		platform_ipc_event((uint32_t)IPC_EVENT_INPUT, event);
+		free(event);
+		platform_ui_refresh();
+	}
+	return changed && !first;
+}
+
+list_t *keyboard_layouts_get(void) {
+	if (!kb_layouts.loaded) {
+		keyboard_layouts_refresh();
+	}
+	return kb_layouts.layouts;
+}
+
+int keyboard_layouts_active(void) {
+	if (!kb_layouts.loaded) {
+		keyboard_layouts_refresh();
+	}
+	return kb_layouts.active;
+}
+
+void keyboard_layouts_finish(void) {
+	keyboard_layouts_free(kb_layouts.layouts);
+	kb_layouts.layouts = NULL;
+	kb_layouts.active = -1;
+	kb_layouts.loaded = false;
 }

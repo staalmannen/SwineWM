@@ -162,7 +162,7 @@ What an existing sway config needs to load and behave.
   responsiveness and shows every window again if swinewm is killed or hangs,
   which an in-process crash handler cannot cover (as GlazeWM's watcher does).
 
-### 0.5.0 — Waybar beyond the basics
+### 0.5.0 — Waybar beyond the basics (in progress)
 
 - `custom/*` running scripts (`exec`, `interval`, `return-type json`,
   `signal` via `pkill -RTMIN+n` equivalents), which most Waybar setups use.

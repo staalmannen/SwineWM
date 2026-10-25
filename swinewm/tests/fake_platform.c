@@ -117,6 +117,41 @@ bool platform_view_has_visible_owned_window(struct swine_view *view) {
 	return fake.has_visible_owned_window;
 }
 
+uint64_t platform_script_start(const char *cmdline, const char *output_name) {
+	if (fake.script_start_fails) {
+		return 0;
+	}
+	fake.script_starts++;
+	snprintf(fake.last_script, sizeof(fake.last_script), "%s", cmdline);
+	snprintf(fake.last_script_output, sizeof(fake.last_script_output), "%s",
+		output_name ? output_name : "");
+	fake.last_script_id = (uint64_t)fake.script_starts;
+	return fake.last_script_id;
+}
+void platform_script_stop(uint64_t id) {
+	fake.script_stops++;
+	fake.last_stopped_script = id;
+}
+int platform_keyboard_layouts(list_t *layouts) {
+	static const char *const table[][4] = {
+		{"English (United States)", "us", "en", ""},
+		{"Swedish (Sweden)", "se", "sv", ""},
+		{"English (United States, Dvorak)", "us", "en", "Dvorak"},
+	};
+	for (int i = 0; i < fake.kb_layout_count && i < 3; ++i) {
+		struct platform_keyboard_layout *l = calloc(1, sizeof(*l));
+		l->name = swine_strdup(table[i][0]);
+		l->short_name = swine_strdup(table[i][1]);
+		l->description = swine_strdup(table[i][2]);
+		l->variant = swine_strdup(table[i][3]);
+		list_add(layouts, l);
+	}
+	return fake.kb_layout_count ? fake.kb_active : -1;
+}
+void platform_keyboard_set_layout(int index) {
+	fake.kb_set_calls++;
+	fake.kb_active = index;
+}
 void platform_queue_command(const char *command) {
 	run(command);
 }
@@ -258,6 +293,48 @@ bool sysinfo_memory(struct sysinfo_memory *out) {
 	return true;
 }
 
+bool sysinfo_disk(const char *path, struct sysinfo_disk *out) {
+	snprintf(fake.last_disk_path, sizeof(fake.last_disk_path), "%s", path);
+	*out = fake.disk;
+	return fake.has_disk;
+}
+bool sysinfo_temperature(int zone, double *celsius) {
+	(void)zone;
+	*celsius = fake.temperature;
+	return fake.has_temperature;
+}
+bool sysinfo_network(const char *pattern, struct sysinfo_network *out) {
+	(void)pattern;
+	*out = fake.network;
+	return true;
+}
+bool sysinfo_audio(struct sysinfo_audio *out) {
+	*out = fake.audio;
+	return fake.audio.present;
+}
+void sysinfo_audio_set_volume(bool source, double percent) {
+	fake.last_volume_set = percent;
+	fake.last_volume_source = source;
+	if (source) {
+		fake.audio.source_volume = (int)percent;
+	} else {
+		fake.audio.volume = (int)percent;
+	}
+}
+void sysinfo_audio_set_mute(bool source, int mode) {
+	fake.mute_calls++;
+	bool *muted = source ? &fake.audio.source_muted : &fake.audio.muted;
+	*muted = mode < 0 ? !*muted : mode == 1;
+}
+void sysinfo_inhibit_idle(bool enable) {
+	fake.idle_inhibited = enable;
+}
+bool sysinfo_keyboard_locks(bool *caps, bool *num, bool *scroll) {
+	*caps = fake.caps_lock;
+	*num = fake.num_lock;
+	*scroll = fake.scroll_lock;
+	return true;
+}
 bool sysinfo_cpu(int *usage) {
 	*usage = fake.cpu_usage;
 	return true;

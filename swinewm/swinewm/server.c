@@ -2,6 +2,7 @@
 #include "swinewm/bar/bar.h"
 #include "swinewm/desktop/transaction.h"
 #include "swinewm/notify.h"
+#include "swinewm/input/keyboard.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/server.h"
 #include "swinewm/tree/root.h"
@@ -25,6 +26,7 @@ void server_fini(void) {
 	root_destroy(root);
 	bar_finish();
 	notify_finish();
+	keyboard_layouts_finish();
 	seat_destroy(seat);
 	list_free(server.views);
 	server.views = NULL;

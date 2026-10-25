@@ -19,6 +19,7 @@
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/desktop/transaction.h"
+#include "swinewm/input/keyboard.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/platform.h"
 #include "swinewm/server.h"
@@ -570,6 +571,8 @@ static void handle_event(DWORD event, HWND hwnd) {
 			seat_set_focus_container(view->container);
 		}
 		check_fullscreen(hwnd);
+		// Each application can have its own layout (a Windows setting).
+		keyboard_layouts_refresh();
 		break;
 
 	case EVENT_OBJECT_LOCATIONCHANGE:

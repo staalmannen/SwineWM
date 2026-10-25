@@ -13,6 +13,7 @@
 #include "swinewm/input/keyboard.h"
 #include "swinewm/ipc-json.h"
 #include "swinewm/platform.h"
+#include "swinewm/sysinfo.h"
 #include "win32.h"
 
 // Unassigned virtual-key code used to "break" a lone Win/Alt press.
@@ -87,6 +88,23 @@ static void post_binding(struct swine_binding *binding) {
 	}
 }
 
+// Caps, Num and Scroll Lock (keyboard-state). GetKeyState only follows the
+// keyboard of a thread that reads key messages, which swinewm's does not:
+// read them once at the start, then toggle on each press the hook sees.
+static bool locks[3];        // VK_CAPITAL, VK_NUMLOCK, VK_SCROLL
+static bool lock_pressed[3];
+
+static int lock_index(DWORD vk) {
+	return vk == VK_CAPITAL ? 0 : vk == VK_NUMLOCK ? 1 : vk == VK_SCROLL ? 2 : -1;
+}
+
+bool sysinfo_keyboard_locks(bool *caps, bool *num, bool *scroll) {
+	*caps = locks[0];
+	*num = locks[1];
+	*scroll = locks[2];
+	return true;
+}
+
 static LRESULT CALLBACK keyboard_proc(int code, WPARAM wparam, LPARAM lparam) {
 	if (code != HC_ACTION) {
 		return CallNextHookEx(hook, code, wparam, lparam);
@@ -94,6 +112,13 @@ static LRESULT CALLBACK keyboard_proc(int code, WPARAM wparam, LPARAM lparam) {
 	const KBDLLHOOKSTRUCT *k = (const KBDLLHOOKSTRUCT *)lparam;
 	DWORD vk = k->vkCode & 0xFF;
 	bool down = wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN;
+	int lock = lock_index(vk);
+	if (lock >= 0) {
+		if (down && !lock_pressed[lock]) {
+			locks[lock] = !locks[lock];
+		}
+		lock_pressed[lock] = down;
+	}
 
 	// Our own (and other programs') synthetic input is never a binding.
 	if (k->flags & LLKHF_INJECTED) {
@@ -125,6 +150,9 @@ static LRESULT CALLBACK keyboard_proc(int code, WPARAM wparam, LPARAM lparam) {
 				post_binding(binding);
 			}
 			swallowed[vk] = true;
+			if (lock >= 0 && !repeat) {
+				locks[lock] = !locks[lock];   // swallowed: it does not toggle
+			}
 			if (mods & SWINE_MOD_LOGO) {
 				suppress_logo_menu = true;
 			}
@@ -150,6 +178,9 @@ static LRESULT CALLBACK keyboard_proc(int code, WPARAM wparam, LPARAM lparam) {
 }
 
 bool win32_keyboard_init(void) {
+	locks[0] = (GetKeyState(VK_CAPITAL) & 1) != 0;
+	locks[1] = (GetKeyState(VK_NUMLOCK) & 1) != 0;
+	locks[2] = (GetKeyState(VK_SCROLL) & 1) != 0;
 	hook = SetWindowsHookExW(WH_KEYBOARD_LL, keyboard_proc,
 		GetModuleHandleW(NULL), 0);
 	if (!hook) {

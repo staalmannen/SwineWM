@@ -13,9 +13,11 @@
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/bar/bar.h"
+#include "swinewm/bar/custom.h"
 #include "swinewm/bar/format.h"
 #include "swinewm/bar/tray.h"
 #include "swinewm/config.h"
+#include "swinewm/input/keyboard.h"
 #include "swinewm/input/seat.h"
 #include "swinewm/platform.h"
 #include "swinewm/sysinfo.h"
@@ -40,6 +42,13 @@ enum module_kind {
 	MOD_MEMORY,
 	MOD_BATTERY,
 	MOD_TRAY,
+	MOD_LANGUAGE,
+	MOD_NETWORK,
+	MOD_PULSEAUDIO,
+	MOD_DISK,
+	MOD_TEMPERATURE,
+	MOD_IDLE_INHIBITOR,
+	MOD_KEYBOARD_STATE,
 	MOD_CUSTOM,
 };
 
@@ -51,7 +60,20 @@ struct bar_module {
 	char *css_class;     // "bat2", or NULL
 	struct json_value *cfg;  // borrowed from the config; may be NULL
 	bool alt;            // showing format-alt
+	struct bar_script *script;  // custom/* with "exec" or "exec-if"
+	// The last system reading (struct sysinfo_*), read again when due.
+	void *reading;
+	long long next_read;
+	// network: bandwidth over the last "interval"
+	long long sample_ms;
+	double rx_total, tx_total, rx_rate, tx_rate;
 };
+
+// idle_inhibitor: one state for every module, as in Waybar.
+static struct {
+	bool active;
+	long long deadline;   // platform_now_ms when "timeout" ends it, or 0
+} idle_inhibit;
 
 static struct {
 	bool loaded;
@@ -73,6 +95,8 @@ static void free_modules(void) {
 		free(m->name);
 		free(m->css_id);
 		free(m->css_class);
+		bar_script_destroy(m->script);
+		free(m->reading);
 		free(m);
 	}
 	list_free(bar.modules);
@@ -92,6 +116,11 @@ static bool module_kind_from_name(const char *name, enum module_kind *kind) {
 		{"sway/window", MOD_WINDOW}, {"sway/scratchpad", MOD_SCRATCHPAD},
 		{"clock", MOD_CLOCK}, {"cpu", MOD_CPU}, {"memory", MOD_MEMORY},
 		{"battery", MOD_BATTERY}, {"tray", MOD_TRAY},
+		{"sway/language", MOD_LANGUAGE}, {"network", MOD_NETWORK},
+		{"pulseaudio", MOD_PULSEAUDIO}, {"wireplumber", MOD_PULSEAUDIO},
+		{"disk", MOD_DISK}, {"temperature", MOD_TEMPERATURE},
+		{"idle_inhibitor", MOD_IDLE_INHIBITOR},
+		{"keyboard-state", MOD_KEYBOARD_STATE},
 	};
 	if (has_prefix(name, "custom/")) {
 		*kind = MOD_CUSTOM;
@@ -146,6 +175,19 @@ static void add_modules(const char *key, enum bar_section section) {
 			free(base);
 		}
 		m->cfg = json_object_get(bar.bar, v->string);
+		if (kind == MOD_IDLE_INHIBITOR && config->bar_enabled &&
+				json_get_bool(m->cfg, "start-activated", false) &&
+				!idle_inhibit.active) {
+			idle_inhibit.active = true;
+			sysinfo_inhibit_idle(true);
+		}
+		if (kind == MOD_CUSTOM && config->bar_enabled) {
+			// Waybar runs a module per bar; swinewm one per module, with
+			// the first monitor's name.
+			struct swine_output *first = root && root->outputs->length ?
+				root->outputs->items[0] : NULL;
+			m->script = bar_script_create(m->cfg, first ? first->name : NULL);
+		}
 		list_add(bar.modules, m);
 	}
 }
@@ -413,6 +455,10 @@ static void add_label(struct build_ctx *ctx, struct bar_module *m, int index,
 	if (on_click) {
 		item->on_click = format_str("exec %s", on_click);
 	}
+	const char *middle = json_get_string(m->cfg, "on-click-middle", NULL);
+	const char *right = json_get_string(m->cfg, "on-click-right", NULL);
+	item->on_click_middle = middle ? format_str("exec %s", middle) : NULL;
+	item->on_click_right = right ? format_str("exec %s", right) : NULL;
 	const char *up = json_get_string(m->cfg, "on-scroll-up", NULL);
 	const char *down = json_get_string(m->cfg, "on-scroll-down", NULL);
 	item->on_scroll_up = up ? format_str("exec %s", up) : NULL;
@@ -448,24 +494,56 @@ static const char *module_state(struct bar_module *m, double value,
 	return best;
 }
 
-// "format-icons" as an array indexed by a 0..100 value, or an object.
-static const char *icon_for_percent(struct bar_module *m, double percent) {
+// Waybar's ALabel::getIcon: "format-icons" as a string, an array (by
+// percentage of max, or of {"icon": ..., "max": n} thresholds), or an object
+// keyed by the first of alts it has (else "default").
+static const char *module_icon(struct bar_module *m, double percentage,
+		const char *const *alts, int max) {
 	struct json_value *icons = json_object_get(m->cfg, "format-icons");
-	if (!icons) {
-		return "";
+	if (icons && icons->type == JSON_OBJECT) {
+		struct json_value *chosen = NULL;
+		for (int i = 0; alts && alts[i] && !chosen; ++i) {
+			struct json_value *v = alts[i][0] ? json_object_get(icons, alts[i]) : NULL;
+			if (v && (v->type == JSON_STRING || v->type == JSON_ARRAY)) {
+				chosen = v;
+			}
+		}
+		icons = chosen ? chosen : json_object_get(icons, "default");
 	}
-	if (icons->type == JSON_ARRAY && icons->items->length) {
-		int n = icons->items->length;
-		int i = (int)(percent * n / 100.0);
-		if (i >= n) i = n - 1;
-		if (i < 0) i = 0;
-		struct json_value *v = icons->items->items[i];
-		return v->type == JSON_STRING ? v->string : "";
+	if (icons && icons->type == JSON_ARRAY && icons->items->length) {
+		int size = icons->items->length;
+		struct json_value *first = icons->items->items[0];
+		if (first->type == JSON_OBJECT) {
+			const char *last = NULL;
+			for (int i = 0; i < size; ++i) {
+				struct json_value *t = icons->items->items[i];
+				const char *icon = json_get_string(t, "icon", NULL);
+				struct json_value *limit = json_object_get(t, "max");
+				if (!icon || !limit || limit->type != JSON_NUMBER) {
+					continue;
+				}
+				last = icon;
+				if (percentage <= limit->number) {
+					return icon;
+				}
+			}
+			return last ? last : "";
+		}
+		int divisor = (max == 0 ? 100 : max) / size;
+		if (divisor < 1) {
+			divisor = 1;
+		}
+		int idx = (percentage < 0 ? 0 : (int)percentage) / divisor;
+		if (idx > size - 1) {
+			idx = size - 1;
+		}
+		icons = icons->items->items[idx];
 	}
-	if (icons->type == JSON_OBJECT) {
-		return json_get_string(icons, "default", "");
-	}
-	return "";
+	return icons && icons->type == JSON_STRING ? icons->string : "";
+}
+
+static const char *icon_for_percent(struct bar_module *m, double percent) {
+	return module_icon(m, percent, NULL, 0);
 }
 
 static const char *module_format(struct bar_module *m, const char *state,
@@ -711,6 +789,588 @@ static void build_tray(struct build_ctx *ctx, struct bar_module *m,
 	list_add(ctx->model->modules, view);
 }
 
+// Waybar's Custom::update.
+static void build_custom(struct build_ctx *ctx, struct bar_module *m,
+		int index) {
+	if (!m->script) {
+		if (!json_object_get(m->cfg, "exec") &&
+				!json_object_get(m->cfg, "exec-if")) {
+			struct fmt_arg args[] = {{NULL, false, "", 0}};
+			add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL,
+				"{}"), args, 1, &ctx->tm), NULL);
+		}
+		return;
+	}
+	struct bar_script_result r;
+	bar_script_result(m->script, &r);
+	if (r.hidden || (json_get_bool(m->cfg, "hide-empty-text", false) &&
+			!r.text[0])) {
+		bar_script_result_finish(&r);
+		return;
+	}
+	struct fmt_arg args[] = {
+		{NULL, false, r.text, 0},
+		{"text", false, r.text, 0},
+		{"alt", false, r.alt, 0},
+		{"icon", false, module_icon(m, r.percentage,
+			(const char *const[]){r.alt, NULL}, 0), 0},
+		{"percentage", true, NULL, r.percentage},
+	};
+	const char *classes[MAX_CLASSES + 1];
+	int n = 0;
+	for (int i = 0; i < r.classes->length && n < MAX_CLASSES; ++i) {
+		classes[n++] = r.classes->items[i];
+	}
+	classes[n] = NULL;
+	add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL, "{}"),
+		args, 5, &ctx->tm), classes);
+	bar_script_result_finish(&r);
+}
+
+// The module's last reading, or NULL when it has to be read again: after
+// "interval" seconds (cap_s: at most that long, for state that has no
+// change notification here).
+static void *cached_reading(struct bar_module *m, size_t size,
+		double default_interval, double cap_s) {
+	long long now = platform_now_ms();
+	if (m->reading && now < m->next_read) {
+		return m->reading;
+	}
+	double interval = json_get_number(m->cfg, "interval", default_interval);
+	if (cap_s > 0 && interval > cap_s) {
+		interval = cap_s;
+	}
+	if (interval < 0.001) {
+		interval = 0.001;
+	}
+	m->next_read = now + (long long)(interval * 1000);
+	if (!m->reading) {
+		m->reading = calloc(1, size);
+	}
+	return NULL;
+}
+
+// Waybar's ALabel::getState applies "states" thresholds; the network module
+// puts the state first: format-<state>-<threshold>, format-<state>, format.
+static const char *state_format(struct bar_module *m, const char *state,
+		const char *threshold, const char *fallback) {
+	char key[96];
+	if (m->alt) {
+		const char *alt = json_get_string(m->cfg, "format-alt", NULL);
+		if (alt) {
+			return alt;
+		}
+	}
+	if (state && threshold) {
+		snprintf(key, sizeof(key), "format-%s-%s", state, threshold);
+		const char *f = json_get_string(m->cfg, key, NULL);
+		if (f) {
+			return f;
+		}
+	}
+	if (state) {
+		snprintf(key, sizeof(key), "format-%s", state);
+		const char *f = json_get_string(m->cfg, key, NULL);
+		if (f) {
+			return f;
+		}
+	}
+	return json_get_string(m->cfg, "format", fallback);
+}
+
+// Waybar's network module.
+static void build_network(struct build_ctx *ctx, struct bar_module *m,
+		int index) {
+	long long now = platform_now_ms();
+	struct sysinfo_network *n = cached_reading(m, sizeof(*n), 60, 5);
+	if (!n) {
+		n = m->reading;
+		const char *iface = json_get_string(m->cfg, "interface", NULL);
+		struct sysinfo_network fresh = {0};
+		if (!sysinfo_network(iface, &fresh)) {
+			memset(&fresh, 0, sizeof(fresh));
+		}
+		*n = fresh;
+	}
+	// Bandwidth over each "interval" (Waybar samples on its timer).
+	double interval = json_get_number(m->cfg, "interval", 60);
+	if (interval < 0.001) {
+		interval = 0.001;
+	}
+	double elapsed = (double)(now - m->sample_ms) / 1000.0;
+	if (!m->sample_ms || elapsed >= interval * 0.5) {
+		if (m->sample_ms && elapsed > 0 && n->rx_bytes >= m->rx_total &&
+				n->tx_bytes >= m->tx_total) {
+			m->rx_rate = (n->rx_bytes - m->rx_total) / elapsed;
+			m->tx_rate = (n->tx_bytes - m->tx_total) / elapsed;
+		} else {
+			m->rx_rate = m->tx_rate = 0;
+		}
+		m->rx_total = n->rx_bytes;
+		m->tx_total = n->tx_bytes;
+		m->sample_ms = now ? now : 1;
+	}
+
+	const char *family = json_get_string(m->cfg, "family", "ipv4");
+	const char *state;
+	if (!n->found || !n->connected) {
+		state = n->disabled && json_get_bool(m->cfg, "rfkill", true) &&
+			(!n->ifname[0] || n->wireless) ? "disabled" : "disconnected";
+	} else if (!n->ipaddr[0] && !n->ipaddr6[0]) {
+		state = "linked";
+	} else if (!n->essid[0] && !n->wireless) {
+		// Waybar tells Wi-Fi by its network name; Windows may hide the name
+		// (location access), so a wireless interface is Wi-Fi regardless.
+		state = "ethernet";
+	} else {
+		state = "wifi";
+	}
+	const char *threshold = module_state(m, n->signal_strength, false);
+	char ipaddr[160];
+	if (strcmp(family, "ipv6") == 0) {
+		snprintf(ipaddr, sizeof(ipaddr), "%s", n->ipaddr6);
+	} else if (strcmp(family, "ipv4_6") == 0) {
+		snprintf(ipaddr, sizeof(ipaddr), "%s\n%s", n->ipaddr, n->ipaddr6);
+	} else {
+		snprintf(ipaddr, sizeof(ipaddr), "%s", n->ipaddr);
+	}
+	const char *app = n->signal_dbm >= -50 ? "Great Connectivity" :
+		n->signal_dbm >= -60 ? "Good Connectivity" :
+		n->signal_dbm >= -67 ? "Streaming" :
+		n->signal_dbm >= -70 ? "Web Surfing" :
+		n->signal_dbm >= -80 ? "Basic Connectivity" : "Poor Connectivity";
+	char frequency[32];
+	snprintf(frequency, sizeof(frequency), "%.1f", n->frequency);
+	double down = m->rx_rate, up = m->tx_rate;
+	struct fmt_arg args[] = {
+		{"essid", FMT_STRING, n->essid, 0},
+		{"bssid", FMT_STRING, n->bssid, 0},
+		{"signaldBm", FMT_NUMBER, NULL, n->signal_dbm},
+		{"signalStrength", FMT_NUMBER, NULL, n->signal_strength},
+		{"signalStrengthApp", FMT_STRING, n->essid[0] ? app : "", 0},
+		{"ifname", FMT_STRING, n->ifname, 0},
+		{"netmask", FMT_STRING, n->netmask, 0},
+		{"netmask6", FMT_STRING, n->netmask6, 0},
+		{"ipaddr", FMT_STRING, ipaddr, 0},
+		{"gwaddr", FMT_STRING, n->gwaddr, 0},
+		{"cidr", FMT_NUMBER, NULL, n->cidr},
+		{"cidr6", FMT_NUMBER, NULL, n->cidr6},
+		{"frequency", FMT_STRING, frequency, 0},
+		{"icon", FMT_STRING, module_icon(m, n->signal_strength,
+			(const char *const[]){state, NULL}, 0), 0},
+		{"bandwidthDownBits", FMT_POW, "b/s", down * 8},
+		{"bandwidthUpBits", FMT_POW, "b/s", up * 8},
+		{"bandwidthTotalBits", FMT_POW, "b/s", (up + down) * 8},
+		{"bandwidthDownOctets", FMT_POW, "o/s", down},
+		{"bandwidthUpOctets", FMT_POW, "o/s", up},
+		{"bandwidthTotalOctets", FMT_POW, "o/s", up + down},
+		{"bandwidthDownBytes", FMT_POW, "B/s", down},
+		{"bandwidthUpBytes", FMT_POW, "B/s", up},
+		{"bandwidthTotalBytes", FMT_POW, "B/s", up + down},
+		{"bandwidthDownBytesCompact", FMT_POW_COMPACT, "B", down},
+		{"bandwidthUpBytesCompact", FMT_POW_COMPACT, "B", up},
+		{"rxBitrate", FMT_POW, "b/s", n->rx_bitrate},
+		{"txBitrate", FMT_POW, "b/s", n->tx_bitrate},
+		{"linkSpeed", FMT_POW_SKIP_DECIMAL, "b/s", n->link_speed},
+	};
+	const char *classes[] = {state, threshold, NULL};
+	add_label(ctx, m, index, format_waybar(state_format(m, state, threshold,
+		"{ifname}"), args, (int)(sizeof(args) / sizeof(args[0])), &ctx->tm),
+		classes);
+}
+
+// Waybar's pulseaudio module (and wireplumber, which reads the same).
+static void build_pulseaudio(struct build_ctx *ctx, struct bar_module *m,
+		int index) {
+	struct sysinfo_audio *a = cached_reading(m, sizeof(*a), 1, 1);
+	if (!a) {
+		a = m->reading;
+		struct sysinfo_audio fresh = {0};
+		if (!sysinfo_audio(&fresh)) {
+			memset(&fresh, 0, sizeof(fresh));
+		}
+		*a = fresh;
+	}
+	if (!a->present) {
+		return;
+	}
+	char format_name[48] = "format";
+	if (a->bluetooth) {
+		strcat(format_name, "-bluetooth");
+	}
+	if (a->muted) {
+		char key[64];
+		snprintf(key, sizeof(key), "%s-muted", format_name);
+		if (strcmp(format_name, "format") != 0 &&
+				!json_get_string(m->cfg, key, NULL)) {
+			strcpy(format_name, "format");
+		}
+		strcat(format_name, "-muted");
+	}
+	const char *state = module_state(m, a->volume, false);
+	const char *format = NULL;
+	if (m->alt) {
+		format = json_get_string(m->cfg, "format-alt", NULL);
+	}
+	if (!format && state) {
+		char key[96];
+		snprintf(key, sizeof(key), "%s-%s", format_name, state);
+		format = json_get_string(m->cfg, key, NULL);
+	}
+	if (!format) {
+		format = json_get_string(m->cfg, format_name, NULL);
+	}
+	bool wireplumber = has_prefix(m->name, "wireplumber");
+	if (!format) {
+		format = json_get_string(m->cfg, "format",
+			wireplumber ? "{volume}%" : "{volume}%");
+	}
+	const char *source_format = a->source_muted ?
+		json_get_string(m->cfg, "format-source-muted", "{volume}%") :
+		json_get_string(m->cfg, "format-source", "{volume}%");
+	struct fmt_arg source_args[] = {
+		{"volume", FMT_NUMBER, NULL, a->source_volume},
+		{"source_desc", FMT_STRING, a->source_desc, 0},
+	};
+	char *format_source = format_waybar(source_format, source_args, 2, NULL);
+	char port_muted[48];
+	snprintf(port_muted, sizeof(port_muted), "%s-muted", a->port);
+	const char *alts_muted[] = {port_muted, a->port, "default-muted", NULL};
+	const char *alts[] = {a->port, NULL};
+	struct fmt_arg args[] = {
+		{"desc", FMT_STRING, a->desc, 0},
+		{"volume", FMT_NUMBER, NULL, a->volume},
+		{"format_source", FMT_STRING, format_source, 0},
+		{"source_volume", FMT_NUMBER, NULL, a->source_volume},
+		{"source_desc", FMT_STRING, a->source_desc, 0},
+		{"icon", FMT_STRING, module_icon(m, a->volume,
+			a->muted ? alts_muted : alts, 0), 0},
+		// wireplumber's names
+		{"node_name", FMT_STRING, a->desc, 0},
+		{"source_node_name", FMT_STRING, a->source_desc, 0},
+	};
+	const char *classes[6];
+	int c = 0;
+	if (a->bluetooth) classes[c++] = "bluetooth";
+	if (a->muted) {
+		classes[c++] = "muted";
+		classes[c++] = "sink-muted";
+	}
+	if (a->source_muted) classes[c++] = "source-muted";
+	if (state) classes[c++] = state;
+	classes[c] = NULL;
+	add_label(ctx, m, index, format_waybar(format, args,
+		(int)(sizeof(args) / sizeof(args[0])), &ctx->tm), classes);
+	free(format_source);
+}
+
+// Changes the volume as Waybar's pulseaudio module does on a scroll.
+static void pulseaudio_scroll(struct bar_module *m, bool up) {
+	struct sysinfo_audio a = {0};
+	if (!sysinfo_audio(&a)) {
+		return;
+	}
+	bool source = strcmp(json_get_string(m->cfg, "target", "sink"),
+		"source") == 0;
+	if (json_get_bool(m->cfg, "reverse-scrolling", false)) {
+		up = !up;
+	}
+	double step = json_get_number(m->cfg, "scroll-step", 1);
+	double max = json_get_number(m->cfg, "max-volume", 100);
+	double volume = (source ? a.source_volume : a.volume) + (up ? step : -step);
+	if (volume > max) volume = max;
+	if (volume < 0) volume = 0;
+	sysinfo_audio_set_volume(source, volume);
+	free(m->reading);
+	m->reading = NULL;   // read it again now
+}
+
+// "path": "/" means the Windows drive, as / is the root on Linux.
+static char *disk_path(const char *path) {
+	if (!path || strcmp(path, "/") == 0) {
+		return platform_expand_path("%SystemDrive%\\");
+	}
+	return platform_expand_path(path);
+}
+
+static double disk_divisor(const char *unit) {
+	static const struct { const char *unit; double divisor; } units[] = {
+		{"kB", 1e3}, {"kiB", 1024.0}, {"MB", 1e6}, {"MiB", 1048576.0},
+		{"GB", 1e9}, {"GiB", 1073741824.0}, {"TB", 1e12},
+		{"TiB", 1099511627776.0},
+	};
+	for (size_t i = 0; unit && i < sizeof(units) / sizeof(units[0]); ++i) {
+		if (strcmp(unit, units[i].unit) == 0) {
+			return units[i].divisor;
+		}
+	}
+	return 1.0;
+}
+
+// One path of Waybar's disk module. Returns NULL if it cannot be read.
+static char *disk_text(struct bar_module *m, const char *path,
+		const char *format, const char **state_out, struct tm *tm) {
+	char *real = disk_path(path);
+	struct sysinfo_disk d = {0};
+	bool ok = real && sysinfo_disk(real, &d) && d.total > 0;
+	free(real);
+	if (!ok) {
+		return NULL;
+	}
+	double used = d.total - d.free;
+	int percentage_used = (int)(used * 100 / d.total);
+	int percentage_free = (int)(d.avail * 100 / d.total);
+	const char *state = module_state(m, percentage_used, false);
+	if (state_out) {
+		*state_out = state;
+	}
+	double divisor = disk_divisor(json_get_string(m->cfg, "unit", NULL));
+	struct fmt_arg args[] = {
+		{NULL, FMT_NUMBER, NULL, percentage_used},
+		{"percentage_used", FMT_NUMBER, NULL, percentage_used},
+		{"percentage_free", FMT_NUMBER, NULL, percentage_free},
+		{"free", FMT_POW_BINARY, "B", d.avail},
+		{"used", FMT_POW_BINARY, "B", used},
+		{"total", FMT_POW_BINARY, "B", d.total},
+		{"path", FMT_STRING, path, 0},
+		{"specific_free", FMT_NUMBER, NULL, d.avail / divisor},
+		{"specific_used", FMT_NUMBER, NULL, used / divisor},
+		{"specific_total", FMT_NUMBER, NULL, d.total / divisor},
+	};
+	if (state) {
+		char key[64];
+		snprintf(key, sizeof(key), "format-%s", state);
+		format = json_get_string(m->cfg, key, format);
+	}
+	return format_waybar(format, args, (int)(sizeof(args) / sizeof(args[0])), tm);
+}
+
+// Waybar's disk module: "path", or "paths" joined by "separator" after
+// "header". Drives are read on every build; Windows caches them.
+static void build_disk(struct build_ctx *ctx, struct bar_module *m,
+		int index) {
+	const char *format = module_format(m, NULL, NULL, "{}%");
+	struct json_value *paths = json_object_get(m->cfg, "paths");
+	const char *state = NULL;
+	if (!paths || paths->type != JSON_ARRAY || !paths->items->length) {
+		char *text = disk_text(m, json_get_string(m->cfg, "path", "/"), format,
+			&state, &ctx->tm);
+		const char *classes[] = {state, NULL};
+		add_label(ctx, m, index, text, classes);
+		return;
+	}
+	const char *separator = json_get_string(m->cfg, "separator", " ");
+	const char *header = json_get_string(m->cfg, "header", "");
+	size_t len = strlen(header), cap = len + 64;
+	char *all = malloc(cap);
+	memcpy(all, header, len + 1);
+	bool first = true;
+	for (int i = 0; i < paths->items->length; ++i) {
+		struct json_value *p = paths->items->items[i];
+		if (p->type != JSON_STRING) {
+			continue;
+		}
+		char *text = disk_text(m, p->string, format, NULL, &ctx->tm);
+		if (!text) {
+			continue;
+		}
+		size_t need = len + strlen(separator) + strlen(text) + 1;
+		if (need > cap) {
+			cap = need * 2;
+			all = realloc(all, cap);
+		}
+		if (!first) {
+			strcat(all, separator);
+		}
+		strcat(all, text);
+		len = strlen(all);
+		first = false;
+		free(text);
+	}
+	add_label(ctx, m, index, all, NULL);
+}
+
+// Waybar's temperature module.
+static void build_temperature(struct build_ctx *ctx, struct bar_module *m,
+		int index) {
+	double *celsius = cached_reading(m, sizeof(double) * 2, 10, 0);
+	if (!celsius) {
+		celsius = m->reading;
+		// [0]: the reading, [1]: 1 if there is one
+		int zone = (int)json_get_number(m->cfg, "thermal-zone", 0);
+		celsius[1] = sysinfo_temperature(zone, &celsius[0]) ? 1 : 0;
+	}
+	if (!celsius[1]) {
+		return;
+	}
+	int c = (int)lround(celsius[0]);
+	int f = (int)lround(celsius[0] * 1.8 + 32);
+	int k = (int)lround(celsius[0] + 273.15);
+	struct json_value *crit = json_object_get(m->cfg, "critical-threshold");
+	struct json_value *warn = json_object_get(m->cfg, "warning-threshold");
+	bool critical = crit && crit->type == JSON_NUMBER && c >= crit->number;
+	bool warning = warn && warn->type == JSON_NUMBER && c >= warn->number;
+	const char *format = json_get_string(m->cfg, "format", "{temperatureC}°C");
+	const char *cls = NULL;
+	if (critical) {
+		format = json_get_string(m->cfg, "format-critical", format);
+		cls = "critical";
+	} else if (warning) {
+		format = json_get_string(m->cfg, "format-warning", format);
+		cls = "warning";
+	}
+	if (m->alt) {
+		format = json_get_string(m->cfg, "format-alt", format);
+	}
+	int max_temp = crit && crit->type == JSON_NUMBER ? (int)crit->number : 0;
+	struct fmt_arg args[] = {
+		{"temperatureC", FMT_NUMBER, NULL, c},
+		{"temperatureF", FMT_NUMBER, NULL, f},
+		{"temperatureK", FMT_NUMBER, NULL, k},
+		{"icon", FMT_STRING, module_icon(m, c, NULL, max_temp), 0},
+	};
+	const char *classes[] = {cls, NULL};
+	add_label(ctx, m, index, format_waybar(format, args, 4, &ctx->tm), classes);
+}
+
+static void idle_inhibit_set(bool active, struct bar_module *m) {
+	idle_inhibit.active = active;
+	idle_inhibit.deadline = 0;
+	double timeout = json_get_number(m->cfg, "timeout", 0);
+	if (active && timeout > 0) {
+		idle_inhibit.deadline = platform_now_ms() + (long long)(timeout * 60000);
+	}
+	sysinfo_inhibit_idle(active);
+}
+
+// Waybar's idle_inhibitor: a click switches it.
+static void build_idle_inhibitor(struct build_ctx *ctx, struct bar_module *m,
+		int index) {
+	long long now = platform_now_ms();
+	if (idle_inhibit.active && idle_inhibit.deadline &&
+			now >= idle_inhibit.deadline) {
+		idle_inhibit_set(false, m);
+	}
+	const char *status = idle_inhibit.active ? "activated" : "deactivated";
+	double timeout = json_get_number(m->cfg, "timeout", 0);
+	double timeleft = idle_inhibit.deadline ?
+		(double)(idle_inhibit.deadline - now) / 60000.0 : timeout;
+	struct fmt_arg args[] = {
+		{"status", FMT_STRING, status, 0},
+		{"timeout", FMT_NUMBER, NULL, timeout},
+		{"timeleft", FMT_NUMBER, NULL, timeleft < 0 ? 0 : timeleft},
+		{"icon", FMT_STRING, module_icon(m, 0,
+			(const char *const[]){status, NULL}, 0), 0},
+	};
+	const char *classes[] = {status, NULL};
+	add_label(ctx, m, index, format_waybar(module_format(m, NULL, status,
+		"{status}"), args, 4, &ctx->tm), classes);
+}
+
+// Waybar's keyboard-state: a label for each lock that is enabled.
+static void build_keyboard_state(struct build_ctx *ctx, struct bar_module *m,
+		int index) {
+	bool locks[3];
+	if (!sysinfo_keyboard_locks(&locks[1], &locks[0], &locks[2])) {
+		return;
+	}
+	static const char *const keys[] = {"numlock", "capslock", "scrolllock"};
+	static const char *const names[] = {"Num", "Caps", "Scroll"};
+	struct bar_module_view *view = new_view(m, index);
+	view->is_box = true;
+	const char *box_classes[2] = {m->css_class, NULL};
+	struct css_element box_el = {"box", m->css_id,
+		m->css_class ? box_classes : NULL, &ctx->window_el};
+	css_compute(bar.css, &box_el, &ctx->model->window, &view->style);
+	struct json_value *format_cfg = json_object_get(m->cfg, "format");
+	struct json_value *icons = json_object_get(m->cfg, "format-icons");
+	bool common = icons && icons->type == JSON_OBJECT &&
+		(json_object_get(icons, "locked") || json_object_get(icons, "unlocked"));
+	for (int i = 0; i < 3; ++i) {
+		if (!json_get_bool(m->cfg, keys[i], false)) {
+			continue;
+		}
+		const char *format = format_cfg && format_cfg->type == JSON_STRING ?
+			format_cfg->string : json_get_string(format_cfg, keys[i],
+			"{name} {icon}");
+		struct json_value *set = common ? icons : json_object_get(icons, keys[i]);
+		const char *icon = locks[i] ? json_get_string(set, "locked", "locked") :
+			json_get_string(set, "unlocked", "unlocked");
+		struct fmt_arg args[] = {
+			{"name", FMT_STRING, names[i], 0},
+			{"icon", FMT_STRING, icon, 0},
+		};
+		char *text = format_waybar(format, args, 2, &ctx->tm);
+		struct bar_item *item = calloc(1, sizeof(*item));
+		item->text = markup_strip(text);
+		free(text);
+		const char *classes[] = {keys[i], locks[i] ? "locked" : NULL, NULL};
+		struct css_element el = {"label", NULL, classes, &box_el};
+		css_compute(bar.css, &el, &view->style, &item->style);
+		list_add(view->items, item);
+	}
+	if (!view->items->length) {
+		list_free(view->items);
+		free(view);
+		return;
+	}
+	list_add(ctx->model->modules, view);
+}
+
+// Waybar's {flag}: the regional indicator symbols of a two-letter region.
+static void layout_flag(const char *region, char *out, size_t size) {
+	out[0] = '\0';
+	if (!region || strlen(region) != 2 || size < 9) {
+		return;
+	}
+	char *o = out;
+	for (int i = 0; i < 2; ++i) {
+		char c = region[i];
+		if (c >= 'A' && c <= 'Z') {
+			c = (char)(c - 'A' + 'a');
+		}
+		if (c < 'a' || c > 'z') {
+			out[0] = '\0';
+			return;
+		}
+		// U+1F1E6 REGIONAL INDICATOR SYMBOL LETTER A + n, in UTF-8
+		unsigned cp = 0x1F1E6u + (unsigned)(c - 'a');
+		*o++ = (char)(0xF0 | (cp >> 18));
+		*o++ = (char)(0x80 | ((cp >> 12) & 0x3F));
+		*o++ = (char)(0x80 | ((cp >> 6) & 0x3F));
+		*o++ = (char)(0x80 | (cp & 0x3F));
+	}
+	*o = '\0';
+}
+
+// Waybar's sway/language: the active keyboard layout.
+static void build_language(struct build_ctx *ctx, struct bar_module *m,
+		int index) {
+	list_t *layouts = keyboard_layouts_get();
+	int active = keyboard_layouts_active();
+	if (!layouts || active < 0 || active >= layouts->length) {
+		return;
+	}
+	if (layouts->length == 1 &&
+			json_get_bool(m->cfg, "hide-single-layout", false)) {
+		return;
+	}
+	struct platform_keyboard_layout *l = layouts->items[active];
+	char flag[9];
+	layout_flag(l->short_name, flag, sizeof(flag));
+	struct fmt_arg args[] = {
+		{NULL, false, l->short_name, 0},
+		{"short", false, l->short_name, 0},
+		{"shortDescription", false, l->description, 0},
+		{"long", false, l->name, 0},
+		{"variant", false, l->variant, 0},
+		{"flag", false, flag, 0},
+	};
+	const char *classes[] = {l->short_name, NULL};
+	add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL, "{}"),
+		args, 6, &ctx->tm), classes);
+}
+
 static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		int index) {
 	switch (m->kind) {
@@ -824,16 +1484,30 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 	case MOD_TRAY:
 		build_tray(ctx, m, index);
 		return;
-	case MOD_CUSTOM: {
-		if (json_object_get(m->cfg, "exec")) {
-			// Running scripts and reading their output is not implemented.
-			return;
-		}
-		struct fmt_arg args[] = {{NULL, false, "", 0}};
-		add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL,
-			"{}"), args, 1, &ctx->tm), NULL);
+	case MOD_LANGUAGE:
+		build_language(ctx, m, index);
 		return;
-	}
+	case MOD_NETWORK:
+		build_network(ctx, m, index);
+		return;
+	case MOD_PULSEAUDIO:
+		build_pulseaudio(ctx, m, index);
+		return;
+	case MOD_DISK:
+		build_disk(ctx, m, index);
+		return;
+	case MOD_TEMPERATURE:
+		build_temperature(ctx, m, index);
+		return;
+	case MOD_IDLE_INHIBITOR:
+		build_idle_inhibitor(ctx, m, index);
+		return;
+	case MOD_KEYBOARD_STATE:
+		build_keyboard_state(ctx, m, index);
+		return;
+	case MOD_CUSTOM:
+		build_custom(ctx, m, index);
+		return;
 	}
 }
 
@@ -867,6 +1541,8 @@ void bar_model_free(struct bar_model *model) {
 			struct bar_item *item = view->items->items[j];
 			free(item->text);
 			free(item->on_click);
+			free(item->on_click_middle);
+			free(item->on_click_right);
 			free(item->on_scroll_up);
 			free(item->on_scroll_down);
 			free(item->icon_path);
@@ -887,4 +1563,41 @@ void bar_module_clicked(int module_index) {
 	if (json_object_get(m->cfg, "format-alt")) {
 		m->alt = !m->alt;
 	}
+	if (m->kind == MOD_IDLE_INHIBITOR) {
+		idle_inhibit_set(!idle_inhibit.active, m);
+	}
+	bar_script_event(m->script);
+}
+
+void bar_refresh_readings(void) {
+	for (int i = 0; bar.modules && i < bar.modules->length; ++i) {
+		struct bar_module *m = bar.modules->items[i];
+		if (m->kind != MOD_NETWORK) {   // keeps its bandwidth sample
+			free(m->reading);
+			m->reading = NULL;
+		}
+	}
+}
+
+bool bar_module_scroll(int module_index, bool up) {
+	if (!bar.modules || module_index < 0 || module_index >= bar.modules->length) {
+		return false;
+	}
+	struct bar_module *m = bar.modules->items[module_index];
+	bar_script_event(m->script);
+	if (m->kind == MOD_PULSEAUDIO &&
+			!json_object_get(m->cfg, "on-scroll-up") &&
+			!json_object_get(m->cfg, "on-scroll-down")) {
+		pulseaudio_scroll(m, up);
+		return true;
+	}
+	return false;
+}
+
+void bar_module_event(int module_index) {
+	if (!bar.modules || module_index < 0 || module_index >= bar.modules->length) {
+		return;
+	}
+	struct bar_module *m = bar.modules->items[module_index];
+	bar_script_event(m->script);
 }

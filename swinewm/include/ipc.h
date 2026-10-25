@@ -41,6 +41,7 @@ enum ipc_command_type {
 	IPC_EVENT_BINDING = (int)((1u << 31) | 5),
 	IPC_EVENT_SHUTDOWN = (int)((1u << 31) | 6),
 	IPC_EVENT_TICK = (int)((1u << 31) | 7),
+	IPC_EVENT_INPUT = (int)((1u << 31) | 21),
 };
 
 // Default pipe name pattern; %s is the user name. Overridden by SWINESOCK.

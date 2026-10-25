@@ -59,10 +59,12 @@ add_library(swinewm_core STATIC
   ${SWINEWM_EMBEDDED}
   swinewm/bar/bar.c
   swinewm/bar/css.c
+  swinewm/bar/custom.c
   swinewm/bar/format.c
   swinewm/bar/tray.c
   swinewm/commands.c
   swinewm/commands/assign.c
+  swinewm/commands/audio.c
   swinewm/commands/bar.c
   swinewm/commands/border.c
   swinewm/commands/bind.c
@@ -72,6 +74,7 @@ add_library(swinewm_core STATIC
   swinewm/commands/for_window.c
   swinewm/commands/gaps.c
   swinewm/commands/grim.c
+  swinewm/commands/input.c
   swinewm/commands/layout.c
   swinewm/commands/mark.c
   swinewm/commands/mode.c
@@ -124,17 +127,21 @@ if(WIN32)
     ${SWINEWM_GENERATED_DIR}/swinewm.rc
     swinewm/main.c
     swinewm/win32/exec.c
+    swinewm/win32/audio.c
     swinewm/win32/bar.c
     swinewm/win32/decor.c
     swinewm/win32/draw.c
     swinewm/win32/ipc.c
     swinewm/win32/keyboard.c
+    swinewm/win32/layout.c
     swinewm/win32/mouse.c
+    swinewm/win32/network.c
     swinewm/win32/notify.c
     swinewm/win32/output.c
     swinewm/win32/platform.c
     swinewm/win32/recover.c
     swinewm/win32/screenshot.c
+    swinewm/win32/script.c
     swinewm/win32/shell.c
     swinewm/win32/sysinfo.c
     swinewm/win32/swaynag.c
@@ -149,7 +156,7 @@ if(WIN32)
   target_compile_definitions(swinewm PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN
     WINVER=0x0A00 _WIN32_WINNT=0x0A00)
   target_link_libraries(swinewm PRIVATE swinewm_core user32 gdi32 dwmapi shell32
-    shcore advapi32 ole32 windowscodecs msimg32 uuid)
+    shcore advapi32 ole32 windowscodecs msimg32 uuid iphlpapi wlanapi pdh ws2_32)
 
   add_executable(swinemenu WIN32 swinemenu/main.c swinemenu/apps.c
     swinemenu/openwith.c)

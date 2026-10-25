@@ -4,9 +4,11 @@
 #include "json.h"
 #include "swinewm/bar/bar.h"
 #include "swinewm/bar/css.h"
+#include "swinewm/bar/custom.h"
 #include "swinewm/bar/format.h"
 #include "swinewm/bar/tray.h"
 #include "swinewm/config.h"
+#include "swinewm/input/keyboard.h"
 #include "swinewm/ipc-json.h"
 #include "swinewm/tree/root.h"
 #include "test.h"
@@ -158,7 +160,7 @@ static void test_bar_model(void) {
 	bar_load_from_strings(
 		"{\n"
 		"  \"height\": 24,\n"
-		"  \"modules-left\": [\"sway/workspaces\", \"sway/mode\", \"pulseaudio\"],\n"
+		"  \"modules-left\": [\"sway/workspaces\", \"sway/mode\", \"mpd\"],\n"
 		"  \"modules-center\": [\"sway/window\"],\n"
 		"  \"modules-right\": [\"cpu\", \"battery#bat0\", \"clock\", \"custom/hello\"],\n"
 		"  \"sway/window\": { \"max-length\": 5 },\n"
@@ -183,7 +185,7 @@ static void test_bar_model(void) {
 	run("workspace 2");
 	fake.cpu_usage = 70;
 	struct bar_model *model = bar_build(output, 0);
-	// "pulseaudio" is unsupported, so the indexes are 0 ws, 1 mode, 2 window, ...
+	// "mpd" is unsupported, so the indexes are 0 ws, 1 mode, 2 window, ...
 	struct bar_module_view *ws = find_view(model, 0);
 	CHECK(ws && ws->is_box && ws->items->length == 2);
 	if (ws && ws->items->length == 2) {
@@ -376,6 +378,372 @@ static void test_bar_config_ipc(void) {
 	fake_teardown();
 }
 
+// Waybar's sway/language: the active keyboard layout.
+static void test_language(void) {
+	fake_setup();
+	config->bar_enabled = true;
+	fake.kb_layout_count = 3;
+	fake.kb_active = 1;
+	bar_load_from_strings(
+		"{ \"modules-right\": [\"sway/language\", \"sway/language#long\","
+		"   \"sway/language#flag\"],\n"
+		"  \"sway/language#long\": { \"format\": \"{long} {shortDescription}\","
+		"     \"on-click\": \"swaymsg input type:keyboard xkb_switch_layout next\" },\n"
+		"  \"sway/language#flag\": { \"format\": \"{flag}{variant}\" } }", NULL);
+	struct swine_output *output = root->outputs->items[0];
+	struct bar_model *model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "se");
+	CHECK_STR(item_text(model, 1), "Swedish (Sweden) sv");
+	// U+1F1F8 U+1F1EA: the Swedish flag
+	CHECK_STR(item_text(model, 2), "\xF0\x9F\x87\xB8\xF0\x9F\x87\xAA");
+	struct bar_module_view *v = find_view(model, 1);
+	if (v && v->items->length) {
+		struct bar_item *item = v->items->items[0];
+		CHECK_STR(item->on_click,
+			"exec swaymsg input type:keyboard xkb_switch_layout next");
+		// Clicking it runs the command in swinewm (no swaymsg process).
+		CHECK(run(item->on_click));
+		CHECK_INT(fake.kb_active, 2);
+		CHECK_INT(fake.spawn_calls, 0);
+	}
+	bar_model_free(model);
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 2), "\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8" "Dvorak");
+	bar_model_free(model);
+
+	// hide-single-layout
+	bar_load_from_strings("{ \"modules-right\": [\"sway/language\"],"
+		" \"sway/language\": { \"hide-single-layout\": true } }", NULL);
+	fake.kb_layout_count = 1;
+	fake.kb_active = 0;
+	keyboard_layouts_refresh();
+	model = bar_build(output, 0);
+	CHECK(find_view(model, 0) == NULL);
+	bar_model_free(model);
+	fake_teardown();
+}
+
+static void test_script_parse(void) {
+	struct bar_script_result r;
+	bar_script_parse("hello\ntip\nwarn\nignored", false, false, &r);
+	CHECK_STR(r.text, "hello");
+	CHECK_STR(r.tooltip, "tip");
+	CHECK_INT(r.classes->length, 1);
+	CHECK_STR(r.classes->items[0], "warn");
+	bar_script_result_finish(&r);
+	bar_script_parse("a & <b>", false, true, &r);
+	CHECK_STR(r.text, "a &amp; &lt;b&gt;");
+	bar_script_result_finish(&r);
+	bar_script_parse("{\"text\": \"5\", \"alt\": \"muted\", \"tooltip\": \"t\","
+		" \"class\": [\"x\", \"y\"], \"percentage\": 42.6}\n{\"text\": \"6\"}",
+		true, false, &r);
+	CHECK_STR(r.text, "5");
+	CHECK_STR(r.alt, "muted");
+	CHECK_STR(r.tooltip, "t");
+	CHECK_INT(r.classes->length, 2);
+	CHECK_INT(r.percentage, 43);
+	bar_script_result_finish(&r);
+	bar_script_parse("not json", true, false, &r);
+	CHECK_STR(r.text, "");
+	bar_script_result_finish(&r);
+}
+
+static struct bar_item *first_item(struct bar_model *model, int index) {
+	struct bar_module_view *v = find_view(model, index);
+	return v && v->items->length ? v->items->items[0] : NULL;
+}
+
+// Waybar's custom/* scripts: when they run, and what the module shows.
+static void test_custom_scripts(void) {
+	fake_setup();
+	config->bar_enabled = true;
+	fake.now_ms = 1000;
+	bar_load_from_strings(
+		"{ \"modules-right\": [\"custom/interval\", \"custom/if\","
+		"   \"custom/loop\", \"custom/signal\", \"custom/json\"],\n"
+		"  \"custom/interval\": { \"exec\": \"date.bat\", \"interval\": 5,"
+		"     \"format\": \"[{}]\", \"on-click-right\": \"notepad.exe\" },\n"
+		"  \"custom/if\": { \"exec-if\": \"check.bat\", \"exec\": \"run.bat\","
+		"     \"interval\": \"once\" },\n"
+		"  \"custom/loop\": { \"exec\": \"loop.bat\", \"restart-interval\": 2 },\n"
+		"  \"custom/signal\": { \"exec\": \"count.bat\", \"signal\": 8,"
+		"     \"hide-empty-text\": true },\n"
+		"  \"custom/json\": { \"exec\": \"vol.ps1\", \"interval\": 1,"
+		"     \"return-type\": \"json\", \"format\": \"{icon} {text} {percentage}\","
+		"     \"format-icons\": { \"muted\": \"M\", \"default\": [\"lo\", \"hi\"] } } }",
+		NULL);
+	struct swine_output *output = root->outputs->items[0];
+	// Nothing has run yet: every script module is hidden.
+	struct bar_model *model = bar_build(output, 0);
+	CHECK_INT(model->modules->length, 0);
+	bar_model_free(model);
+	CHECK(bar_scripts_next_due() == 1000);
+	bar_scripts_tick(1000);
+	// interval, exec-if, loop, signal and json start; exec-if first.
+	CHECK_INT(fake.script_starts, 5);
+	CHECK_STR(fake.last_script_output, "DISPLAY1");
+	CHECK(bar_scripts_next_due() == 0);   // all running
+
+	// 1: interval. A run's whole output, then again after the interval.
+	bar_script_line(1, "12:00");
+	bar_script_line(1, "tooltip");
+	bar_script_exited(1, 0);
+	CHECK(bar_scripts_next_due() == 6000);
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "[12:00]");
+	struct bar_item *item = first_item(model, 0);
+	CHECK(item && item->on_click_right &&
+		strcmp(item->on_click_right, "exec notepad.exe") == 0);
+	bar_model_free(model);
+
+	// 2: exec-if fails: hidden, and "once" does not try again.
+	bar_script_exited(2, 1);
+	model = bar_build(output, 0);
+	CHECK(find_view(model, 1) == NULL);
+	bar_model_free(model);
+
+	// 3: a continuous script: each line is an update.
+	bar_script_line(3, "first");
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 2), "first");
+	bar_model_free(model);
+	bar_script_line(3, "second");
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 2), "second");
+	bar_model_free(model);
+	fake.now_ms = 1500;
+	bar_script_exited(3, 1);   // it stopped: hidden, restarted in 2 s
+	model = bar_build(output, 0);
+	CHECK(find_view(model, 2) == NULL);
+	bar_model_free(model);
+	CHECK(bar_scripts_next_due() == 3500);
+
+	// 4: signal. Once at startup, then on "pkill -RTMIN+8 waybar".
+	bar_script_line(4, "");
+	bar_script_exited(4, 0);
+	model = bar_build(output, 0);
+	CHECK(find_view(model, 3) == NULL);   // empty output
+	bar_model_free(model);
+	int starts = fake.script_starts;
+	CHECK(run("exec pkill -RTMIN+8 waybar"));
+	CHECK_INT(fake.script_starts, starts + 1);
+	CHECK_STR(fake.last_script, "count.bat");
+	uint64_t id = fake.last_script_id;
+	CHECK(run("exec pkill -SIGRTMIN+8 waybar"));   // still running: no second
+	CHECK_INT(fake.script_starts, starts + 1);
+	bar_script_line(id, "3");
+	bar_script_exited(id, 0);
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 3), "3");
+	bar_model_free(model);
+	CHECK(run("exec killall -s RTMIN+8 waybar"));
+	CHECK_INT(fake.script_starts, starts + 2);
+	bar_script_exited(fake.last_script_id, 0);
+	CHECK_INT(fake.spawn_calls, 0);
+	CHECK(run("exec pkill -RTMIN+8 notepad"));   // not waybar: a program
+	CHECK_INT(fake.spawn_calls, 1);
+
+	// 5: JSON with format-icons by alt, then by percentage.
+	bar_script_line(5, "{\"text\": \"50%\", \"percentage\": 80, \"class\": \"loud\"}");
+	bar_script_exited(5, 0);
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 4), "hi 50% 80");
+	bar_model_free(model);
+
+	// A click runs an idle interval script again (exec-on-event).
+	fake.now_ms = 2000;
+	starts = fake.script_starts;
+	bar_module_clicked(0);
+	CHECK_INT(fake.script_starts, starts + 1);
+	CHECK_STR(fake.last_script, "date.bat");
+	bar_module_event(0);   // already running
+	CHECK_INT(fake.script_starts, starts + 1);
+
+	// exec-if succeeds: exec runs after it.
+	bar_module_event(1);
+	CHECK_STR(fake.last_script, "check.bat");
+	bar_script_exited(fake.last_script_id, 0);
+	CHECK_STR(fake.last_script, "run.bat");
+
+	// A reload stops what is running.
+	int stops = fake.script_stops;
+	bar_load_from_strings("{ \"modules-right\": [\"clock\"] }", NULL);
+	CHECK(fake.script_stops >= stops + 2);
+	CHECK(bar_scripts_next_due() == 0);
+
+	// A script that cannot start is hidden and tried again later.
+	fake.script_start_fails = true;
+	bar_load_from_strings("{ \"modules-right\": [\"custom/x\"],"
+		" \"custom/x\": { \"exec\": \"missing\", \"interval\": 3 } }", NULL);
+	bar_scripts_tick(2000);
+	CHECK(bar_scripts_next_due() == 5000);
+	model = bar_build(output, 0);
+	CHECK_INT(model->modules->length, 0);
+	bar_model_free(model);
+	fake.script_start_fails = false;
+	fake_teardown();
+}
+
+// Waybar's pow_format: SI and binary prefixes, with its specs.
+static void test_pow_format(void) {
+	struct fmt_arg args[] = {
+		{"bits", FMT_POW, "b/s", 1234567},
+		{"size", FMT_POW_BINARY, "B", 256.0 * 1024 * 1024 * 1024},
+		{"small", FMT_POW, "B/s", 12},
+		{"speed", FMT_POW_SKIP_DECIMAL, "b/s", 1e9},
+		{"compact", FMT_POW_COMPACT, "B", 2500},
+	};
+	char *out = format_waybar("{bits} {size} {small} {speed} {compact}", args, 5, NULL);
+	CHECK_STR(out, "1.2Mb/s 256.0GiB 12.0B/s 1Gb/s 2kB");
+	free(out);
+	out = format_waybar("[{bits:>}] [{small:=}] [{bits:k}] [{size:Gi}] [{bits:Mu}]",
+		args, 5, NULL);
+	CHECK_STR(out, "[  1.2Mb/s] [12.0  B/s] [1234.6] [256] [1.2]");
+	free(out);
+}
+
+// network, pulseaudio, disk, temperature, idle_inhibitor, keyboard-state.
+static void test_system_modules(void) {
+	fake_setup();
+	config->bar_enabled = true;
+	fake.now_ms = 10000;
+	fake.network = (struct sysinfo_network){
+		.found = true, .connected = true, .wireless = true,
+		.ifname = "Wi-Fi", .ipaddr = "192.168.1.20", .cidr = 24,
+		.essid = "home", .signal_strength = 70, .signal_dbm = -55,
+		.frequency = 5.18, .rx_bytes = 1000, .tx_bytes = 500,
+	};
+	fake.audio = (struct sysinfo_audio){
+		.present = true, .volume = 40, .desc = "Speakers",
+		.port = "speaker", .source_present = true, .source_volume = 80,
+		.source_desc = "Microphone",
+	};
+	fake.has_disk = true;
+	fake.disk = (struct sysinfo_disk){
+		.total = 100.0 * 1073741824.0, .free = 25.0 * 1073741824.0,
+		.avail = 20.0 * 1073741824.0,
+	};
+	fake.has_temperature = true;
+	fake.temperature = 81.4;
+	fake.caps_lock = true;
+	bar_load_from_strings(
+		"{ \"modules-right\": [\"network\", \"pulseaudio\", \"disk\","
+		"   \"temperature\", \"idle_inhibitor\", \"keyboard-state\", \"wireplumber\"],\n"
+		"  \"network\": { \"interval\": 2, \"format-wifi\": \"{essid} {signalStrength}% {icon}\","
+		"     \"format-ethernet\": \"{ipaddr}/{cidr}\", \"format-disconnected\": \"off\","
+		"     \"format-icons\": [\"w0\", \"w1\", \"w2\"],"
+		"     \"format-alt\": \"{bandwidthDownBytes} {bandwidthUpBytes}\" },\n"
+		"  \"pulseaudio\": { \"format\": \"{volume}% {icon} {format_source}\","
+		"     \"format-muted\": \"M {format_source}\", \"format-source\": \"mic {volume}%\","
+		"     \"format-icons\": { \"speaker\": [\"s0\", \"s1\"], \"default\": \"d\" },"
+		"     \"scroll-step\": 5, \"max-volume\": 50 },\n"
+		"  \"disk\": { \"format\": \"{percentage_used}% {used}/{total} {path}\","
+		"     \"states\": { \"full\": 70 } },\n"
+		"  \"temperature\": { \"critical-threshold\": 80, \"format-critical\": \"HOT {temperatureC}\" },\n"
+		"  \"idle_inhibitor\": { \"format\": \"{icon}\","
+		"     \"format-icons\": { \"activated\": \"ON\", \"deactivated\": \"off\" },"
+		"     \"timeout\": 1 },\n"
+		"  \"keyboard-state\": { \"capslock\": true, \"numlock\": true,"
+		"     \"format\": \"{name}{icon}\","
+		"     \"format-icons\": { \"locked\": \"+\", \"unlocked\": \"-\" } },\n"
+		"  \"wireplumber\": { \"format\": \"{node_name} {volume}\" } }", NULL);
+	struct swine_output *output = root->outputs->items[0];
+	struct bar_model *model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "home 70% w2");
+	CHECK_STR(item_text(model, 1), "40% s0 mic 80%");
+	CHECK_STR(item_text(model, 2), "75% 75.0GiB/100.0GiB /");
+	CHECK_STR(fake.last_disk_path, "%SystemDrive%\\");
+	CHECK_STR(item_text(model, 3), "HOT 81");
+	CHECK_STR(item_text(model, 4), "off");
+	CHECK_STR(item_text(model, 6), "Speakers 40");
+	struct bar_module_view *kb = find_view(model, 5);
+	CHECK(kb && kb->is_box && kb->items->length == 2);
+	if (kb && kb->items->length == 2) {
+		CHECK_STR(((struct bar_item *)kb->items->items[0])->text, "Num-");
+		CHECK_STR(((struct bar_item *)kb->items->items[1])->text, "Caps+");
+	}
+	bar_model_free(model);
+
+	// Readings are kept until "interval" has passed.
+	fake.network.connected = false;
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "home 70% w2");
+	bar_model_free(model);
+	fake.now_ms = 12000;
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "off");
+	bar_model_free(model);
+	// Ethernet, and the bandwidth over the interval (format-alt).
+	fake.network = (struct sysinfo_network){ .found = true, .connected = true,
+		.ifname = "Ethernet", .ipaddr = "10.0.0.2", .cidr = 8,
+		.rx_bytes = 1000 + 4000, .tx_bytes = 500 + 2000 };
+	fake.now_ms = 14000;
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "10.0.0.2/8");
+	bar_model_free(model);
+	bar_module_clicked(0);   // format-alt
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "2.0kB/s 1.0kB/s");   // over 2 s
+	bar_model_free(model);
+
+	// Scrolling changes the volume (scroll-step, max-volume); muted format.
+	CHECK(bar_module_scroll(1, true));
+	CHECK(fake.last_volume_set == 45);
+	CHECK(bar_module_scroll(1, true));
+	CHECK(bar_module_scroll(1, true));
+	CHECK(fake.last_volume_set == 50);
+	fake.audio.muted = true;
+	bar_refresh_readings();
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 1), "M mic 80%");
+	bar_model_free(model);
+	CHECK(!bar_module_scroll(2, true));   // disk has no scroll action
+
+	// idle_inhibitor: a click switches it, "timeout" ends it.
+	bar_module_clicked(4);
+	CHECK(fake.idle_inhibited);
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 4), "ON");
+	bar_model_free(model);
+	fake.now_ms += 61000;
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 4), "off");
+	CHECK(!fake.idle_inhibited);
+	bar_model_free(model);
+
+	// The Linux volume tools of on-clicks work on Windows' volume.
+	fake.audio.muted = false;
+	CHECK(run("exec pactl set-sink-volume @DEFAULT_SINK@ -10%"));
+	CHECK(fake.last_volume_set == 40);
+	CHECK(run("exec pactl set-sink-mute @DEFAULT_SINK@ toggle"));
+	CHECK(fake.audio.muted);
+	CHECK(run("exec wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+"));
+	CHECK(fake.last_volume_set == 45);
+	CHECK(run("exec wpctl set-volume @DEFAULT_AUDIO_SOURCE@ 0.25"));
+	CHECK(fake.last_volume_source && fake.last_volume_set == 25);
+	CHECK(run("exec wpctl set-mute @DEFAULT_AUDIO_SINK@ 0"));
+	CHECK(!fake.audio.muted);
+	CHECK(run("exec pamixer -d 5"));
+	CHECK(fake.last_volume_set == 40);
+	CHECK(run("exec pamixer --default-source -t"));
+	CHECK(fake.audio.source_muted);
+	CHECK(run("exec pamixer --set-volume 150 --allow-boost"));
+	CHECK(fake.last_volume_set == 100);
+	CHECK_INT(fake.spawn_calls, 0);
+	CHECK(run("exec pavucontrol"));   // a program
+	CHECK_INT(fake.spawn_calls, 1);
+
+	// A missing reading hides the module.
+	fake.has_temperature = false;
+	fake.has_disk = false;
+	fake.now_ms += 100000;
+	model = bar_build(output, 0);
+	CHECK(find_view(model, 2) == NULL);
+	CHECK(find_view(model, 3) == NULL);
+	bar_model_free(model);
+	fake_teardown();
+}
+
 void test_bar_all(void) {
 	test_bar_config_ipc();
 	test_json_parse();
@@ -384,4 +752,9 @@ void test_bar_all(void) {
 	test_bar_model();
 	test_bar_config_enabling();
 	test_tray();
+	test_language();
+	test_script_parse();
+	test_custom_scripts();
+	test_pow_format();
+	test_system_modules();
 }

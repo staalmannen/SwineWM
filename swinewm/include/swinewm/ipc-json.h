@@ -23,6 +23,8 @@ char *ipc_json_event_window(const char *change, struct swine_container *con);
 // sway's mode event: {"change": "<mode name>", "pango_markup": ...}.
 char *ipc_json_event_mode(const char *name, bool pango_markup);
 char *ipc_json_event_output(const char *change);
+// sway's input event for the keyboard ("xkb_layout").
+char *ipc_json_event_input(const char *change);
 char *ipc_json_event_binding(const struct swine_binding *binding,
 		const char *event);
 // NULL or "" lists the bar ids; otherwise the bar's config (sway format).

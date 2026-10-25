@@ -2,7 +2,9 @@
 #define _SWINE_FAKE_PLATFORM_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "swinewm/platform.h"
+#include "swinewm/sysinfo.h"
 #include "swinewm/tree/node.h"
 #include "swinewm/tree/output.h"
 #include "swinewm/tree/view.h"
@@ -51,6 +53,32 @@ struct fake_platform_state {
 	char ipc_last_event[8192];
 	// The "change" of every event, in order: "new,focus,"
 	char ipc_changes[1024];
+	// sysinfo for the network, pulseaudio, disk, temperature, idle_inhibitor
+	// and keyboard-state modules
+	bool has_disk;
+	struct sysinfo_disk disk;
+	char last_disk_path[64];
+	bool has_temperature;
+	double temperature;
+	struct sysinfo_network network;
+	struct sysinfo_audio audio;
+	double last_volume_set;
+	bool last_volume_source;
+	int mute_calls;
+	bool idle_inhibited;
+	bool caps_lock, num_lock, scroll_lock;
+	// bar scripts: platform_script_start returns 1, 2, ...
+	int script_starts;
+	int script_stops;
+	uint64_t last_script_id;
+	uint64_t last_stopped_script;
+	char last_script[256];
+	char last_script_output[32];
+	bool script_start_fails;
+	// keyboard layouts: the first kb_layout_count of fake_platform.c's list
+	int kb_layout_count;
+	int kb_active;
+	int kb_set_calls;
 	int swaynag_show_calls;
 	bool swaynag_visible;
 	char swaynag_details[2048];

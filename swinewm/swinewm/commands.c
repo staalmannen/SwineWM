@@ -58,7 +58,7 @@ static const struct cmd_handler handlers[] = {
 	{ "hide_edge_borders", cmd_hide_edge_borders, 0 },
 	{ "include", cmd_include, CMD_CONFIG_ONLY },
 	{ "inhibit_idle", cmd_ignored, 0 },
-	{ "input", cmd_ignored, 0 },
+	{ "input", cmd_input, 0 },
 	{ "kill", cmd_kill, CMD_RUNTIME_ONLY },
 	{ "layout", cmd_layout, CMD_RUNTIME_ONLY },
 	{ "makoctl", cmd_makoctl, CMD_RUNTIME_ONLY },

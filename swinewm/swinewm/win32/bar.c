@@ -16,6 +16,8 @@ struct hit {
 	int module_index;
 	uint64_t tray_id;
 	char *on_click;
+	char *on_click_middle;
+	char *on_click_right;
 	char *on_scroll_up;
 	char *on_scroll_down;
 };
@@ -37,6 +39,8 @@ static void clear_hits(struct bar_window *bw) {
 	for (int i = 0; i < bw->hits->length; ++i) {
 		struct hit *h = bw->hits->items[i];
 		free(h->on_click);
+		free(h->on_click_middle);
+		free(h->on_click_right);
 		free(h->on_scroll_up);
 		free(h->on_scroll_down);
 		free(h);
@@ -187,6 +191,10 @@ static int draw_item(struct bar_window *bw, HDC dc, int x, int top, int bottom,
 	h->module_index = module_index;
 	h->tray_id = item->tray_id;
 	h->on_click = item->on_click ? swine_strdup(item->on_click) : NULL;
+	h->on_click_middle = item->on_click_middle ?
+		swine_strdup(item->on_click_middle) : NULL;
+	h->on_click_right = item->on_click_right ?
+		swine_strdup(item->on_click_right) : NULL;
 	h->on_scroll_up = item->on_scroll_up ? swine_strdup(item->on_scroll_up) : NULL;
 	h->on_scroll_down = item->on_scroll_down ?
 		swine_strdup(item->on_scroll_down) : NULL;
@@ -327,13 +335,30 @@ static LRESULT CALLBACK bar_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 		tray_mouse(bw, 0, true, lparam);
 		return 0;
 	case WM_MBUTTONDOWN:
-	case WM_MBUTTONUP:
-		tray_mouse(bw, 1, msg == WM_MBUTTONDOWN, lparam);
-		return 0;
 	case WM_RBUTTONDOWN:
-	case WM_RBUTTONUP:
-		tray_mouse(bw, 2, msg == WM_RBUTTONDOWN, lparam);
+		tray_mouse(bw, msg == WM_MBUTTONDOWN ? 1 : 2, true, lparam);
 		return 0;
+	case WM_MBUTTONUP:
+	case WM_RBUTTONUP: {
+		bool middle = msg == WM_MBUTTONUP;
+		if (tray_mouse(bw, middle ? 1 : 2, false, lparam)) {
+			return 0;
+		}
+		// on-click-middle / on-click-right
+		struct hit *h = bw ? hit_test(bw, (short)LOWORD(lparam),
+			(short)HIWORD(lparam)) : NULL;
+		if (h) {
+			const char *command = middle ? h->on_click_middle : h->on_click_right;
+			char *copy = command ? swine_strdup(command) : NULL;
+			int index = h->module_index;
+			if (copy) {
+				win32_run_command(copy);
+				free(copy);
+			}
+			bar_module_event(index);
+		}
+		return 0;
+	}
 	case WM_LBUTTONUP: {
 		if (tray_mouse(bw, 0, false, lparam)) {
 			return 0;
@@ -359,10 +384,14 @@ static LRESULT CALLBACK bar_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 		short delta = (short)HIWORD(wparam);
 		const char *command = !h ? NULL :
 			delta > 0 ? h->on_scroll_up : h->on_scroll_down;
+		int index = h ? h->module_index : -1;
 		if (command) {
 			char *copy = swine_strdup(command);
 			win32_run_command(copy);
 			free(copy);
+			bar_module_event(index);
+		} else if (index >= 0 && bar_module_scroll(index, delta > 0)) {
+			win32_bar_refresh();
 		}
 		return 0;
 	}

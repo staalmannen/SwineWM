@@ -6,6 +6,8 @@
 #include <string.h>
 #include "log.h"
 #include "stringop.h"
+#include "swinewm/bar/bar.h"
+#include "swinewm/bar/custom.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
 #include "swinewm/notify.h"
@@ -211,6 +213,61 @@ static char *program_name(const char *arg) {
 	return name;
 }
 
+// Waybar's signals, sent with "pkill -RTMIN+8 waybar" (also -SIGRTMIN+8,
+// --signal RTMIN+8, -s RTMIN+8, killall): RTMIN+n runs the custom modules
+// with "signal": n, USR1 shows or hides the bar, USR2 reloads it. Returns
+// false if the line is not that (it is then run as a program).
+static bool waybar_signal(int argc, char **argv, bool apply) {
+	const char *sig = NULL;
+	bool waybar = false;
+	for (int i = 1; i < argc; ++i) {
+		const char *a = argv[i];
+		if ((strcmp(a, "-s") == 0 || strcmp(a, "--signal") == 0) && i + 1 < argc) {
+			sig = argv[++i];
+		} else if (has_prefix(a, "--signal=")) {
+			sig = a + strlen("--signal=");
+		} else if (a[0] == '-' && strcmp(a, "-x") != 0 && strcmp(a, "-e") != 0) {
+			sig = a + 1;
+		} else if (strcmp(a, "waybar") == 0) {
+			waybar = true;
+		}
+	}
+	if (!sig || !waybar) {
+		return false;
+	}
+	if (has_prefix(sig, "SIG")) {
+		sig += 3;
+	}
+	if (has_prefix(sig, "RTMIN+")) {
+		char *end;
+		long n = strtol(sig + strlen("RTMIN+"), &end, 10);
+		if (*end || n <= 0 || n > 64) {
+			return false;
+		}
+		if (apply) {
+			bar_scripts_signal((int)n);
+		}
+		return true;
+	}
+	if (strcmp(sig, "USR1") == 0 || strcmp(sig, "USR2") == 0) {
+		if (apply && strcmp(sig, "USR1") == 0) {
+			platform_queue_command("bar mode toggle");
+		} else if (apply) {
+			bar_load();
+			platform_ui_refresh();
+		}
+		return true;
+	}
+	return false;
+}
+
+// swaymsg or swinemsg with a command and no options (those print replies
+// or query state, so they still run as a program).
+static bool is_msg_command(const char *name, int argc, char **argv) {
+	return (strcmp(name, "swaymsg") == 0 || strcmp(name, "swinemsg") == 0) &&
+		argc > 1 && argv[1][0] != '-';
+}
+
 static struct cmd_results *run_builtin(int argc, char **argv,
 		bool persistent_only) {
 	if (argc == 0) {
@@ -233,6 +290,19 @@ static struct cmd_results *run_builtin(int argc, char **argv,
 		res = cmd_notify_send(argc - 1, argv + 1);
 	} else if (strcmp(name, "grim") == 0) {
 		res = cmd_grim(argc - 1, argv + 1);
+	} else if ((strcmp(name, "pkill") == 0 || strcmp(name, "killall") == 0) &&
+			waybar_signal(argc, argv, false)) {
+		waybar_signal(argc, argv, true);
+		res = cmd_results_new(CMD_SUCCESS, NULL);
+	} else if ((res = audio_builtin(name, argc, argv)) != NULL) {
+		// pactl, wpctl or pamixer changed the Windows volume
+	} else if (is_msg_command(name, argc, argv)) {
+		// "swaymsg <command>" (a Waybar on-click, a binding): run the
+		// command here instead of starting a process to send it back.
+		char *command = join_args(argv + 1, argc - 1);
+		platform_queue_command(command);
+		free(command);
+		res = cmd_results_new(CMD_SUCCESS, NULL);
 	}
 	free(name);
 	return res;
@@ -265,7 +335,10 @@ struct cmd_results *exec_builtin(const char *cmdline, bool persistent_only) {
 			}
 			char *name = program_name(argv[start]);
 			bool builtin = strcmp(name, "makoctl") == 0 ||
-				strcmp(name, "notify-send") == 0 || strcmp(name, "grim") == 0;
+				strcmp(name, "notify-send") == 0 || strcmp(name, "grim") == 0 ||
+				is_msg_command(name, i - start, argv + start) ||
+				((strcmp(name, "pkill") == 0 || strcmp(name, "killall") == 0) &&
+				waybar_signal(i - start, argv + start, false));
 			free(name);
 			if (!builtin) {
 				free_argv(argc, argv);

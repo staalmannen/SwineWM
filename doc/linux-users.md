@@ -127,6 +127,10 @@ Useful equivalents:
   and Task Scheduler. As the shell, swinewm starts the Startup folder and
   `Run` entries at logon, as Explorer would; Task Scheduler runs on its
   own.
+- **Bar scripts.** Waybar's `custom/*` scripts run through `cmd.exe`
+  instead of `sh`: `"exec": "powershell -NoProfile -File %USERPROFILE%\\.swinewm\\waybar\\media.ps1"`.
+  To refresh a module, `pkill -RTMIN+8 waybar` still works in an
+  `on-click` or a binding; from a terminal, `swinemsg exec pkill -RTMIN+8 waybar`.
 - **Line endings.** Windows text files often end lines with CRLF. Git for
   Windows converts by default; for shared repositories,
   `git config --global core.autocrlf input` keeps LF in the repository.
