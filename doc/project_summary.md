@@ -162,7 +162,7 @@ What an existing sway config needs to load and behave.
   responsiveness and shows every window again if swinewm is killed or hangs,
   which an in-process crash handler cannot cover (as GlazeWM's watcher does).
 
-### 0.5.0 — Waybar beyond the basics (in progress)
+### 0.5.0 — Waybar beyond the basics (implemented, being tested)
 
 - `custom/*` running scripts (`exec`, `interval`, `return-type json`,
   `signal` via `pkill -RTMIN+n` equivalents), which most Waybar setups use.
@@ -171,7 +171,8 @@ What an existing sway config needs to load and behave.
   `power-profiles-daemon` → Windows power mode.
 - Tooltips, `:hover`, real transparency (layered windows), multiple bars,
   `left`/`right` positions, `rotate`.
-- Tray: tooltips, hover messages and scrolling.
+- Tray: tooltips and hover messages. (Scrolling has no counterpart:
+  Windows' notification area sends programs no scroll messages.)
 
 ### 0.6.0 — Mako, grim and the rest of the desktop
 
