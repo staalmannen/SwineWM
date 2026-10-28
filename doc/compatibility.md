@@ -146,7 +146,7 @@ Unicode properties (`\p{…}`).
 | Tooltips | ✅ | After the hover delay, below a top bar (above a bottom one). `tooltip` (`false` turns it off), `tooltip-format`, `tooltip-format-<state>` and each module's Waybar default (window: the whole title; battery: `{timeTo}`; disk: `{used} used out of {total} on {path} ({percentage_used}%)`; scratchpad: one `{app}: {title}` line per window; custom: the script's `tooltip`, lines split by `\r`). Styled by `tooltip` and `tooltip label` in style.css; markup is stripped |
 | `rotate` | ✅ | 90, 180, 270 (counter-clockwise, as GTK) for text modules |
 | Markup beyond stripping | ❌ | |
-| `style.css` | 🟡 | Selectors by type/#id/.class with descendants; `@define-color`, `alpha()`; colours, fonts, padding, margin, borders, `box-shadow: inset`; `:hover` (colours and borders; it does not change sizes) and `:not(.class)`; no other pseudo-classes (`:first-child`, …), animations, transparency (blended over black) |
+| `style.css` | 🟡 | Selectors by type/#id/.class with descendants; `@define-color`, `alpha()`; colours, fonts, padding, margin, borders, `box-shadow: inset`; `:hover` (colours and borders; it does not change sizes) and `:not(.class)`; no other pseudo-classes (`:first-child`, …), animations. Translucent colours (`rgba()`, `alpha()`) show the desktop behind the bar (a layered window with per-pixel alpha) |
 
 ## Notifications (mako config)
 

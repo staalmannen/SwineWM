@@ -159,40 +159,6 @@ static int module_length(struct bar_window *bw, HDC dc,
 	return total;
 }
 
-static void draw_edges(struct bar_window *bw, HDC dc, const RECT *r,
-		const struct swine_style *s, COLORREF under) {
-	RECT e;
-	if (s->border_top.width) {
-		e = (RECT){r->left, r->top, r->right, r->top + px(bw, s->border_top.width)};
-		win32_fill(dc, &e, win32_blend(s->border_top.color, under));
-	}
-	if (s->border_bottom.width) {
-		e = (RECT){r->left, r->bottom - px(bw, s->border_bottom.width),
-			r->right, r->bottom};
-		win32_fill(dc, &e, win32_blend(s->border_bottom.color, under));
-	}
-	if (s->border_left.width) {
-		e = (RECT){r->left, r->top, r->left + px(bw, s->border_left.width),
-			r->bottom};
-		win32_fill(dc, &e, win32_blend(s->border_left.color, under));
-	}
-	if (s->border_right.width) {
-		e = (RECT){r->right - px(bw, s->border_right.width), r->top, r->right,
-			r->bottom};
-		win32_fill(dc, &e, win32_blend(s->border_right.color, under));
-	}
-	// "box-shadow: inset 0 -3px color": a line inside the bottom edge
-	if (s->inset_bottom) {
-		e = (RECT){r->left, r->bottom - px(bw, s->inset_bottom), r->right,
-			r->bottom};
-		win32_fill(dc, &e, win32_blend(s->inset_color, under));
-	}
-	if (s->inset_top) {
-		e = (RECT){r->left, r->top, r->right, r->top + px(bw, s->inset_top)};
-		win32_fill(dc, &e, win32_blend(s->inset_color, under));
-	}
-}
-
 // Text centred in rect, turned counter-clockwise by rotate degrees as GTK
 // turns a label: the origin of TextOut is the top-left corner of the text
 // cell, which turns with it.
@@ -224,14 +190,186 @@ static void draw_text(struct bar_window *bw, HDC dc, const RECT *rect,
 	SelectObject(dc, old);
 }
 
+// --- painting ------------------------------------------------------------
+// The bar is a layered window painted with per-pixel alpha, so translucent
+// backgrounds (Waybar's default is rgba(43, 48, 59, 0.5)) show the desktop
+// behind it. GDI ignores alpha, so shapes are filled here directly into a
+// premultiplied 32-bit bitmap; text is drawn white on black into a mask
+// and blended by its coverage; tray icons are drawn over black and over
+// white, which gives their colour and alpha.
+
+struct canvas {
+	HDC dc;              // the bitmap below, for measuring text
+	uint32_t *px;        // premultiplied BGRA, top-down
+	HDC mask_dc;         // black, for text and icons
+	uint32_t *mask;
+	HDC white_dc;        // white, for icons
+	uint32_t *white;
+	int w, h;
+};
+
+static HBITMAP dib(HDC ref, int w, int h, uint32_t **bits) {
+	BITMAPINFO bi = {0};
+	bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+	bi.bmiHeader.biWidth = w;
+	bi.bmiHeader.biHeight = -h;   // top-down
+	bi.bmiHeader.biPlanes = 1;
+	bi.bmiHeader.biBitCount = 32;
+	bi.bmiHeader.biCompression = BI_RGB;
+	void *data = NULL;
+	HBITMAP bitmap = CreateDIBSection(ref, &bi, DIB_RGB_COLORS, &data, NULL, 0);
+	*bits = data;
+	return bitmap;
+}
+
+// The rect, cut to the canvas.
+static bool clip(const struct canvas *c, const RECT *r, RECT *out) {
+	out->left = r->left < 0 ? 0 : r->left;
+	out->top = r->top < 0 ? 0 : r->top;
+	out->right = r->right > c->w ? c->w : r->right;
+	out->bottom = r->bottom > c->h ? c->h : r->bottom;
+	return out->left < out->right && out->top < out->bottom;
+}
+
+// "Source over" of a premultiplied pixel.
+static uint32_t over(uint32_t dst, unsigned r, unsigned g, unsigned b,
+		unsigned a) {
+	unsigned keep = 255 - a;
+	unsigned db = dst & 0xFF, dg = (dst >> 8) & 0xFF, dr = (dst >> 16) & 0xFF,
+		da = dst >> 24;
+	return (r + dr * keep / 255) << 16 | (g + dg * keep / 255) << 8 |
+		(b + db * keep / 255) | (a + da * keep / 255) << 24;
+}
+
+static void canvas_fill(struct canvas *c, const RECT *rect,
+		struct swine_color color) {
+	RECT r;
+	if (!color.a || !clip(c, rect, &r)) {
+		return;
+	}
+	unsigned a = color.a;
+	unsigned pr = color.r * a / 255, pg = color.g * a / 255,
+		pb = color.b * a / 255;
+	for (int y = r.top; y < r.bottom; ++y) {
+		uint32_t *row = c->px + (size_t)y * c->w;
+		for (int x = r.left; x < r.right; ++x) {
+			row[x] = over(row[x], pr, pg, pb, a);
+		}
+	}
+}
+
+// Draws white on the black mask inside rect, then blends color through it.
+static void canvas_text(struct bar_window *bw, struct canvas *c,
+		const RECT *rect, const wchar_t *text, const struct swine_style *s,
+		int rotate, struct swine_color color) {
+	RECT r;
+	if (!clip(c, rect, &r)) {
+		return;
+	}
+	for (int y = r.top; y < r.bottom; ++y) {
+		memset(c->mask + (size_t)y * c->w + r.left, 0,
+			sizeof(uint32_t) * (size_t)(r.right - r.left));
+	}
+	SetTextColor(c->mask_dc, RGB(255, 255, 255));
+	draw_text(bw, c->mask_dc, rect, text, s, rotate);
+	GdiFlush();
+	for (int y = r.top; y < r.bottom; ++y) {
+		uint32_t *row = c->px + (size_t)y * c->w;
+		const uint32_t *m = c->mask + (size_t)y * c->w;
+		for (int x = r.left; x < r.right; ++x) {
+			unsigned v = m[x];
+			// ClearType draws per channel; their mean is the coverage.
+			unsigned cover = ((v & 0xFF) + ((v >> 8) & 0xFF) +
+				((v >> 16) & 0xFF)) / 3;
+			if (!cover) {
+				continue;
+			}
+			unsigned a = cover * color.a / 255;
+			row[x] = over(row[x], color.r * a / 255, color.g * a / 255,
+				color.b * a / 255, a);
+		}
+	}
+}
+
+static void canvas_tray_icon(struct bar_window *bw, struct canvas *c,
+		const RECT *rect, const struct bar_item *item) {
+	RECT r;
+	if (!clip(c, rect, &r)) {
+		return;
+	}
+	for (int y = r.top; y < r.bottom; ++y) {
+		memset(c->mask + (size_t)y * c->w + r.left, 0,
+			sizeof(uint32_t) * (size_t)(r.right - r.left));
+		memset(c->white + (size_t)y * c->w + r.left, 0xFF,
+			sizeof(uint32_t) * (size_t)(r.right - r.left));
+	}
+	win32_tray_draw(c->mask_dc, item->tray_id, item->icon_path, rect, bw->hwnd);
+	win32_tray_draw(c->white_dc, item->tray_id, item->icon_path, rect, bw->hwnd);
+	GdiFlush();
+	for (int y = r.top; y < r.bottom; ++y) {
+		uint32_t *row = c->px + (size_t)y * c->w;
+		const uint32_t *k = c->mask + (size_t)y * c->w;
+		const uint32_t *wh = c->white + (size_t)y * c->w;
+		for (int x = r.left; x < r.right; ++x) {
+			// Over black the icon is colour * alpha; white shows the rest.
+			unsigned kb = k[x] & 0xFF, kg = (k[x] >> 8) & 0xFF,
+				kr = (k[x] >> 16) & 0xFF;
+			unsigned wb = wh[x] & 0xFF, wg = (wh[x] >> 8) & 0xFF,
+				wr = (wh[x] >> 16) & 0xFF;
+			int through = ((int)(wr - kr) + (int)(wg - kg) + (int)(wb - kb)) / 3;
+			unsigned a = through < 0 ? 255 : through > 255 ? 0 :
+				255 - (unsigned)through;
+			if (!a) {
+				continue;
+			}
+			row[x] = over(row[x], kr < a ? kr : a, kg < a ? kg : a,
+				kb < a ? kb : a, a);
+		}
+	}
+}
+
+static void draw_edges(struct bar_window *bw, struct canvas *c, const RECT *r,
+		const struct swine_style *s) {
+	RECT e;
+	if (s->border_top.width) {
+		e = (RECT){r->left, r->top, r->right, r->top + px(bw, s->border_top.width)};
+		canvas_fill(c, &e, s->border_top.color);
+	}
+	if (s->border_bottom.width) {
+		e = (RECT){r->left, r->bottom - px(bw, s->border_bottom.width),
+			r->right, r->bottom};
+		canvas_fill(c, &e, s->border_bottom.color);
+	}
+	if (s->border_left.width) {
+		e = (RECT){r->left, r->top, r->left + px(bw, s->border_left.width),
+			r->bottom};
+		canvas_fill(c, &e, s->border_left.color);
+	}
+	if (s->border_right.width) {
+		e = (RECT){r->right - px(bw, s->border_right.width), r->top, r->right,
+			r->bottom};
+		canvas_fill(c, &e, s->border_right.color);
+	}
+	// "box-shadow: inset 0 -3px color": a line inside the bottom edge
+	if (s->inset_bottom) {
+		e = (RECT){r->left, r->bottom - px(bw, s->inset_bottom), r->right,
+			r->bottom};
+		canvas_fill(c, &e, s->inset_color);
+	}
+	if (s->inset_top) {
+		e = (RECT){r->left, r->top, r->right, r->top + px(bw, s->inset_top)};
+		canvas_fill(c, &e, s->inset_color);
+	}
+}
+
 // Draws one item at pos along the bar, between cross_start and cross_end
 // across it; returns the position after it.
-static int draw_item(struct bar_window *bw, HDC dc, int pos, int cross_start,
-		int cross_end, const struct bar_item *item, COLORREF under,
+static int draw_item(struct bar_window *bw, struct canvas *c, int pos,
+		int cross_start, int cross_end, const struct bar_item *item,
 		int module_index) {
 	const struct swine_style *s = &item->style;
 	int outer = 0;
-	int length = item_length(bw, dc, item, &outer);
+	int length = item_length(bw, c->dc, item, &outer);
 	RECT box;
 	if (bw->model->vertical) {
 		box = (RECT){cross_start + px(bw, s->margin.left),
@@ -248,11 +386,8 @@ static int draw_item(struct bar_window *bw, HDC dc, int pos, int cross_start,
 	if (item->has_hover && bw->hovering && EqualRect(&box, &bw->hover_rect)) {
 		s = &item->hover_style;
 	}
-	COLORREF bg = win32_blend(s->background, under);
-	if (s->background.a) {
-		win32_fill(dc, &box, bg);
-	}
-	draw_edges(bw, dc, &box, s, bg);
+	canvas_fill(c, &box, s->background);
+	draw_edges(bw, c, &box, s);
 	RECT content = {
 		box.left + px(bw, s->padding.left + s->border_left.width),
 		box.top + px(bw, s->padding.top + s->border_top.width),
@@ -264,11 +399,10 @@ static int draw_item(struct bar_window *bw, HDC dc, int pos, int cross_start,
 		int ix = content.left + (content.right - content.left - size) / 2;
 		int iy = content.top + (content.bottom - content.top - size) / 2;
 		RECT icon = {ix, iy, ix + size, iy + size};
-		win32_tray_draw(dc, item->tray_id, item->icon_path, &icon, bw->hwnd);
+		canvas_tray_icon(bw, c, &icon, item);
 	} else {
 		wchar_t *text = utf8_to_utf16(item->text);
-		SetTextColor(dc, win32_blend(s->color, bg));
-		draw_text(bw, dc, &content, text, s, item->rotate);
+		canvas_text(bw, c, &content, text, s, item->rotate, s->color);
 		free(text);
 	}
 
@@ -291,16 +425,15 @@ static int draw_item(struct bar_window *bw, HDC dc, int pos, int cross_start,
 	return pos + outer;
 }
 
-static void draw_module(struct bar_window *bw, HDC dc, int pos,
-		int cross_start, int cross_end, const struct bar_module_view *view,
-		COLORREF under) {
+static void draw_module(struct bar_window *bw, struct canvas *c, int pos,
+		int cross_start, int cross_end, const struct bar_module_view *view) {
 	if (!view->is_box) {
-		draw_item(bw, dc, pos, cross_start, cross_end, view->items->items[0],
-			under, view->module_index);
+		draw_item(bw, c, pos, cross_start, cross_end, view->items->items[0],
+			view->module_index);
 		return;
 	}
 	const struct swine_style *s = &view->style;
-	int length = module_length(bw, dc, view);
+	int length = module_length(bw, c->dc, view);
 	bool vertical = bw->model->vertical;
 	RECT box;
 	if (vertical) {
@@ -313,11 +446,8 @@ static void draw_module(struct bar_window *bw, HDC dc, int pos,
 			pos + length - px(bw, s->margin.right),
 			cross_end - px(bw, s->margin.bottom)};
 	}
-	COLORREF bg = win32_blend(s->background, under);
-	if (s->background.a) {
-		win32_fill(dc, &box, bg);
-	}
-	draw_edges(bw, dc, &box, s, bg);
+	canvas_fill(c, &box, s->background);
+	draw_edges(bw, c, &box, s);
 	RECT inner = {
 		box.left + px(bw, s->padding.left + s->border_left.width),
 		box.top + px(bw, s->padding.top + s->border_top.width),
@@ -326,10 +456,10 @@ static void draw_module(struct bar_window *bw, HDC dc, int pos,
 	};
 	int item_pos = vertical ? inner.top : inner.left;
 	for (int i = 0; i < view->items->length; ++i) {
-		item_pos = draw_item(bw, dc, item_pos,
+		item_pos = draw_item(bw, c, item_pos,
 			vertical ? inner.left : inner.top,
 			vertical ? inner.right : inner.bottom,
-			view->items->items[i], bg, view->module_index) +
+			view->items->items[i], view->module_index) +
 			px(bw, view->item_spacing);
 	}
 }
@@ -351,24 +481,39 @@ static bool tray_mouse(struct bar_window *bw, int button, bool down,
 }
 
 // Modules-left from the start of the bar (left, or top of a vertical bar),
-// modules-center in the middle, modules-right at the end.
-static void paint(struct bar_window *bw, HDC target) {
-	RECT client;
-	GetClientRect(bw->hwnd, &client);
-	int w = client.right, h = client.bottom;
-	HDC dc = CreateCompatibleDC(target);
-	HBITMAP bitmap = CreateCompatibleBitmap(target, w, h);
-	HBITMAP old_bitmap = SelectObject(dc, bitmap);
-	SetBkMode(dc, TRANSPARENT);
+// modules-center in the middle, modules-right at the end. Paints the whole
+// window and hands it to Windows with its alpha (UpdateLayeredWindow).
+static void render(struct bar_window *bw) {
+	if (!bw->model || !bw->shown) {
+		return;
+	}
+	int w = bw->rect.width, h = bw->rect.height;
+	if (w <= 0 || h <= 0) {
+		return;
+	}
+	HDC screen = GetDC(NULL);
+	struct canvas c = { .w = w, .h = h };
+	c.dc = CreateCompatibleDC(screen);
+	c.mask_dc = CreateCompatibleDC(screen);
+	c.white_dc = CreateCompatibleDC(screen);
+	HBITMAP bitmap = dib(screen, w, h, &c.px);
+	HBITMAP mask = dib(screen, w, h, &c.mask);
+	HBITMAP white = dib(screen, w, h, &c.white);
+	if (!bitmap || !mask || !white) {
+		goto done;
+	}
+	HGDIOBJ old_bitmap = SelectObject(c.dc, bitmap);
+	HGDIOBJ old_mask = SelectObject(c.mask_dc, mask);
+	HGDIOBJ old_white = SelectObject(c.white_dc, white);
+	SetBkMode(c.mask_dc, TRANSPARENT);
+	memset(c.px, 0, sizeof(uint32_t) * (size_t)w * (size_t)h);
 	clear_hits(bw);
 
 	struct bar_model *model = bw->model;
 	bool vertical = model->vertical;
-	// Translucent backgrounds are blended over black for now; true
-	// per-pixel transparency needs a layered window.
-	COLORREF bg = win32_blend(model->window.background, RGB(0, 0, 0));
-	win32_fill(dc, &client, bg);
-	draw_edges(bw, dc, &client, &model->window, bg);
+	RECT client = {0, 0, w, h};
+	canvas_fill(&c, &client, model->window.background);
+	draw_edges(bw, &c, &client, &model->window);
 	int cross_start = vertical ? px(bw, model->window.border_left.width) :
 		px(bw, model->window.border_top.width);
 	int cross_end = vertical ? w - px(bw, model->window.border_right.width) :
@@ -381,26 +526,46 @@ static void paint(struct bar_window *bw, HDC target) {
 	for (int i = 0; i < model->modules->length; ++i) {
 		struct bar_module_view *v = model->modules->items[i];
 		if (v->section == BAR_SECTION_RIGHT) {
-			end_len += module_length(bw, dc, v) + spacing;
+			end_len += module_length(bw, c.dc, v) + spacing;
 		} else if (v->section == BAR_SECTION_CENTER) {
-			center_len += module_length(bw, dc, v) + spacing;
+			center_len += module_length(bw, c.dc, v) + spacing;
 		}
 	}
 	int end = total - end_len + (end_len ? spacing : 0);
 	int center = (total - center_len + (center_len ? spacing : 0)) / 2;
 	for (int i = 0; i < model->modules->length; ++i) {
 		struct bar_module_view *v = model->modules->items[i];
-		int length = module_length(bw, dc, v);
+		int length = module_length(bw, c.dc, v);
 		int *pos = v->section == BAR_SECTION_LEFT ? &start :
 			v->section == BAR_SECTION_CENTER ? &center : &end;
-		draw_module(bw, dc, *pos, cross_start, cross_end, v, bg);
+		draw_module(bw, &c, *pos, cross_start, cross_end, v);
 		*pos += length + spacing;
 	}
+	// Fully transparent pixels would let clicks through to the desktop;
+	// Waybar's surface takes them everywhere.
+	for (size_t i = 0; i < (size_t)w * (size_t)h; ++i) {
+		if (!(c.px[i] >> 24)) {
+			c.px[i] = 0x01000000;
+		}
+	}
 
-	BitBlt(target, 0, 0, w, h, dc, 0, 0, SRCCOPY);
-	SelectObject(dc, old_bitmap);
-	DeleteObject(bitmap);
-	DeleteDC(dc);
+	POINT pos = {bw->rect.x, bw->rect.y};
+	SIZE size = {w, h};
+	POINT origin = {0, 0};
+	BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+	UpdateLayeredWindow(bw->hwnd, screen, &pos, &size, c.dc, &origin, 0,
+		&blend, ULW_ALPHA);
+	SelectObject(c.dc, old_bitmap);
+	SelectObject(c.mask_dc, old_mask);
+	SelectObject(c.white_dc, old_white);
+done:
+	if (bitmap) DeleteObject(bitmap);
+	if (mask) DeleteObject(mask);
+	if (white) DeleteObject(white);
+	DeleteDC(c.dc);
+	DeleteDC(c.mask_dc);
+	DeleteDC(c.white_dc);
+	ReleaseDC(NULL, screen);
 }
 
 static struct hit *hit_test(struct bar_window *bw, int x, int y) {
@@ -554,7 +719,7 @@ static void bar_mouse_move(struct bar_window *bw, int x, int y) {
 		struct hit *old = bw->hovering ? hit_test(bw,
 			bw->hover_rect.left, bw->hover_rect.top) : NULL;
 		if ((old && old->has_hover) || (h && h->has_hover)) {
-			InvalidateRect(bw->hwnd, NULL, FALSE);   // :hover styles
+			render(bw);   // :hover styles
 		}
 		if (bw->hovering && bw->hover_tray) {
 			win32_tray_hover(bw->hover_tray, TRAY_HOVER_LEAVE, screen);
@@ -592,7 +757,7 @@ static void bar_mouse_leave(struct bar_window *bw) {
 	struct hit *old = bw->hovering ? hit_test(bw, bw->hover_rect.left,
 		bw->hover_rect.top) : NULL;
 	if (old && old->has_hover) {
-		InvalidateRect(bw->hwnd, NULL, FALSE);
+		render(bw);
 	}
 	if (bw->hovering && bw->hover_tray) {
 		POINT screen;
@@ -620,11 +785,9 @@ static LRESULT CALLBACK bar_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 		}
 		return 0;
 	case WM_PAINT: {
+		// Layered: Windows keeps what render() gave it.
 		PAINTSTRUCT ps;
-		HDC dc = BeginPaint(hwnd, &ps);
-		if (bw && bw->model) {
-			paint(bw, dc);
-		}
+		BeginPaint(hwnd, &ps);
 		EndPaint(hwnd, &ps);
 		return 0;
 	}
@@ -738,7 +901,7 @@ static struct bar_window *create_bar(int index, struct swine_output *output) {
 	bw->output_name = swine_strdup(output->name);
 	bw->hits = create_list();
 	bw->hwnd = CreateWindowExW(
-		WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE,
+		WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_LAYERED,
 		L"swinewm-bar", L"swinewm bar", WS_POPUP, 0, 0, 0, 0,
 		NULL, NULL, instance, NULL);
 	SetWindowLongPtrW(bw->hwnd, GWLP_USERDATA, (LONG_PTR)bw);
@@ -805,7 +968,7 @@ void win32_bar_refresh(void) {
 			win32_tray_set_host_rect(&r);
 			tray_host_set = true;
 		}
-		InvalidateRect(bw->hwnd, NULL, FALSE);
+		render(bw);
 	}
 }
 

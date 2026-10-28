@@ -16,6 +16,9 @@ the MSI and zip with the matching section below as release notes.
   scratchpad windows), styled by `tooltip` in style.css. Tray icons show
   their program's tooltip, or get `NIN_POPUPOPEN` to show their own, and
   receive the pointer's movements as from Explorer.
+- The bar is translucent where its style says so (Waybar's default
+  `rgba(43, 48, 59, 0.5)`): it is a layered window with per-pixel alpha,
+  where it used to blend such colours over black.
 - Several bars from one Waybar config (an array), each with its own
   modules and outputs; `left` and `right` positions with the modules top
   to bottom; `margin`, `width` and `exclusive`; `rotate` for text modules.
