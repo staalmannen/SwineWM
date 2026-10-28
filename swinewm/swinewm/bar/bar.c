@@ -49,6 +49,7 @@ enum module_kind {
 	MOD_TEMPERATURE,
 	MOD_IDLE_INHIBITOR,
 	MOD_KEYBOARD_STATE,
+	MOD_POWER_PROFILES,
 	MOD_CUSTOM,
 };
 
@@ -121,6 +122,7 @@ static bool module_kind_from_name(const char *name, enum module_kind *kind) {
 		{"disk", MOD_DISK}, {"temperature", MOD_TEMPERATURE},
 		{"idle_inhibitor", MOD_IDLE_INHIBITOR},
 		{"keyboard-state", MOD_KEYBOARD_STATE},
+		{"power-profiles-daemon", MOD_POWER_PROFILES},
 	};
 	if (has_prefix(name, "custom/")) {
 		*kind = MOD_CUSTOM;
@@ -1431,6 +1433,68 @@ static void build_idle_inhibitor(struct build_ctx *ctx, struct bar_module *m,
 	set_tooltip(ctx, m, item, status, "{status}", args, 4, NULL);
 }
 
+// power-profiles-daemon's profiles, in its order (a click cycles them).
+static const char *const power_profiles[] = {"power-saver", "balanced",
+	"performance"};
+
+struct power_reading {
+	bool known;
+	char profile[32];
+	char driver[64];
+};
+
+// Waybar's power-profiles-daemon module: Windows' power mode.
+static void build_power_profiles(struct build_ctx *ctx, struct bar_module *m,
+		int index) {
+	struct power_reading *r = cached_reading(m, sizeof(*r), 2, 2);
+	if (!r) {
+		r = m->reading;
+		r->known = sysinfo_power_profile(r->profile, sizeof(r->profile),
+			r->driver, sizeof(r->driver));
+	}
+	if (!r->known) {
+		return;
+	}
+	const char *icon = module_icon(m, 0,
+		(const char *const[]){r->profile, NULL}, 0);
+	if (!json_object_get(m->cfg, "format-icons")) {
+		// Waybar's default icons need Font Awesome, which Windows lacks.
+		icon = strcmp(r->profile, "performance") == 0 ? "PERF" :
+			strcmp(r->profile, "power-saver") == 0 ? "SAVE" : "BAL";
+	}
+	struct fmt_arg args[] = {
+		{"profile", FMT_STRING, r->profile, 0},
+		{"icon", FMT_STRING, icon, 0},
+		{"driver", FMT_STRING, r->driver, 0},
+		{"cpu_driver", FMT_STRING, r->driver, 0},
+		{"platform_driver", FMT_STRING, r->driver, 0},
+	};
+	const char *classes[] = {r->profile, NULL};
+	struct bar_item *item = add_label(ctx, m, index, format_waybar(
+		module_format(m, NULL, NULL, "{icon}"), args, 5, &ctx->tm), classes);
+	set_tooltip(ctx, m, item, NULL,
+		"Power profile: {profile}\nDriver: {driver}", args, 5, NULL);
+}
+
+// The next (or previous) power profile, as Waybar's left (right) click.
+static void power_profiles_cycle(struct bar_module *m, int step) {
+	char profile[32], driver[64];
+	if (!sysinfo_power_profile(profile, sizeof(profile), driver,
+			sizeof(driver))) {
+		return;
+	}
+	int n = (int)(sizeof(power_profiles) / sizeof(power_profiles[0]));
+	int current = 1;
+	for (int i = 0; i < n; ++i) {
+		if (strcmp(profile, power_profiles[i]) == 0) {
+			current = i;
+		}
+	}
+	sysinfo_set_power_profile(power_profiles[(current + step + n) % n]);
+	free(m->reading);
+	m->reading = NULL;
+}
+
 // Waybar's keyboard-state: a label for each lock that is enabled.
 static void build_keyboard_state(struct build_ctx *ctx, struct bar_module *m,
 		int index) {
@@ -1772,6 +1836,9 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 	case MOD_KEYBOARD_STATE:
 		build_keyboard_state(ctx, m, index);
 		return;
+	case MOD_POWER_PROFILES:
+		build_power_profiles(ctx, m, index);
+		return;
 	case MOD_CUSTOM:
 		build_custom(ctx, m, index);
 		return;
@@ -1833,6 +1900,20 @@ void bar_module_clicked(int module_index) {
 	}
 	if (m->kind == MOD_IDLE_INHIBITOR) {
 		idle_inhibit_set(!idle_inhibit.active, m);
+	}
+	if (m->kind == MOD_POWER_PROFILES) {
+		power_profiles_cycle(m, 1);
+	}
+	bar_script_event(m->script);
+}
+
+void bar_module_right_clicked(int module_index) {
+	if (!bar.modules || module_index < 0 || module_index >= bar.modules->length) {
+		return;
+	}
+	struct bar_module *m = bar.modules->items[module_index];
+	if (m->kind == MOD_POWER_PROFILES) {
+		power_profiles_cycle(m, -1);
 	}
 	bar_script_event(m->script);
 }

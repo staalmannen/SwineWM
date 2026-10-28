@@ -2,6 +2,7 @@
 #define _SWINE_SYSINFO_H
 
 #include <stdbool.h>
+#include <stddef.h>
 
 // System readings for bar modules, implemented by the platform layer.
 
@@ -95,6 +96,13 @@ void sysinfo_audio_set_mute(bool source, int mode);
 // Keeps the display on and the computer awake (Waybar's idle_inhibitor),
 // for as long as swinewm runs or until switched off again.
 void sysinfo_inhibit_idle(bool enable);
+
+// Waybar's power-profiles-daemon: Windows' power mode, as the profile
+// names of power-profiles-daemon ("power-saver", "balanced",
+// "performance"), and what sets it ({driver}). False if unknown.
+bool sysinfo_power_profile(char *profile, size_t size, char *driver,
+		size_t driver_size);
+void sysinfo_set_power_profile(const char *profile);
 
 // Caps Lock, Num Lock and Scroll Lock (Waybar's keyboard-state).
 bool sysinfo_keyboard_locks(bool *caps, bool *num, bool *scroll);

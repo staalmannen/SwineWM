@@ -581,7 +581,12 @@ static LRESULT CALLBACK bar_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 				win32_run_command(copy);
 				free(copy);
 			}
-			bar_module_event(index);
+			if (middle) {
+				bar_module_event(index);
+			} else {
+				bar_module_right_clicked(index);
+			}
+			win32_bar_refresh();
 		}
 		return 0;
 	}

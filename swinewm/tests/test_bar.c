@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "fake_platform.h"
@@ -822,6 +823,41 @@ static void test_tooltips(void) {
 	fake_teardown();
 }
 
+// power-profiles-daemon: Windows' power mode; clicks cycle it.
+static void test_power_profiles(void) {
+	fake_setup();
+	config->bar_enabled = true;
+	snprintf(fake.power_profile, sizeof(fake.power_profile), "balanced");
+	bar_load_from_strings("{ \"modules-right\": [\"power-profiles-daemon\","
+		" \"power-profiles-daemon#name\"],"
+		" \"power-profiles-daemon#name\": { \"format\": \"{icon} {profile}\","
+		"   \"format-icons\": { \"default\": \"?\", \"performance\": \"P\" } } }",
+		NULL);
+	struct swine_output *output = root->outputs->items[0];
+	struct bar_model *model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "BAL");
+	CHECK_STR(item_text(model, 1), "? balanced");
+	struct bar_item *item = first_item(model, 0);
+	CHECK(item && item->tooltip &&
+		strcmp(item->tooltip, "Power profile: balanced\nDriver: fake") == 0);
+	bar_model_free(model);
+	bar_module_clicked(1);
+	CHECK_STR(fake.power_profile, "performance");
+	bar_module_clicked(1);
+	CHECK_STR(fake.power_profile, "power-saver");
+	bar_module_right_clicked(0);
+	CHECK_STR(fake.power_profile, "performance");
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 1), "P performance");
+	bar_model_free(model);
+	fake.power_profile[0] = '\0';   // unknown: hidden
+	fake.now_ms += 5000;
+	model = bar_build(output, 0);
+	CHECK_INT(model->modules->length, 0);
+	bar_model_free(model);
+	fake_teardown();
+}
+
 void test_bar_all(void) {
 	test_bar_config_ipc();
 	test_json_parse();
@@ -836,4 +872,5 @@ void test_bar_all(void) {
 	test_pow_format();
 	test_system_modules();
 	test_tooltips();
+	test_power_profiles();
 }

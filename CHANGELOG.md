@@ -16,6 +16,8 @@ the MSI and zip with the matching section below as release notes.
   scratchpad windows), styled by `tooltip` in style.css. Tray icons show
   their program's tooltip, or get `NIN_POPUPOPEN` to show their own, and
   receive the pointer's movements as from Explorer.
+- Waybar's `power-profiles-daemon` module shows and cycles Windows' power
+  mode (or the power plan): power-saver, balanced, performance.
 - `:hover` and `:not(.class)` in the bar's style.css; the default style
   has Waybar's hover rules (workspace buttons, `#pulseaudio`). Waybar's
   `#battery.critical:not(.charging)` now turns a low battery red.

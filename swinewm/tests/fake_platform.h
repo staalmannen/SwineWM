@@ -67,6 +67,7 @@ struct fake_platform_state {
 	bool last_volume_source;
 	int mute_calls;
 	bool idle_inhibited;
+	char power_profile[32];   // "" for none
 	bool caps_lock, num_lock, scroll_lock;
 	// bar scripts: platform_script_start returns 1, 2, ...
 	int script_starts;

@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <pdh.h>
 #include <pdhmsg.h>
+#include <powrprof.h>
+#include <stdio.h>
+#include <string.h>
 #include "stringop.h"
 #include "swinewm/sysinfo.h"
 #include "win32.h"
@@ -136,4 +139,102 @@ void sysinfo_inhibit_idle(bool enable) {
 	SetThreadExecutionState(enable ?
 		ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED :
 		ES_CONTINUOUS);
+}
+
+// Waybar's power-profiles-daemon: Windows' power mode ("Best power
+// efficiency", "Balanced", "Best performance"), an overlay on the Balanced
+// power plan set through powrprof's (undocumented, so looked up at run
+// time) overlay functions. With another plan active, or without them, the
+// classic plans stand in: Power saver, Balanced, High performance.
+static const GUID plan_balanced = {0x381b4222, 0xf694, 0x41f0,
+	{0x96, 0x85, 0xff, 0x5b, 0xb2, 0x60, 0xdf, 0x2e}};
+static const GUID plan_saver = {0xa1841308, 0x3541, 0x4fab,
+	{0xbc, 0x81, 0xf7, 0x15, 0x56, 0xf2, 0x0b, 0x4a}};
+static const GUID plan_high = {0x8c5e7fda, 0xe8bf, 0x4a96,
+	{0x9a, 0x85, 0xa6, 0xe2, 0x3a, 0x8c, 0x63, 0x5c}};
+static const GUID plan_ultimate = {0xe9a42b02, 0xd5df, 0x448d,
+	{0xaa, 0x00, 0x03, 0xf1, 0x47, 0x49, 0xeb, 0x61}};
+static const GUID overlay_efficiency = {0x961cc777, 0x2547, 0x4f9d,
+	{0x81, 0x74, 0x7d, 0x86, 0x18, 0x1b, 0x8a, 0x7a}};
+static const GUID overlay_performance = {0xded574b5, 0x45a0, 0x4f42,
+	{0x87, 0x37, 0x46, 0x34, 0x5c, 0x09, 0xc2, 0x38}};
+static const GUID overlay_balanced = {0, 0, 0, {0, 0, 0, 0, 0, 0, 0, 0}};
+
+typedef DWORD (WINAPI *get_overlay_fn)(GUID *);
+typedef DWORD (WINAPI *set_overlay_fn)(GUID);
+static get_overlay_fn get_overlay = NULL;
+static set_overlay_fn set_overlay = NULL;
+
+static void load_overlay_functions(void) {
+	static bool loaded = false;
+	if (loaded) {
+		return;
+	}
+	loaded = true;
+	HMODULE powrprof = GetModuleHandleW(L"powrprof.dll");
+	if (!powrprof) {
+		powrprof = LoadLibraryW(L"powrprof.dll");
+	}
+	if (powrprof) {
+		get_overlay = (get_overlay_fn)(void (*)(void))GetProcAddress(powrprof,
+			"PowerGetEffectiveOverlayScheme");
+		set_overlay = (set_overlay_fn)(void (*)(void))GetProcAddress(powrprof,
+			"PowerSetActiveOverlayScheme");
+	}
+}
+
+static bool active_plan(GUID *out) {
+	GUID *active = NULL;
+	if (PowerGetActiveScheme(NULL, &active) != ERROR_SUCCESS || !active) {
+		return false;
+	}
+	*out = *active;
+	LocalFree(active);
+	return true;
+}
+
+bool sysinfo_power_profile(char *profile, size_t size, char *driver,
+		size_t driver_size) {
+	load_overlay_functions();
+	GUID plan;
+	if (!active_plan(&plan)) {
+		return false;
+	}
+	GUID overlay;
+	if (IsEqualGUID(&plan, &plan_balanced) && get_overlay &&
+			get_overlay(&overlay) == ERROR_SUCCESS) {
+		snprintf(profile, size, "%s",
+			IsEqualGUID(&overlay, &overlay_efficiency) ? "power-saver" :
+			IsEqualGUID(&overlay, &overlay_performance) ? "performance" :
+			"balanced");
+		snprintf(driver, driver_size, "Windows power mode");
+		return true;
+	}
+	snprintf(profile, size, "%s",
+		IsEqualGUID(&plan, &plan_saver) ? "power-saver" :
+		IsEqualGUID(&plan, &plan_high) || IsEqualGUID(&plan, &plan_ultimate) ?
+		"performance" : "balanced");
+	snprintf(driver, driver_size, "Windows power plan");
+	return true;
+}
+
+void sysinfo_set_power_profile(const char *profile) {
+	load_overlay_functions();
+	bool saver = strcmp(profile, "power-saver") == 0;
+	bool performance = strcmp(profile, "performance") == 0;
+	GUID plan;
+	bool balanced_plan = active_plan(&plan) &&
+		IsEqualGUID(&plan, &plan_balanced);
+	if (!balanced_plan || !set_overlay) {
+		// The classic plans; if this one is missing (Modern Standby PCs
+		// have only Balanced), Balanced with the power mode below.
+		const GUID *want = saver ? &plan_saver : performance ? &plan_high :
+			&plan_balanced;
+		if (PowerSetActiveScheme(NULL, want) == ERROR_SUCCESS || !set_overlay) {
+			return;
+		}
+		PowerSetActiveScheme(NULL, &plan_balanced);
+	}
+	set_overlay(saver ? overlay_efficiency : performance ? overlay_performance :
+		overlay_balanced);
 }
