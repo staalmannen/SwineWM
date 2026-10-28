@@ -27,6 +27,7 @@ struct hit {
 
 struct bar_window {
 	HWND hwnd;
+	int bar_index;          // which bar of the config
 	char *output_name;
 	struct swine_box rect;
 	bool shown;
@@ -78,56 +79,84 @@ static int px(struct bar_window *bw, double v) {
 	return (int)(v * bw->scale + 0.5);
 }
 
-static HFONT style_font(struct bar_window *bw, const struct swine_style *s) {
-	return win32_font(s->font_family, px(bw, s->font_size), s->bold, s->italic);
+static HFONT style_font(struct bar_window *bw, const struct swine_style *s,
+		int rotate) {
+	return win32_font_rotated(s->font_family, px(bw, s->font_size), s->bold,
+		s->italic, rotate);
 }
 
-static int text_width(HDC dc, HFONT font, const wchar_t *text) {
-	SIZE size = {0};
+static SIZE text_size(HDC dc, HFONT font, const wchar_t *text) {
+	SIZE size = {0, 0};
 	HFONT old = SelectObject(dc, font);
 	GetTextExtentPoint32W(dc, text, (int)wcslen(text), &size);
 	SelectObject(dc, old);
-	return size.cx;
+	return size;
 }
 
-// Width of an item including its padding, border and margin.
-static int item_outer_width(struct bar_window *bw, HDC dc,
-		const struct bar_item *item, int *inner) {
-	const struct swine_style *s = &item->style;
-	int content;
+// The content of an item (text or icon) as laid out: rotated text ("rotate"
+// 90 or 270) takes its height across and its width along.
+static SIZE content_size(struct bar_window *bw, HDC dc,
+		const struct bar_item *item) {
 	if (item->tray_id) {
-		content = px(bw, item->icon_size);
-	} else {
-		wchar_t *text = utf8_to_utf16(item->text);
-		content = text_width(dc, style_font(bw, s), text);
-		free(text);
+		int size = px(bw, item->icon_size);
+		return (SIZE){size, size};
 	}
-	int w = content + px(bw, s->padding.left + s->padding.right +
-		s->border_left.width + s->border_right.width);
-	if (w < px(bw, s->min_width)) {
-		w = px(bw, s->min_width);
+	wchar_t *text = utf8_to_utf16(item->text);
+	SIZE size = text_size(dc, style_font(bw, &item->style, 0), text);
+	free(text);
+	if (item->rotate == 90 || item->rotate == 270) {
+		return (SIZE){size.cy, size.cx};
 	}
-	if (inner) {
-		*inner = w;
-	}
-	return w + px(bw, s->margin.left + s->margin.right);
+	return size;
 }
 
-static int module_width(struct bar_window *bw, HDC dc,
+// The length of an item along the bar (its width in a horizontal bar, its
+// height in a vertical one) including padding and border; *outer adds the
+// margins.
+static int item_length(struct bar_window *bw, HDC dc,
+		const struct bar_item *item, int *outer) {
+	const struct swine_style *s = &item->style;
+	SIZE content = content_size(bw, dc, item);
+	int length;
+	if (bw->model->vertical) {
+		length = content.cy + px(bw, s->padding.top + s->padding.bottom +
+			s->border_top.width + s->border_bottom.width);
+		if (outer) {
+			*outer = length + px(bw, s->margin.top + s->margin.bottom);
+		}
+		return length;
+	}
+	length = content.cx + px(bw, s->padding.left + s->padding.right +
+		s->border_left.width + s->border_right.width);
+	if (length < px(bw, s->min_width)) {
+		length = px(bw, s->min_width);
+	}
+	if (outer) {
+		*outer = length + px(bw, s->margin.left + s->margin.right);
+	}
+	return length;
+}
+
+static int module_length(struct bar_window *bw, HDC dc,
 		const struct bar_module_view *view) {
-	int w = 0;
+	int total = 0;
 	for (int i = 0; i < view->items->length; ++i) {
-		w += item_outer_width(bw, dc, view->items->items[i], NULL);
+		int outer = 0;
+		item_length(bw, dc, view->items->items[i], &outer);
+		total += outer;
 	}
 	if (view->items->length > 1) {
-		w += px(bw, view->item_spacing) * (view->items->length - 1);
+		total += px(bw, view->item_spacing) * (view->items->length - 1);
 	}
 	if (view->is_box) {
 		const struct swine_style *s = &view->style;
-		w += px(bw, s->padding.left + s->padding.right + s->margin.left +
-			s->margin.right + s->border_left.width + s->border_right.width);
+		total += bw->model->vertical ?
+			px(bw, s->padding.top + s->padding.bottom + s->margin.top +
+				s->margin.bottom + s->border_top.width + s->border_bottom.width) :
+			px(bw, s->padding.left + s->padding.right + s->margin.left +
+				s->margin.right + s->border_left.width + s->border_right.width);
 	}
-	return w;
+	return total;
 }
 
 static void draw_edges(struct bar_window *bw, HDC dc, const RECT *r,
@@ -164,14 +193,57 @@ static void draw_edges(struct bar_window *bw, HDC dc, const RECT *r,
 	}
 }
 
-// Draws one item with its left edge at x; returns the x after it.
-static int draw_item(struct bar_window *bw, HDC dc, int x, int top, int bottom,
-		const struct bar_item *item, COLORREF under, int module_index) {
+// Text centred in rect, turned counter-clockwise by rotate degrees as GTK
+// turns a label: the origin of TextOut is the top-left corner of the text
+// cell, which turns with it.
+static void draw_text(struct bar_window *bw, HDC dc, const RECT *rect,
+		const wchar_t *text, const struct swine_style *s, int rotate) {
+	if (!rotate) {
+		RECT r = *rect;
+		HFONT old = SelectObject(dc, style_font(bw, s, 0));
+		DrawTextW(dc, text, -1, &r, DT_SINGLELINE | DT_VCENTER | DT_CENTER |
+			DT_NOPREFIX | (bw->model->vertical ? DT_END_ELLIPSIS : 0));
+		SelectObject(dc, old);
+		return;
+	}
+	SIZE size = text_size(dc, style_font(bw, s, 0), text);
+	int box_w = rect->right - rect->left, box_h = rect->bottom - rect->top;
+	int x, y;
+	if (rotate == 90) {          // reads bottom to top
+		x = rect->left + (box_w - size.cy) / 2;
+		y = rect->top + (box_h + size.cx) / 2;
+	} else if (rotate == 270) {  // reads top to bottom
+		x = rect->left + (box_w + size.cy) / 2;
+		y = rect->top + (box_h - size.cx) / 2;
+	} else {                     // 180: upside down
+		x = rect->left + (box_w + size.cx) / 2;
+		y = rect->top + (box_h + size.cy) / 2;
+	}
+	HFONT old = SelectObject(dc, style_font(bw, s, rotate));
+	ExtTextOutW(dc, x, y, ETO_CLIPPED, rect, text, (UINT)wcslen(text), NULL);
+	SelectObject(dc, old);
+}
+
+// Draws one item at pos along the bar, between cross_start and cross_end
+// across it; returns the position after it.
+static int draw_item(struct bar_window *bw, HDC dc, int pos, int cross_start,
+		int cross_end, const struct bar_item *item, COLORREF under,
+		int module_index) {
 	const struct swine_style *s = &item->style;
-	int inner = 0;
-	int outer = item_outer_width(bw, dc, item, &inner);
-	RECT box = {x + px(bw, s->margin.left), top + px(bw, s->margin.top),
-		x + px(bw, s->margin.left) + inner, bottom - px(bw, s->margin.bottom)};
+	int outer = 0;
+	int length = item_length(bw, dc, item, &outer);
+	RECT box;
+	if (bw->model->vertical) {
+		box = (RECT){cross_start + px(bw, s->margin.left),
+			pos + px(bw, s->margin.top),
+			cross_end - px(bw, s->margin.right),
+			pos + px(bw, s->margin.top) + length};
+	} else {
+		box = (RECT){pos + px(bw, s->margin.left),
+			cross_start + px(bw, s->margin.top),
+			pos + px(bw, s->margin.left) + length,
+			cross_end - px(bw, s->margin.bottom)};
+	}
 	// :hover changes the look, never the size.
 	if (item->has_hover && bw->hovering && EqualRect(&box, &bw->hover_rect)) {
 		s = &item->hover_style;
@@ -181,7 +253,7 @@ static int draw_item(struct bar_window *bw, HDC dc, int x, int top, int bottom,
 		win32_fill(dc, &box, bg);
 	}
 	draw_edges(bw, dc, &box, s, bg);
-	RECT text_rect = {
+	RECT content = {
 		box.left + px(bw, s->padding.left + s->border_left.width),
 		box.top + px(bw, s->padding.top + s->border_top.width),
 		box.right - px(bw, s->padding.right + s->border_right.width),
@@ -189,17 +261,14 @@ static int draw_item(struct bar_window *bw, HDC dc, int x, int top, int bottom,
 	};
 	if (item->tray_id) {
 		int size = px(bw, item->icon_size);
-		int ix = text_rect.left + (text_rect.right - text_rect.left - size) / 2;
-		int iy = text_rect.top + (text_rect.bottom - text_rect.top - size) / 2;
+		int ix = content.left + (content.right - content.left - size) / 2;
+		int iy = content.top + (content.bottom - content.top - size) / 2;
 		RECT icon = {ix, iy, ix + size, iy + size};
 		win32_tray_draw(dc, item->tray_id, item->icon_path, &icon, bw->hwnd);
 	} else {
 		wchar_t *text = utf8_to_utf16(item->text);
-		HFONT old = SelectObject(dc, style_font(bw, s));
 		SetTextColor(dc, win32_blend(s->color, bg));
-		DrawTextW(dc, text, -1, &text_rect,
-			DT_SINGLELINE | DT_VCENTER | DT_CENTER | DT_NOPREFIX);
-		SelectObject(dc, old);
+		draw_text(bw, dc, &content, text, s, item->rotate);
 		free(text);
 	}
 
@@ -219,31 +288,47 @@ static int draw_item(struct bar_window *bw, HDC dc, int x, int top, int bottom,
 	h->tooltip_mono = item->tooltip_mono;
 	h->has_hover = item->has_hover;
 	list_add(bw->hits, h);
-	return x + outer;
+	return pos + outer;
 }
 
-static void draw_module(struct bar_window *bw, HDC dc, int x, int top,
-		int bottom, const struct bar_module_view *view, COLORREF under) {
+static void draw_module(struct bar_window *bw, HDC dc, int pos,
+		int cross_start, int cross_end, const struct bar_module_view *view,
+		COLORREF under) {
 	if (!view->is_box) {
-		draw_item(bw, dc, x, top, bottom, view->items->items[0], under,
-			view->module_index);
+		draw_item(bw, dc, pos, cross_start, cross_end, view->items->items[0],
+			under, view->module_index);
 		return;
 	}
 	const struct swine_style *s = &view->style;
-	int width = module_width(bw, dc, view);
-	RECT box = {x + px(bw, s->margin.left), top + px(bw, s->margin.top),
-		x + width - px(bw, s->margin.right), bottom - px(bw, s->margin.bottom)};
+	int length = module_length(bw, dc, view);
+	bool vertical = bw->model->vertical;
+	RECT box;
+	if (vertical) {
+		box = (RECT){cross_start + px(bw, s->margin.left),
+			pos + px(bw, s->margin.top), cross_end - px(bw, s->margin.right),
+			pos + length - px(bw, s->margin.bottom)};
+	} else {
+		box = (RECT){pos + px(bw, s->margin.left),
+			cross_start + px(bw, s->margin.top),
+			pos + length - px(bw, s->margin.right),
+			cross_end - px(bw, s->margin.bottom)};
+	}
 	COLORREF bg = win32_blend(s->background, under);
 	if (s->background.a) {
 		win32_fill(dc, &box, bg);
 	}
 	draw_edges(bw, dc, &box, s, bg);
-	int item_x = box.left + px(bw, s->padding.left + s->border_left.width);
-	int item_top = box.top + px(bw, s->padding.top + s->border_top.width);
-	int item_bottom = box.bottom - px(bw, s->padding.bottom +
-		s->border_bottom.width);
+	RECT inner = {
+		box.left + px(bw, s->padding.left + s->border_left.width),
+		box.top + px(bw, s->padding.top + s->border_top.width),
+		box.right - px(bw, s->padding.right + s->border_right.width),
+		box.bottom - px(bw, s->padding.bottom + s->border_bottom.width),
+	};
+	int item_pos = vertical ? inner.top : inner.left;
 	for (int i = 0; i < view->items->length; ++i) {
-		item_x = draw_item(bw, dc, item_x, item_top, item_bottom,
+		item_pos = draw_item(bw, dc, item_pos,
+			vertical ? inner.left : inner.top,
+			vertical ? inner.right : inner.bottom,
 			view->items->items[i], bg, view->module_index) +
 			px(bw, view->item_spacing);
 	}
@@ -265,6 +350,8 @@ static bool tray_mouse(struct bar_window *bw, int button, bool down,
 	return true;
 }
 
+// Modules-left from the start of the bar (left, or top of a vertical bar),
+// modules-center in the middle, modules-right at the end.
 static void paint(struct bar_window *bw, HDC target) {
 	RECT client;
 	GetClientRect(bw->hwnd, &client);
@@ -276,34 +363,38 @@ static void paint(struct bar_window *bw, HDC target) {
 	clear_hits(bw);
 
 	struct bar_model *model = bw->model;
+	bool vertical = model->vertical;
 	// Translucent backgrounds are blended over black for now; true
 	// per-pixel transparency needs a layered window.
 	COLORREF bg = win32_blend(model->window.background, RGB(0, 0, 0));
 	win32_fill(dc, &client, bg);
 	draw_edges(bw, dc, &client, &model->window, bg);
-	int top = px(bw, model->window.border_top.width);
-	int bottom = h - px(bw, model->window.border_bottom.width);
+	int cross_start = vertical ? px(bw, model->window.border_left.width) :
+		px(bw, model->window.border_top.width);
+	int cross_end = vertical ? w - px(bw, model->window.border_right.width) :
+		h - px(bw, model->window.border_bottom.width);
+	int total = vertical ? h : w;
 	int spacing = px(bw, model->spacing);
 
-	int left_x = 0;
-	int right_w = 0, center_w = 0;
+	int start = 0;
+	int end_len = 0, center_len = 0;
 	for (int i = 0; i < model->modules->length; ++i) {
 		struct bar_module_view *v = model->modules->items[i];
 		if (v->section == BAR_SECTION_RIGHT) {
-			right_w += module_width(bw, dc, v) + spacing;
+			end_len += module_length(bw, dc, v) + spacing;
 		} else if (v->section == BAR_SECTION_CENTER) {
-			center_w += module_width(bw, dc, v) + spacing;
+			center_len += module_length(bw, dc, v) + spacing;
 		}
 	}
-	int right_x = w - right_w + (right_w ? spacing : 0);
-	int center_x = (w - center_w + (center_w ? spacing : 0)) / 2;
+	int end = total - end_len + (end_len ? spacing : 0);
+	int center = (total - center_len + (center_len ? spacing : 0)) / 2;
 	for (int i = 0; i < model->modules->length; ++i) {
 		struct bar_module_view *v = model->modules->items[i];
-		int mw = module_width(bw, dc, v);
-		int *x = v->section == BAR_SECTION_LEFT ? &left_x :
-			v->section == BAR_SECTION_CENTER ? &center_x : &right_x;
-		draw_module(bw, dc, *x, top, bottom, v, bg);
-		*x += mw + spacing;
+		int length = module_length(bw, dc, v);
+		int *pos = v->section == BAR_SECTION_LEFT ? &start :
+			v->section == BAR_SECTION_CENTER ? &center : &end;
+		draw_module(bw, dc, *pos, cross_start, cross_end, v, bg);
+		*pos += length + spacing;
 	}
 
 	BitBlt(target, 0, 0, w, h, dc, 0, 0, SRCCOPY);
@@ -631,7 +722,7 @@ static LRESULT CALLBACK bar_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 	}
 }
 
-static struct bar_window *create_bar(struct swine_output *output) {
+static struct bar_window *create_bar(int index, struct swine_output *output) {
 	HINSTANCE instance = GetModuleHandleW(NULL);
 	if (!class_registered) {
 		WNDCLASSEXW wc = { .cbSize = sizeof(wc) };
@@ -643,6 +734,7 @@ static struct bar_window *create_bar(struct swine_output *output) {
 		class_registered = true;
 	}
 	struct bar_window *bw = calloc(1, sizeof(*bw));
+	bw->bar_index = index;
 	bw->output_name = swine_strdup(output->name);
 	bw->hits = create_list();
 	bw->hwnd = CreateWindowExW(
@@ -653,10 +745,10 @@ static struct bar_window *create_bar(struct swine_output *output) {
 	return bw;
 }
 
-static struct bar_window *find_bar(const char *output_name) {
+static struct bar_window *find_bar(int index, const char *output_name) {
 	for (int i = 0; i < bars->length; ++i) {
 		struct bar_window *bw = bars->items[i];
-		if (strcmp(bw->output_name, output_name) == 0) {
+		if (bw->bar_index == index && strcmp(bw->output_name, output_name) == 0) {
 			return bw;
 		}
 	}
@@ -667,20 +759,23 @@ void win32_bar_refresh(void) {
 	if (!bars) {
 		bars = create_list();
 	}
-	// Drop windows whose output is gone.
+	// Drop windows whose output or bar is gone.
+	int count = bar_enabled() ? bar_count() : 0;
 	for (int i = bars->length - 1; i >= 0; --i) {
 		struct bar_window *bw = bars->items[i];
-		if (!output_by_name(bw->output_name)) {
+		if (!output_by_name(bw->output_name) || bw->bar_index >= count) {
 			destroy_bar(bw);
 			list_del(bars, i);
 		}
 	}
 	time_t now = time(NULL);
-	for (int i = 0; i < root->outputs->length; ++i) {
-		struct swine_output *output = root->outputs->items[i];
+	bool tray_host_set = false;
+	for (int n = 0; n < count * root->outputs->length; ++n) {
+		int index = n / root->outputs->length;
+		struct swine_output *output = root->outputs->items[n % root->outputs->length];
 		struct swine_box rect;
-		bool wanted = bar_get_rect(output, &rect);
-		struct bar_window *bw = find_bar(output->name);
+		bool wanted = bar_get_rect_n(index, output, &rect);
+		struct bar_window *bw = find_bar(index, output->name);
 		if (!wanted) {
 			if (bw && bw->shown) {
 				ShowWindow(bw->hwnd, SW_HIDE);
@@ -689,13 +784,13 @@ void win32_bar_refresh(void) {
 			continue;
 		}
 		if (!bw) {
-			bw = create_bar(output);
+			bw = create_bar(index, output);
 			list_add(bars, bw);
 		}
 		bw->scale = win32_output_scale(output);
 		clear_hits(bw);
 		bar_model_free(bw->model);
-		bw->model = bar_build(output, now);
+		bw->model = bar_build_n(index, output, now);
 		if (!bw->shown || !box_equal(&bw->rect, &rect)) {
 			SetWindowPos(bw->hwnd, HWND_TOPMOST, rect.x, rect.y, rect.width,
 				rect.height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
@@ -705,9 +800,10 @@ void win32_bar_refresh(void) {
 		// Programs place tray menus and some dialogs next to the
 		// "taskbar" (our Shell_TrayWnd): make that the primary bar, as
 		// ManagedShell does with Cairo's menu bar.
-		if (output->box.x == 0 && output->box.y == 0) {
+		if (output->box.x == 0 && output->box.y == 0 && !tray_host_set) {
 			RECT r = {rect.x, rect.y, rect.x + rect.width, rect.y + rect.height};
 			win32_tray_set_host_rect(&r);
+			tray_host_set = true;
 		}
 		InvalidateRect(bw->hwnd, NULL, FALSE);
 	}

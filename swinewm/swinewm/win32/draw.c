@@ -10,6 +10,7 @@ struct cached_font {
 	char *families;
 	int px;
 	bool bold, italic;
+	int degrees;
 	HFONT font;
 };
 
@@ -69,13 +70,18 @@ static wchar_t *pick_family(const char *families) {
 }
 
 HFONT win32_font(const char *families, int px, bool bold, bool italic) {
+	return win32_font_rotated(families, px, bold, italic, 0);
+}
+
+HFONT win32_font_rotated(const char *families, int px, bool bold, bool italic,
+		int degrees) {
 	if (!fonts) {
 		fonts = create_list();
 	}
 	for (int i = 0; i < fonts->length; ++i) {
 		struct cached_font *f = fonts->items[i];
 		if (f->px == px && f->bold == bold && f->italic == italic &&
-				strcmp(f->families, families) == 0) {
+				f->degrees == degrees && strcmp(f->families, families) == 0) {
 			return f->font;
 		}
 	}
@@ -86,6 +92,8 @@ HFONT win32_font(const char *families, int px, bool bold, bool italic) {
 	lf.lfItalic = italic ? TRUE : FALSE;
 	lf.lfCharSet = DEFAULT_CHARSET;
 	lf.lfQuality = CLEARTYPE_QUALITY;
+	// Counter-clockwise, as GTK's label angle.
+	lf.lfEscapement = lf.lfOrientation = degrees * 10;
 	wcsncpy(lf.lfFaceName, face, LF_FACESIZE - 1);
 	free(face);
 	struct cached_font *f = calloc(1, sizeof(*f));
@@ -93,6 +101,7 @@ HFONT win32_font(const char *families, int px, bool bold, bool italic) {
 	f->px = px;
 	f->bold = bold;
 	f->italic = italic;
+	f->degrees = degrees;
 	f->font = CreateFontIndirectW(&lf);
 	list_add(fonts, f);
 	return f->font;

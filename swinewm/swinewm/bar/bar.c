@@ -61,6 +61,7 @@ struct bar_module {
 	char *css_class;     // "bat2", or NULL
 	struct json_value *cfg;  // borrowed from the config; may be NULL
 	bool alt;            // showing format-alt
+	int bar;             // which bar (index in bar.bars)
 	struct bar_script *script;  // custom/* with "exec" or "exec-if"
 	// The last system reading (struct sysinfo_*), read again when due.
 	void *reading;
@@ -76,15 +77,24 @@ static struct {
 	long long deadline;   // platform_now_ms when "timeout" ends it, or 0
 } idle_inhibit;
 
+// One bar of the config (Waybar's config may hold an array of them).
+struct bar_instance {
+	struct json_value *cfg;     // its object in the config
+	int position;               // -1 unset (sway's "bar position"), else
+	                            // enum bar_position
+	int height;                 // logical px: the thickness of a top or
+	int width;                  // bottom bar, and of a left or right one
+	int spacing;
+	struct side_gaps margin;    // "margin", "margin-top", ...
+	bool exclusive;             // the tiling area leaves its space free
+};
+
 static struct {
 	bool loaded;
 	struct json_value *root;
-	struct json_value *bar;     // the bar object inside root
 	struct css_stylesheet *css;
-	list_t *modules;            // struct bar_module *
-	int height;
-	int spacing;
-	int position;               // 0 unset, 1 top, 2 bottom
+	list_t *bars;               // struct bar_instance *
+	list_t *modules;            // struct bar_module *, of every bar
 } bar = {0};
 
 static void free_modules(void) {
@@ -106,6 +116,9 @@ static void free_modules(void) {
 
 void bar_finish(void) {
 	free_modules();
+	if (bar.bars) {
+		list_free_items_and_destroy(bar.bars);
+	}
 	json_value_free(bar.root);
 	css_free(bar.css);
 	memset(&bar, 0, sizeof(bar));
@@ -139,8 +152,10 @@ static bool module_kind_from_name(const char *name, enum module_kind *kind) {
 	return false;
 }
 
-static void add_modules(const char *key, enum bar_section section) {
-	struct json_value *list = json_object_get(bar.bar, key);
+static void add_modules(int bar_index, const char *key,
+		enum bar_section section) {
+	struct bar_instance *b = bar.bars->items[bar_index];
+	struct json_value *list = json_object_get(b->cfg, key);
 	if (!list || list->type != JSON_ARRAY) {
 		return;
 	}
@@ -176,7 +191,8 @@ static void add_modules(const char *key, enum bar_section section) {
 			m->css_id = swine_strdup(slash ? slash + 1 : base);
 			free(base);
 		}
-		m->cfg = json_object_get(bar.bar, v->string);
+		m->cfg = json_object_get(b->cfg, v->string);
+		m->bar = bar_index;
 		if (kind == MOD_IDLE_INHIBITOR && config->bar_enabled &&
 				json_get_bool(m->cfg, "start-activated", false) &&
 				!idle_inhibit.active) {
@@ -192,6 +208,74 @@ static void add_modules(const char *key, enum bar_section section) {
 		}
 		list_add(bar.modules, m);
 	}
+}
+
+// Waybar's "margin": a number, or a CSS-like string of one to four
+// numbers; then "margin-top" and the others.
+static struct side_gaps bar_margin(const struct json_value *cfg) {
+	struct side_gaps m = {0, 0, 0, 0};
+	struct json_value *v = json_object_get(cfg, "margin");
+	if (v && v->type == JSON_NUMBER) {
+		m.top = m.right = m.bottom = m.left = (int)v->number;
+	} else if (v && v->type == JSON_STRING) {
+		int n[4];
+		int count = sscanf(v->string, "%d %d %d %d", &n[0], &n[1], &n[2], &n[3]);
+		if (count == 1) {
+			m.top = m.right = m.bottom = m.left = n[0];
+		} else if (count == 2) {
+			m.top = m.bottom = n[0];
+			m.right = m.left = n[1];
+		} else if (count == 3) {
+			m.top = n[0];
+			m.right = m.left = n[1];
+			m.bottom = n[2];
+		} else if (count == 4) {
+			m.top = n[0];
+			m.right = n[1];
+			m.bottom = n[2];
+			m.left = n[3];
+		}
+	}
+	m.top = (int)json_get_number(cfg, "margin-top", m.top);
+	m.right = (int)json_get_number(cfg, "margin-right", m.right);
+	m.bottom = (int)json_get_number(cfg, "margin-bottom", m.bottom);
+	m.left = (int)json_get_number(cfg, "margin-left", m.left);
+	return m;
+}
+
+static void add_bar(struct json_value *cfg) {
+	struct bar_instance *b = calloc(1, sizeof(*b));
+	b->cfg = cfg;
+	// Auto size: Waybar sizes to the content; estimate it from the font.
+	struct swine_style window;
+	struct css_element el = {"window", "waybar", NULL, NULL};
+	css_compute(bar.css, &el, NULL, &window);
+	int line = (int)ceil(window.font_size * 1.6) + 6;
+	const char *position = json_get_string(cfg, "position", NULL);
+	b->position = !position ? -1 :
+		strcmp(position, "bottom") == 0 ? BAR_BOTTOM :
+		strcmp(position, "left") == 0 ? BAR_LEFT :
+		strcmp(position, "right") == 0 ? BAR_RIGHT : BAR_TOP;
+	bool vertical = b->position == BAR_LEFT || b->position == BAR_RIGHT;
+	// "height" is the thickness of a horizontal bar, "width" of a vertical
+	// one; the other is its length, which is always the whole monitor here.
+	b->height = vertical ? 0 : (int)json_get_number(cfg, "height", 0);
+	if (b->height <= 0) {
+		b->height = line + window.border_bottom.width + window.border_top.width;
+	}
+	b->width = vertical ? (int)json_get_number(cfg, "width", 0) : 0;
+	if (b->width <= 0) {
+		b->width = 2 * line + window.border_left.width +
+			window.border_right.width;
+	}
+	b->spacing = (int)json_get_number(cfg, "spacing", 4);
+	b->margin = bar_margin(cfg);
+	b->exclusive = json_get_bool(cfg, "exclusive", true);
+	int index = bar.bars->length;
+	list_add(bar.bars, b);
+	add_modules(index, "modules-left", BAR_SECTION_LEFT);
+	add_modules(index, "modules-center", BAR_SECTION_CENTER);
+	add_modules(index, "modules-right", BAR_SECTION_RIGHT);
 }
 
 // Applies config (JSONC) and style (CSS) text; NULL selects the default.
@@ -210,29 +294,19 @@ void bar_load_from_strings(const char *config_text, const char *style_text) {
 	if (!bar.root) {
 		bar.root = json_parse(default_bar_config, NULL);
 	}
-	// The config may hold several bars; the first one is used for now.
-	bar.bar = bar.root;
-	if (bar.root && bar.root->type == JSON_ARRAY) {
-		bar.bar = bar.root->items->length ? bar.root->items->items[0] : NULL;
-	}
 	bar.css = css_parse(style_text ? style_text : default_bar_style);
-
-	bar.height = (int)json_get_number(bar.bar, "height", 0);
-	if (bar.height <= 0) {
-		// Auto height: Waybar sizes to the content; estimate from the font.
-		struct swine_style window;
-		struct css_element el = {"window", "waybar", NULL, NULL};
-		css_compute(bar.css, &el, NULL, &window);
-		bar.height = (int)ceil(window.font_size * 1.6) + 6 +
-			window.border_bottom.width + window.border_top.width;
+	bar.bars = create_list();
+	// One bar, or an array of them.
+	if (bar.root && bar.root->type == JSON_ARRAY) {
+		for (int i = 0; i < bar.root->items->length; ++i) {
+			struct json_value *cfg = bar.root->items->items[i];
+			if (cfg->type == JSON_OBJECT) {
+				add_bar(cfg);
+			}
+		}
+	} else if (bar.root && bar.root->type == JSON_OBJECT) {
+		add_bar(bar.root);
 	}
-	bar.spacing = (int)json_get_number(bar.bar, "spacing", 4);
-	const char *position = json_get_string(bar.bar, "position", NULL);
-	bar.position = !position ? 0 : strcmp(position, "bottom") == 0 ? 2 : 1;
-
-	add_modules("modules-left", BAR_SECTION_LEFT);
-	add_modules("modules-center", BAR_SECTION_CENTER);
-	add_modules("modules-right", BAR_SECTION_RIGHT);
 }
 
 void bar_load(void) {
@@ -312,19 +386,43 @@ bool bar_enabled(void) {
 	return config && config->bar_enabled && !config->bar_invisible;
 }
 
+int bar_count(void) {
+	ensure_loaded();
+	return bar.bars->length;
+}
+
+static enum bar_position instance_position(const struct bar_instance *b) {
+	if (b->position >= 0) {
+		return (enum bar_position)b->position;
+	}
+	return config->bar_position == 2 ? BAR_BOTTOM : BAR_TOP;
+}
+
+enum bar_position bar_position_n(int index) {
+	ensure_loaded();
+	if (index < 0 || index >= bar.bars->length) {
+		return BAR_TOP;
+	}
+	return instance_position(bar.bars->items[index]);
+}
+
 int bar_height(void) {
 	ensure_loaded();
-	return bar.height;
+	if (!bar.bars->length) {
+		return 0;
+	}
+	struct bar_instance *b = bar.bars->items[0];
+	enum bar_position pos = instance_position(b);
+	return pos == BAR_LEFT || pos == BAR_RIGHT ? b->width : b->height;
 }
 
 bool bar_at_top(void) {
-	ensure_loaded();
-	int position = bar.position ? bar.position : config->bar_position;
-	return position != 2;
+	return bar_position_n(0) != BAR_BOTTOM;
 }
 
-static bool output_allowed(struct swine_output *output) {
-	struct json_value *filter = json_object_get(bar.bar, "output");
+static bool output_allowed(const struct bar_instance *b,
+		struct swine_output *output) {
+	struct json_value *filter = json_object_get(b->cfg, "output");
 	if (!filter) {
 		return true;
 	}
@@ -356,9 +454,75 @@ static bool output_allowed(struct swine_output *output) {
 	return matched || !any_positive;
 }
 
-static int scaled_height(struct swine_output *output) {
+// Places the bars of an output in order, as layer-shell does: each takes
+// its edge of the area the bars before it left free, and an exclusive bar
+// takes its space (with its margins) out of that area. Returns the rect of
+// bar `want` (false if it has none there), and the space all of them take.
+static bool place_bars(struct swine_output *output, int want,
+		struct swine_box *rect, struct side_gaps *taken) {
 	double scale = output->scale > 0 ? output->scale : 1.0;
-	return (int)(bar.height * scale + 0.5);
+	struct swine_box area = output->usable;
+	struct side_gaps used = {0, 0, 0, 0};
+	bool found = false;
+	for (int i = 0; i < bar.bars->length; ++i) {
+		struct bar_instance *b = bar.bars->items[i];
+		if (!output_allowed(b, output)) {
+			continue;
+		}
+		enum bar_position pos = instance_position(b);
+		int mt = (int)(b->margin.top * scale + 0.5);
+		int mr = (int)(b->margin.right * scale + 0.5);
+		int mb = (int)(b->margin.bottom * scale + 0.5);
+		int ml = (int)(b->margin.left * scale + 0.5);
+		struct swine_box r;
+		int zone;
+		if (pos == BAR_LEFT || pos == BAR_RIGHT) {
+			int w = (int)(b->width * scale + 0.5);
+			r.y = area.y + mt;
+			r.height = area.height - mt - mb;
+			r.width = w;
+			r.x = pos == BAR_LEFT ? area.x + ml : area.x + area.width - mr - w;
+			zone = w + ml + mr;
+		} else {
+			int h = (int)(b->height * scale + 0.5);
+			r.x = area.x + ml;
+			r.width = area.width - ml - mr;
+			r.height = h;
+			r.y = pos == BAR_TOP ? area.y + mt : area.y + area.height - mb - h;
+			zone = h + mt + mb;
+		}
+		if (i == want) {
+			*rect = r;
+			found = true;
+		}
+		if (!b->exclusive) {
+			continue;
+		}
+		switch (pos) {
+		case BAR_TOP:
+			area.y += zone;
+			area.height -= zone;
+			used.top += zone;
+			break;
+		case BAR_BOTTOM:
+			area.height -= zone;
+			used.bottom += zone;
+			break;
+		case BAR_LEFT:
+			area.x += zone;
+			area.width -= zone;
+			used.left += zone;
+			break;
+		case BAR_RIGHT:
+			area.width -= zone;
+			used.right += zone;
+			break;
+		}
+	}
+	if (taken) {
+		*taken = used;
+	}
+	return found;
 }
 
 void bar_update_reservations(void) {
@@ -369,18 +533,16 @@ void bar_update_reservations(void) {
 	for (int i = 0; i < root->outputs->length; ++i) {
 		struct swine_output *output = root->outputs->items[i];
 		output->reserved = (struct side_gaps){0};
-		if (enabled && output_allowed(output)) {
-			if (bar_at_top()) {
-				output->reserved.top = scaled_height(output);
-			} else {
-				output->reserved.bottom = scaled_height(output);
-			}
+		if (enabled) {
+			struct swine_box unused;
+			place_bars(output, -1, &unused, &output->reserved);
 		}
 	}
 }
 
-bool bar_get_rect(struct swine_output *output, struct swine_box *out) {
-	if (!bar_enabled() || !output->enabled || !output_allowed(output)) {
+bool bar_get_rect_n(int index, struct swine_output *output,
+		struct swine_box *out) {
+	if (!bar_enabled() || !output->enabled) {
 		return false;
 	}
 	struct swine_workspace *ws = output_get_active_workspace(output);
@@ -388,12 +550,11 @@ bool bar_get_rect(struct swine_output *output, struct swine_box *out) {
 		return false;
 	}
 	ensure_loaded();
-	out->x = output->usable.x;
-	out->width = output->usable.width;
-	out->height = scaled_height(output);
-	out->y = bar_at_top() ? output->usable.y :
-		output->usable.y + output->usable.height - out->height;
-	return true;
+	return place_bars(output, index, out, NULL);
+}
+
+bool bar_get_rect(struct swine_output *output, struct swine_box *out) {
+	return bar_get_rect_n(0, output, out);
 }
 
 // --- model building -------------------------------------------------------
@@ -501,6 +662,7 @@ static struct bar_item *add_label(struct build_ctx *ctx, struct bar_module *m,
 	struct css_element el = {"label", m->css_id, all, &ctx->window_el};
 	struct bar_item *item = calloc(1, sizeof(*item));
 	item->text = plain;
+	item->rotate = ((int)json_get_number(m->cfg, "rotate", 0) % 360 + 360) % 360;
 	compute_item_style(&el, &ctx->model->window, item);
 	view->style = item->style;
 	const char *on_click = json_get_string(m->cfg, "on-click", NULL);
@@ -1845,24 +2007,42 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 	}
 }
 
-struct bar_model *bar_build(struct swine_output *output, time_t now) {
+struct bar_model *bar_build_n(int index, struct swine_output *output,
+		time_t now) {
 	ensure_loaded();
 	struct build_ctx ctx = {0};
 	ctx.model = calloc(1, sizeof(*ctx.model));
 	ctx.model->modules = create_list();
-	ctx.model->spacing = bar.spacing;
 	ctx.output = output;
 	ctx.now = now;
 	struct tm *tm = localtime(&now);
 	if (tm) {
 		ctx.tm = *tm;
 	}
-	ctx.window_el = (struct css_element){"window", "waybar", NULL, NULL};
+	if (index < 0 || index >= bar.bars->length) {
+		return ctx.model;
+	}
+	struct bar_instance *b = bar.bars->items[index];
+	enum bar_position pos = instance_position(b);
+	ctx.model->spacing = b->spacing;
+	ctx.model->vertical = pos == BAR_LEFT || pos == BAR_RIGHT;
+	// Waybar: window#waybar.<position>.<name>
+	static const char *const positions[] = {"top", "bottom", "left", "right"};
+	const char *classes[] = {positions[pos],
+		json_get_string(b->cfg, "name", NULL), NULL};
+	ctx.window_el = (struct css_element){"window", "waybar", classes, NULL};
 	css_compute(bar.css, &ctx.window_el, NULL, &ctx.model->window);
 	for (int i = 0; i < bar.modules->length; ++i) {
-		build_module(&ctx, bar.modules->items[i], i);
+		struct bar_module *m = bar.modules->items[i];
+		if (m->bar == index) {
+			build_module(&ctx, m, i);
+		}
 	}
 	return ctx.model;
+}
+
+struct bar_model *bar_build(struct swine_output *output, time_t now) {
+	return bar_build_n(0, output, now);
 }
 
 void bar_model_free(struct bar_model *model) {

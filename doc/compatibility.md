@@ -124,8 +124,8 @@ Unicode properties (`\p{…}`).
 
 | Feature | Status | Notes |
 | --- | --- | --- |
-| `waybar/config.jsonc` / `waybar/config`, JSONC | ✅ | First bar of an array is used |
-| `height`, `spacing`, `position` (top/bottom), `output` | ✅ | left/right positions not supported |
+| `waybar/config.jsonc` / `waybar/config`, JSONC | ✅ | One bar, or an array of bars. Bars on the same edge stack in config order, and a later bar takes its edge of the space earlier bars left (as Waybar's layer-shell surfaces do) |
+| `height`, `width`, `spacing`, `position` (top/bottom/left/right), `output`, `margin`, `margin-top/right/bottom/left`, `exclusive`, `name` | ✅ | `height` is the thickness of a top or bottom bar and `width` of a left or right one (without it a vertical bar is twice the line height); bars always span the monitor. Left and right bars lay their modules out top to bottom. `window#waybar` has the position and `name` as classes. No `layer`, `mode`, `start_hidden`, `ipc` |
 | `modules-left/center/right` | ✅ | |
 | `sway/workspaces` | 🟡 | `format` with `{name} {value} {index} {icon} {output}`, `format-icons`, `all-outputs`, `disable-scroll`, `disable-click`; no persistent workspaces |
 | `sway/mode`, `sway/window`, `sway/scratchpad` | ✅ | window: `{title} {app_id}`, `max-length` |
@@ -144,7 +144,8 @@ Unicode properties (`\p{…}`).
 | Others (`backlight`, `bluetooth`, `mpd`, …) | ❌ | Skipped with a log message |
 | `on-click`, `on-click-middle`, `on-click-right`, `on-scroll-up/down` | ✅ | Run through `exec`; `swaymsg <command>`, `pkill -<signal> waybar` and the volume commands `pactl set-sink-volume\|set-sink-mute\|set-source-volume\|set-source-mute`, `wpctl set-volume\|set-mute` and `pamixer -i\|-d\|--set-volume\|-t\|-m\|-u` (on the default Windows devices) run inside swinewm. A Waybar signal through `pkill`: `RTMIN+n` (custom modules), `USR1` (show or hide the bar), `USR2` (reload the bar) |
 | Tooltips | ✅ | After the hover delay, below a top bar (above a bottom one). `tooltip` (`false` turns it off), `tooltip-format`, `tooltip-format-<state>` and each module's Waybar default (window: the whole title; battery: `{timeTo}`; disk: `{used} used out of {total} on {path} ({percentage_used}%)`; scratchpad: one `{app}: {title}` line per window; custom: the script's `tooltip`, lines split by `\r`). Styled by `tooltip` and `tooltip label` in style.css; markup is stripped |
-| `rotate`, markup beyond stripping | ❌ | |
+| `rotate` | ✅ | 90, 180, 270 (counter-clockwise, as GTK) for text modules |
+| Markup beyond stripping | ❌ | |
 | `style.css` | 🟡 | Selectors by type/#id/.class with descendants; `@define-color`, `alpha()`; colours, fonts, padding, margin, borders, `box-shadow: inset`; `:hover` (colours and borders; it does not change sizes) and `:not(.class)`; no other pseudo-classes (`:first-child`, …), animations, transparency (blended over black) |
 
 ## Notifications (mako config)

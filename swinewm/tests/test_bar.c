@@ -858,6 +858,69 @@ static void test_power_profiles(void) {
 	fake_teardown();
 }
 
+// Several bars: stacked on their edges in order, as layer-shell places
+// them, with margins, "exclusive" and per-bar outputs and modules.
+static void test_multiple_bars(void) {
+	fake_setup_two_outputs();
+	config->bar_enabled = true;
+	bar_load_from_strings(
+		"[ { \"name\": \"main\", \"height\": 20, \"modules-left\": [\"clock\"],"
+		"    \"clock\": { \"rotate\": -90 } },\n"
+		"  { \"position\": \"top\", \"height\": 10, \"margin\": \"2 4\","
+		"    \"output\": \"DISPLAY1\", \"modules-left\": [\"cpu\"] },\n"
+		"  { \"position\": \"left\", \"width\": 50, \"modules-left\": [\"sway/workspaces\"] },\n"
+		"  { \"position\": \"bottom\", \"height\": 15, \"exclusive\": false } ]",
+		"window#waybar.left { color: #ff0000; }\n");
+	CHECK_INT(bar_count(), 4);
+	CHECK(bar_position_n(2) == BAR_LEFT);
+	CHECK_INT(bar_height(), 20);
+	struct swine_output *one = root->outputs->items[0];
+	struct swine_output *two = root->outputs->items[1];
+	bar_update_reservations();
+	// top: 20 + (2 + 10 + 2); left: 50; the bottom bar is not exclusive
+	CHECK_INT(one->reserved.top, 34);
+	CHECK_INT(one->reserved.left, 50);
+	CHECK_INT(one->reserved.bottom, 0);
+	CHECK_INT(two->reserved.top, 20);   // bar 1 is only on DISPLAY1
+	struct swine_box r;
+	CHECK(bar_get_rect_n(1, one, &r));
+	CHECK_INT(r.y, 22);
+	CHECK_INT(r.x, 4);
+	CHECK_INT(r.width, 1000 - 8);
+	CHECK_INT(r.height, 10);
+	CHECK(!bar_get_rect_n(1, two, &r));
+	// The left bar starts below the top bars.
+	CHECK(bar_get_rect_n(2, one, &r));
+	CHECK_INT(r.x, 0);
+	CHECK_INT(r.y, 34);
+	CHECK_INT(r.width, 50);
+	CHECK_INT(r.height, 800 - 34);
+	CHECK(bar_get_rect_n(3, one, &r));
+	CHECK_INT(r.y, 800 - 15);
+	CHECK_INT(r.x, 50);
+	// Each bar has its own modules; window#waybar has its position class.
+	struct bar_model *model = bar_build_n(2, one, 0);
+	CHECK(model->vertical);
+	CHECK_INT(model->window.color.r, 255);
+	CHECK_INT(model->window.color.g, 0);
+	CHECK_INT(model->modules->length, 1);
+	struct bar_module_view *ws = model->modules->items[0];
+	CHECK(ws->is_box);
+	bar_model_free(model);
+	model = bar_build_n(0, one, 0);
+	CHECK(!model->vertical);
+	CHECK_INT(model->modules->length, 1);
+	struct bar_module_view *clock = model->modules->items[0];
+	CHECK_INT(clock->module_index, 0);
+	CHECK_INT(((struct bar_item *)clock->items->items[0])->rotate, 270);
+	bar_model_free(model);
+	model = bar_build_n(1, one, 0);
+	struct bar_module_view *cpu = model->modules->items[0];
+	CHECK_INT(cpu->module_index, 1);   // indexes count across bars
+	bar_model_free(model);
+	fake_teardown();
+}
+
 void test_bar_all(void) {
 	test_bar_config_ipc();
 	test_json_parse();
@@ -873,4 +936,5 @@ void test_bar_all(void) {
 	test_system_modules();
 	test_tooltips();
 	test_power_profiles();
+	test_multiple_bars();
 }

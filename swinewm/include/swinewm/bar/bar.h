@@ -37,6 +37,7 @@ struct bar_item {
 	bool has_hover;                  // hover_style looks different
 	uint64_t tray_id;        // struct tray_item id, or 0
 	int icon_size;           // logical px, for tray icons
+	int rotate;              // "rotate": 0, 90, 180 or 270, counter-clockwise
 	char *icon_path;         // "icons" override (an .ico file), or NULL
 };
 
@@ -53,6 +54,7 @@ struct bar_module_view {
 
 struct bar_model {
 	struct swine_style window;   // window#waybar
+	bool vertical;               // a left or right bar: modules top to bottom
 	int spacing;                 // px between modules ("spacing")
 	list_t *modules;             // struct bar_module_view *
 };
@@ -76,6 +78,17 @@ void bar_load_from_strings(const char *config_text, const char *style_text);
 void bar_finish(void);
 
 bool bar_enabled(void);
+
+// Waybar's config may hold several bars (an array); they are numbered
+// from 0 in its order. The functions without _n are about bar 0.
+enum bar_position {
+	BAR_TOP,
+	BAR_BOTTOM,
+	BAR_LEFT,
+	BAR_RIGHT,
+};
+int bar_count(void);
+enum bar_position bar_position_n(int index);
 // Whether the bar has a "tray" module, i.e. should host the tray.
 bool bar_has_tray(void);
 // Height in logical pixels; multiply by output->scale for device pixels.
@@ -86,8 +99,12 @@ void bar_update_reservations(void);
 // Where the bar for this output goes; false if it has none or should be
 // hidden (fullscreen window on the output).
 bool bar_get_rect(struct swine_output *output, struct swine_box *out);
+bool bar_get_rect_n(int index, struct swine_output *output,
+		struct swine_box *out);
 
 struct bar_model *bar_build(struct swine_output *output, time_t now);
+struct bar_model *bar_build_n(int index, struct swine_output *output,
+		time_t now);
 void bar_model_free(struct bar_model *model);
 // Reads the system again for every module (after a volume change).
 void bar_refresh_readings(void);
