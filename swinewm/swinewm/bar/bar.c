@@ -293,6 +293,19 @@ void bar_get_theme(struct bar_theme *out) {
 	css_compute(bar.css, &el, &box, &out->urgent);
 }
 
+void bar_tooltip_style(struct swine_style *box, struct swine_style *label) {
+	ensure_loaded();
+	// GTK draws tooltips in their own window: "tooltip" and "tooltip label"
+	struct css_element tooltip_el = {"tooltip", NULL, NULL, NULL};
+	css_compute(bar.css, &tooltip_el, NULL, box);
+	struct css_element label_el = {"label", NULL, NULL, &tooltip_el};
+	css_compute(bar.css, &label_el, box, label);
+	if (box->background.a == 0) {
+		// A theme without tooltip rules: GTK's dark default.
+		box->background = (struct swine_color){43, 48, 59, 242};
+	}
+}
+
 bool bar_enabled(void) {
 	return config && config->bar_enabled && !config->bar_invisible;
 }
@@ -425,11 +438,11 @@ static char *truncate_utf8(char *text, int max_chars) {
 
 // Adds a single-label module. Takes ownership of text; NULL or empty text
 // hides the module (as an empty format does in Waybar).
-static void add_label(struct build_ctx *ctx, struct bar_module *m, int index,
-		char *text, const char **classes) {
+static struct bar_item *add_label(struct build_ctx *ctx, struct bar_module *m,
+		int index, char *text, const char **classes) {
 	if (!text || !*text) {
 		free(text);
-		return;
+		return NULL;
 	}
 	char *plain = markup_strip(text);
 	free(text);
@@ -465,6 +478,59 @@ static void add_label(struct build_ctx *ctx, struct bar_module *m, int index,
 	item->on_scroll_down = down ? format_str("exec %s", down) : NULL;
 	list_add(view->items, item);
 	list_add(ctx->model->modules, view);
+	return item;
+}
+
+// Tooltip text from Pango markup: tags dropped, "\r" (which Waybar's
+// scripts use for line breaks) made a line break. NULL if empty.
+static char *tooltip_text(const char *markup) {
+	char *text = markup_strip(markup);
+	char *o = text;
+	for (const char *p = text; *p; ++p) {
+		if (*p == '\r') {
+			if (p[1] != '\n') {
+				*o++ = '\n';
+			}
+			continue;
+		}
+		*o++ = *p;
+	}
+	*o = '\0';
+	while (o > text && (o[-1] == '\n' || o[-1] == ' ')) {
+		*--o = '\0';
+	}
+	if (!*text) {
+		free(text);
+		return NULL;
+	}
+	return text;
+}
+
+// Waybar's tooltip: none with "tooltip": false, else tooltip-format-<state>,
+// tooltip-format, the module's default format (with the label's arguments),
+// or default_text.
+static void set_tooltip(struct build_ctx *ctx, struct bar_module *m,
+		struct bar_item *item, const char *state, const char *default_format,
+		const struct fmt_arg *args, int nargs, const char *default_text) {
+	if (!item || !json_get_bool(m->cfg, "tooltip", true)) {
+		return;
+	}
+	const char *format = NULL;
+	if (state) {
+		char key[96];
+		snprintf(key, sizeof(key), "tooltip-format-%s", state);
+		format = json_get_string(m->cfg, key, NULL);
+	}
+	if (!format) {
+		format = json_get_string(m->cfg, "tooltip-format", default_format);
+	}
+	char *raw = format ? format_waybar(format, args, nargs, &ctx->tm) :
+		swine_strdup(default_text ? default_text : "");
+	// <tt> asks for a fixed-width font (the clock's calendar).
+	item->tooltip_mono = strstr(format ? format : raw, "<tt>") != NULL;
+	free(item->tooltip);
+	item->tooltip = tooltip_text(raw);
+	free(raw);
 }
 
 // Waybar "states": {"warning": 30, "critical": 15}. For battery a state
@@ -778,6 +844,7 @@ static void build_tray(struct build_ctx *ctx, struct bar_module *m,
 		struct bar_item *item = calloc(1, sizeof(*item));
 		item->text = swine_strdup("");
 		item->tray_id = t->id;
+		item->tooltip = t->title && t->title[0] ? swine_strdup(t->title) : NULL;
 		item->icon_size = icon_size;
 		item->icon_path = entries[i].icon_path ?
 			platform_expand_path(entries[i].icon_path) : NULL;
@@ -822,8 +889,23 @@ static void build_custom(struct build_ctx *ctx, struct bar_module *m,
 		classes[n++] = r.classes->items[i];
 	}
 	classes[n] = NULL;
-	add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL, "{}"),
-		args, 5, &ctx->tm), classes);
+	char *label = format_waybar(module_format(m, NULL, NULL, "{}"), args, 5,
+		&ctx->tm);
+	char *label_copy = swine_strdup(label);
+	struct bar_item *item = add_label(ctx, m, index, label, classes);
+	// Waybar: tooltip-format (with {tooltip}), else the script's tooltip,
+	// or the label when the script gave none.
+	struct fmt_arg tip_args[] = {
+		{NULL, false, r.text, 0},
+		{"text", false, r.text, 0},
+		{"tooltip", false, r.tooltip, 0},
+		{"alt", false, r.alt, 0},
+		{"icon", false, args[3].str, 0},
+		{"percentage", true, NULL, r.percentage},
+	};
+	set_tooltip(ctx, m, item, NULL, NULL, tip_args, 6,
+		strcmp(r.text, r.tooltip) == 0 ? label_copy : r.tooltip);
+	free(label_copy);
 	bar_script_result_finish(&r);
 }
 
@@ -974,9 +1056,24 @@ static void build_network(struct build_ctx *ctx, struct bar_module *m,
 		{"linkSpeed", FMT_POW_SKIP_DECIMAL, "b/s", n->link_speed},
 	};
 	const char *classes[] = {state, threshold, NULL};
-	add_label(ctx, m, index, format_waybar(state_format(m, state, threshold,
-		"{ifname}"), args, (int)(sizeof(args) / sizeof(args[0])), &ctx->tm),
-		classes);
+	int nargs = (int)(sizeof(args) / sizeof(args[0]));
+	char *label = format_waybar(state_format(m, state, threshold, "{ifname}"),
+		args, nargs, &ctx->tm);
+	char *label_copy = swine_strdup(label);
+	struct bar_item *item = add_label(ctx, m, index, label, classes);
+	// tooltip-format-<state>-<threshold> first, as for the label
+	const char *tip_state = state;
+	char combined[96];
+	if (threshold) {
+		snprintf(combined, sizeof(combined), "tooltip-format-%s-%s", state,
+			threshold);
+		if (json_object_get(m->cfg, combined)) {
+			snprintf(combined, sizeof(combined), "%s-%s", state, threshold);
+			tip_state = combined;
+		}
+	}
+	set_tooltip(ctx, m, item, tip_state, NULL, args, nargs, label_copy);
+	free(label_copy);
 }
 
 // Waybar's pulseaudio module (and wireplumber, which reads the same).
@@ -1059,8 +1156,10 @@ static void build_pulseaudio(struct build_ctx *ctx, struct bar_module *m,
 	if (a->source_muted) classes[c++] = "source-muted";
 	if (state) classes[c++] = state;
 	classes[c] = NULL;
-	add_label(ctx, m, index, format_waybar(format, args,
-		(int)(sizeof(args) / sizeof(args[0])), &ctx->tm), classes);
+	int nargs = (int)(sizeof(args) / sizeof(args[0]));
+	struct bar_item *item = add_label(ctx, m, index,
+		format_waybar(format, args, nargs, &ctx->tm), classes);
+	set_tooltip(ctx, m, item, NULL, NULL, args, nargs, a->desc);
 	free(format_source);
 }
 
@@ -1109,7 +1208,8 @@ static double disk_divisor(const char *unit) {
 
 // One path of Waybar's disk module. Returns NULL if it cannot be read.
 static char *disk_text(struct bar_module *m, const char *path,
-		const char *format, const char **state_out, struct tm *tm) {
+		const char *format, const char **state_out, struct tm *tm,
+		char **tooltip) {
 	char *real = disk_path(path);
 	struct sysinfo_disk d = {0};
 	bool ok = real && sysinfo_disk(real, &d) && d.total > 0;
@@ -1142,7 +1242,13 @@ static char *disk_text(struct bar_module *m, const char *path,
 		snprintf(key, sizeof(key), "format-%s", state);
 		format = json_get_string(m->cfg, key, format);
 	}
-	return format_waybar(format, args, (int)(sizeof(args) / sizeof(args[0])), tm);
+	int nargs = (int)(sizeof(args) / sizeof(args[0]));
+	if (tooltip) {
+		*tooltip = format_waybar(json_get_string(m->cfg, "tooltip-format",
+			"{used} used out of {total} on {path} ({percentage_used}%)"),
+			args, nargs, tm);
+	}
+	return format_waybar(format, args, nargs, tm);
 }
 
 // Waybar's disk module: "path", or "paths" joined by "separator" after
@@ -1153,12 +1259,18 @@ static void build_disk(struct build_ctx *ctx, struct bar_module *m,
 	struct json_value *paths = json_object_get(m->cfg, "paths");
 	const char *state = NULL;
 	if (!paths || paths->type != JSON_ARRAY || !paths->items->length) {
+		char *tooltip = NULL;
 		char *text = disk_text(m, json_get_string(m->cfg, "path", "/"), format,
-			&state, &ctx->tm);
+			&state, &ctx->tm, &tooltip);
 		const char *classes[] = {state, NULL};
-		add_label(ctx, m, index, text, classes);
+		struct bar_item *item = add_label(ctx, m, index, text, classes);
+		if (item && tooltip && json_get_bool(m->cfg, "tooltip", true)) {
+			item->tooltip = tooltip_text(tooltip);
+		}
+		free(tooltip);
 		return;
 	}
+	char *tooltips = swine_strdup("");
 	const char *separator = json_get_string(m->cfg, "separator", " ");
 	const char *header = json_get_string(m->cfg, "header", "");
 	size_t len = strlen(header), cap = len + 64;
@@ -1170,10 +1282,18 @@ static void build_disk(struct build_ctx *ctx, struct bar_module *m,
 		if (p->type != JSON_STRING) {
 			continue;
 		}
-		char *text = disk_text(m, p->string, format, NULL, &ctx->tm);
+		char *tooltip = NULL;
+		char *text = disk_text(m, p->string, format, NULL, &ctx->tm, &tooltip);
 		if (!text) {
 			continue;
 		}
+		size_t tlen = strlen(tooltips);
+		tooltips = realloc(tooltips, tlen + strlen(tooltip) + 2);
+		if (tlen) {
+			strcat(tooltips, "\n");
+		}
+		strcat(tooltips, tooltip);
+		free(tooltip);
 		size_t need = len + strlen(separator) + strlen(text) + 1;
 		if (need > cap) {
 			cap = need * 2;
@@ -1187,7 +1307,11 @@ static void build_disk(struct build_ctx *ctx, struct bar_module *m,
 		first = false;
 		free(text);
 	}
-	add_label(ctx, m, index, all, NULL);
+	struct bar_item *item = add_label(ctx, m, index, all, NULL);
+	if (item && json_get_bool(m->cfg, "tooltip", true)) {
+		item->tooltip = tooltip_text(tooltips);
+	}
+	free(tooltips);
 }
 
 // Waybar's temperature module.
@@ -1230,7 +1354,9 @@ static void build_temperature(struct build_ctx *ctx, struct bar_module *m,
 		{"icon", FMT_STRING, module_icon(m, c, NULL, max_temp), 0},
 	};
 	const char *classes[] = {cls, NULL};
-	add_label(ctx, m, index, format_waybar(format, args, 4, &ctx->tm), classes);
+	struct bar_item *item = add_label(ctx, m, index,
+		format_waybar(format, args, 4, &ctx->tm), classes);
+	set_tooltip(ctx, m, item, NULL, "{temperatureC}°C", args, 4, NULL);
 }
 
 static void idle_inhibit_set(bool active, struct bar_module *m) {
@@ -1263,8 +1389,9 @@ static void build_idle_inhibitor(struct build_ctx *ctx, struct bar_module *m,
 			(const char *const[]){status, NULL}, 0), 0},
 	};
 	const char *classes[] = {status, NULL};
-	add_label(ctx, m, index, format_waybar(module_format(m, NULL, status,
-		"{status}"), args, 4, &ctx->tm), classes);
+	struct bar_item *item = add_label(ctx, m, index, format_waybar(
+		module_format(m, NULL, status, "{status}"), args, 4, &ctx->tm), classes);
+	set_tooltip(ctx, m, item, status, "{status}", args, 4, NULL);
 }
 
 // Waybar's keyboard-state: a label for each lock that is enabled.
@@ -1367,8 +1494,38 @@ static void build_language(struct build_ctx *ctx, struct bar_module *m,
 		{"flag", false, flag, 0},
 	};
 	const char *classes[] = {l->short_name, NULL};
-	add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL, "{}"),
-		args, 6, &ctx->tm), classes);
+	char *label = format_waybar(module_format(m, NULL, NULL, "{}"), args, 6,
+		&ctx->tm);
+	char *label_copy = swine_strdup(label);
+	struct bar_item *item = add_label(ctx, m, index, label, classes);
+	set_tooltip(ctx, m, item, NULL, NULL, args, 6, label_copy);
+	free(label_copy);
+}
+
+// Waybar's {calendar}: the month of tm, weeks from Monday.
+static char *month_calendar(const struct tm *tm) {
+	static const int days_in[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+	int year = tm->tm_year + 1900;
+	int days = days_in[tm->tm_mon];
+	if (tm->tm_mon == 1 && ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0)) {
+		days = 29;
+	}
+	// Weekday of the 1st (Monday 0), from today's.
+	int first = ((tm->tm_wday + 6) % 7 - (tm->tm_mday - 1) % 7 + 7) % 7;
+	char *out = malloc(8 * 21 + 1);
+	char *o = out;
+	o += sprintf(o, "Mo Tu We Th Fr Sa Su");
+	int column = 0;
+	for (int i = 0; i < first; ++i, ++column) {
+		o += sprintf(o, "%s  ", column == 0 ? "\n" : " ");
+	}
+	for (int day = 1; day <= days; ++day, ++column) {
+		if (column == 7) {
+			column = 0;
+		}
+		o += sprintf(o, "%s%2d", column == 0 ? "\n" : " ", day);
+	}
+	return out;
 }
 
 static void build_module(struct build_ctx *ctx, struct bar_module *m,
@@ -1383,8 +1540,9 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			return;
 		}
 		struct fmt_arg args[] = {{NULL, false, mode, 0}};
-		add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL, "{}"),
-			args, 1, &ctx->tm), NULL);
+		struct bar_item *item = add_label(ctx, m, index, format_waybar(
+			module_format(m, NULL, NULL, "{}"), args, 1, &ctx->tm), NULL);
+		set_tooltip(ctx, m, item, NULL, NULL, args, 1, mode);
 		return;
 	}
 	case MOD_WINDOW: {
@@ -1400,8 +1558,10 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			{"app_id", false, view->app_id, 0},
 			{"shell", false, "native", 0},
 		};
-		add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL, "{}"),
-			args, 3, &ctx->tm), NULL);
+		struct bar_item *item = add_label(ctx, m, index, format_waybar(
+			module_format(m, NULL, NULL, "{}"), args, 3, &ctx->tm), NULL);
+		// The whole title, which max-length may have cut.
+		set_tooltip(ctx, m, item, NULL, NULL, args, 3, view->title);
 		return;
 	}
 	case MOD_SCRATCHPAD: {
@@ -1421,14 +1581,50 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			{"icon", false, icon, 0},
 		};
 		const char *classes[] = {count == 0 ? "empty" : NULL, NULL};
-		add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL,
-			"{icon} {count}"), args, 2, &ctx->tm), classes);
+		struct bar_item *item = add_label(ctx, m, index, format_waybar(
+			module_format(m, NULL, NULL, "{icon} {count}"), args, 2, &ctx->tm),
+			classes);
+		if (item && json_get_bool(m->cfg, "tooltip", true)) {
+			// Waybar: one line per window, "{app}: {title}"
+			const char *line = json_get_string(m->cfg, "tooltip-format",
+				"{app}: {title}");
+			size_t len = 0;
+			char *all = swine_strdup("");
+			for (int i = 0; i < count; ++i) {
+				struct swine_container *con = root->scratchpad->items[i];
+				if (!con->view) {
+					continue;
+				}
+				struct fmt_arg wargs[] = {
+					{"app", false, con->view->app_id, 0},
+					{"title", false, con->view->title, 0},
+				};
+				char *text = format_waybar(line, wargs, 2, &ctx->tm);
+				all = realloc(all, len + strlen(text) + 2);
+				if (len) {
+					all[len++] = '\n';
+				}
+				strcpy(all + len, text);
+				len += strlen(text);
+				free(text);
+			}
+			item->tooltip = tooltip_text(all);
+			free(all);
+		}
 		return;
 	}
-	case MOD_CLOCK:
-		add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL,
-			"{:%H:%M}"), NULL, 0, &ctx->tm), NULL);
+	case MOD_CLOCK: {
+		struct bar_item *item = add_label(ctx, m, index, format_waybar(
+			module_format(m, NULL, NULL, "{:%H:%M}"), NULL, 0, &ctx->tm), NULL);
+		// Waybar's clock has a tooltip only with tooltip-format.
+		if (item && json_object_get(m->cfg, "tooltip-format")) {
+			char *calendar = month_calendar(&ctx->tm);
+			struct fmt_arg args[] = {{"calendar", false, calendar, 0}};
+			set_tooltip(ctx, m, item, NULL, NULL, args, 1, NULL);
+			free(calendar);
+		}
 		return;
+	}
 	case MOD_CPU: {
 		int usage = 0;
 		if (!sysinfo_cpu(&usage)) {
@@ -1440,8 +1636,9 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		};
 		const char *state = module_state(m, usage, false);
 		const char *classes[] = {state, NULL};
-		add_label(ctx, m, index, format_waybar(module_format(m, state, NULL,
-			"{usage}%"), args, 2, &ctx->tm), classes);
+		struct bar_item *item = add_label(ctx, m, index, format_waybar(
+			module_format(m, state, NULL, "{usage}%"), args, 2, &ctx->tm), classes);
+		set_tooltip(ctx, m, item, state, "{usage}%", args, 2, NULL);
 		return;
 	}
 	case MOD_MEMORY: {
@@ -1458,8 +1655,10 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		};
 		const char *state = module_state(m, mem.percentage, false);
 		const char *classes[] = {state, NULL};
-		add_label(ctx, m, index, format_waybar(module_format(m, state, NULL,
-			"{percentage}%"), args, 5, &ctx->tm), classes);
+		struct bar_item *item = add_label(ctx, m, index, format_waybar(
+			module_format(m, state, NULL, "{percentage}%"), args, 5, &ctx->tm),
+			classes);
+		set_tooltip(ctx, m, item, state, "{used:0.1f}GiB used", args, 5, NULL);
 		return;
 	}
 	case MOD_BATTERY: {
@@ -1471,14 +1670,45 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			bat.plugged ? (bat.capacity >= 100 ? "full" : "plugged") :
 			"discharging";
 		const char *state = module_state(m, bat.capacity, true);
+		// Waybar's format-time, "{H} h {M} min"
+		char time_text[64] = "";
+		if (bat.seconds_left > 0) {
+			struct fmt_arg targs[] = {
+				{"H", true, NULL, bat.seconds_left / 3600},
+				{"M", true, NULL, (bat.seconds_left / 60) % 60},
+				{"m", true, NULL, (bat.seconds_left / 60) % 60},
+			};
+			char *t = format_waybar(json_get_string(m->cfg, "format-time",
+				"{H} h {M} min"), targs, 3, NULL);
+			snprintf(time_text, sizeof(time_text), "%s", t);
+			free(t);
+		}
+		static const char *const pretty[][2] = {
+			{"charging", "Charging"}, {"discharging", "Discharging"},
+			{"full", "Full"}, {"plugged", "Not charging"},
+		};
+		const char *time_to = status;
+		for (size_t i = 0; i < sizeof(pretty) / sizeof(pretty[0]); ++i) {
+			if (strcmp(status, pretty[i][0]) == 0) {
+				time_to = pretty[i][1];
+			}
+		}
+		char empty_in[96];
+		if (time_text[0] && strcmp(status, "discharging") == 0) {
+			snprintf(empty_in, sizeof(empty_in), "Empty in %s", time_text);
+			time_to = empty_in;
+		}
 		struct fmt_arg args[] = {
 			{"capacity", true, NULL, bat.capacity},
 			{"icon", false, icon_for_percent(m, bat.capacity), 0},
-			{"time", false, "", 0},
+			{"time", false, time_text, 0},
+			{"timeTo", false, time_to, 0},
 		};
 		const char *classes[] = {status, state, NULL};
-		add_label(ctx, m, index, format_waybar(module_format(m, state, status,
-			"{capacity}%"), args, 3, &ctx->tm), classes);
+		struct bar_item *item = add_label(ctx, m, index, format_waybar(
+			module_format(m, state, status, "{capacity}%"), args, 4, &ctx->tm),
+			classes);
+		set_tooltip(ctx, m, item, status, "{timeTo}", args, 4, NULL);
 		return;
 	}
 	case MOD_TRAY:
@@ -1540,6 +1770,7 @@ void bar_model_free(struct bar_model *model) {
 		for (int j = 0; j < view->items->length; ++j) {
 			struct bar_item *item = view->items->items[j];
 			free(item->text);
+			free(item->tooltip);
 			free(item->on_click);
 			free(item->on_click_middle);
 			free(item->on_click_right);

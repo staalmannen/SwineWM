@@ -35,6 +35,7 @@ struct fake_platform_state {
 	bool has_battery;
 	int battery_capacity;
 	bool battery_charging;
+	int battery_seconds;
 	int cpu_usage;
 	int memory_percentage;
 	// decorations

@@ -25,6 +25,8 @@ enum bar_section {
 // then tray_id is set, text is empty and the platform draws the icon.
 struct bar_item {
 	char *text;              // markup already stripped
+	char *tooltip;           // plain text with line breaks, or NULL
+	bool tooltip_mono;       // a fixed-width font (<tt>: the calendar)
 	char *on_click;          // swinewm command for a left click, or NULL
 	char *on_click_middle;
 	char *on_click_right;
@@ -62,6 +64,8 @@ struct bar_theme {
 	struct swine_style urgent;      // #workspaces button.urgent
 };
 void bar_get_theme(struct bar_theme *out);
+// The style of tooltips ("tooltip" and "tooltip label" in style.css).
+void bar_tooltip_style(struct swine_style *box, struct swine_style *label);
 
 // (Re)reads the Waybar config and style sheet. Safe to call repeatedly.
 void bar_load(void);

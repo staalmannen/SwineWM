@@ -102,6 +102,12 @@ void win32_tray_draw(HDC dc, uint64_t id, const char *icon_path,
 void win32_tray_set_host_rect(const RECT *screen);
 // button: 0 left, 1 middle, 2 right
 void win32_tray_mouse(uint64_t id, int button, bool down, POINT screen);
+enum tray_hover {
+	TRAY_HOVER_MOVE,
+	TRAY_HOVER_POPUP,
+	TRAY_HOVER_LEAVE,
+};
+bool win32_tray_hover(uint64_t id, enum tray_hover what, POINT screen);
 
 // window.c
 // The executable's file name ("Discord.exe"), or NULL.

@@ -9,6 +9,7 @@ struct sysinfo_battery {
 	int capacity;      // percent
 	bool charging;
 	bool plugged;      // on AC power
+	int seconds_left;  // until empty, 0 if Windows does not know
 };
 
 struct sysinfo_memory {

@@ -168,3 +168,14 @@ window#waybar {
 #tray > .needs-attention {
     background-color: #eb4d4b;
 }
+
+/* Tooltips: Waybar leaves them to the GTK theme. */
+tooltip {
+    background-color: rgba(43, 48, 59, 0.95);
+    border: 1px solid rgba(100, 114, 125, 0.8);
+    padding: 4px 8px;
+}
+
+tooltip label {
+    color: #ffffff;
+}

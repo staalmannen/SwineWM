@@ -10,6 +10,12 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- Bar tooltips, as in Waybar: `tooltip-format`, `tooltip-format-<state>`
+  and each module's default tooltip (the whole window title, battery time
+  left, the clock's `{calendar}`, disk usage, a script's `tooltip`,
+  scratchpad windows), styled by `tooltip` in style.css. Tray icons show
+  their program's tooltip, or get `NIN_POPUPOPEN` to show their own, and
+  receive the pointer's movements as from Explorer.
 - Keyboard layouts: Waybar's `sway/language` module shows the active
   Windows keyboard layout (in the default bar when more than one is
   installed; a click switches to the next), and sway's

@@ -282,6 +282,7 @@ bool sysinfo_battery(struct sysinfo_battery *out) {
 	out->capacity = fake.battery_capacity;
 	out->charging = fake.battery_charging;
 	out->plugged = fake.battery_charging;
+	out->seconds_left = fake.battery_seconds;
 	return true;
 }
 

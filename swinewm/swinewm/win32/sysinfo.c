@@ -17,6 +17,8 @@ bool sysinfo_battery(struct sysinfo_battery *out) {
 	out->capacity = status.BatteryLifePercent;
 	out->charging = (status.BatteryFlag & 8) != 0;
 	out->plugged = status.ACLineStatus == 1;
+	out->seconds_left = status.BatteryLifeTime == (DWORD)-1 ? 0 :
+		(int)status.BatteryLifeTime;
 	return true;
 }
 

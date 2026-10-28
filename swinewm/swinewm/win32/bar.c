@@ -20,6 +20,8 @@ struct hit {
 	char *on_click_right;
 	char *on_scroll_up;
 	char *on_scroll_down;
+	char *tooltip;
+	bool tooltip_mono;
 };
 
 struct bar_window {
@@ -30,7 +32,16 @@ struct bar_window {
 	struct bar_model *model;
 	double scale;
 	list_t *hits;   // struct hit *, rebuilt on every paint
+	// The item under the pointer (by its place: hits are rebuilt).
+	bool tracking;
+	bool hovering;
+	RECT hover_rect;
+	uint64_t hover_tray;
 };
+
+static HWND tooltip_hwnd = NULL;
+static wchar_t *tooltip_text = NULL;
+static bool tooltip_mono = false;
 
 static list_t *bars = NULL;
 static bool class_registered = false;
@@ -43,6 +54,7 @@ static void clear_hits(struct bar_window *bw) {
 		free(h->on_click_right);
 		free(h->on_scroll_up);
 		free(h->on_scroll_down);
+		free(h->tooltip);
 		free(h);
 	}
 	bw->hits->length = 0;
@@ -198,6 +210,8 @@ static int draw_item(struct bar_window *bw, HDC dc, int x, int top, int bottom,
 	h->on_scroll_up = item->on_scroll_up ? swine_strdup(item->on_scroll_up) : NULL;
 	h->on_scroll_down = item->on_scroll_down ?
 		swine_strdup(item->on_scroll_down) : NULL;
+	h->tooltip = item->tooltip ? swine_strdup(item->tooltip) : NULL;
+	h->tooltip_mono = item->tooltip_mono;
 	list_add(bw->hits, h);
 	return x + outer;
 }
@@ -303,6 +317,186 @@ static struct hit *hit_test(struct bar_window *bw, int x, int y) {
 	return NULL;
 }
 
+// --- tooltips ------------------------------------------------------------
+// One small window of our own, styled by "tooltip" and "tooltip label" in
+// style.css, shown after the hover delay as GTK shows Waybar's tooltips.
+
+static HFONT tooltip_font(const struct swine_style *label, double scale) {
+	int size = (int)(label->font_size * scale + 0.5);
+	return tooltip_mono ? win32_font("Consolas, Courier New", size, false, false) :
+		win32_font(label->font_family, size, label->bold, label->italic);
+}
+
+static LRESULT CALLBACK tooltip_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+		LPARAM lparam) {
+	if (msg == WM_PAINT) {
+		PAINTSTRUCT ps;
+		HDC dc = BeginPaint(hwnd, &ps);
+		struct swine_style box, label;
+		bar_tooltip_style(&box, &label);
+		double scale = (double)GetDpiForWindow(hwnd) / 96.0;
+		RECT client;
+		GetClientRect(hwnd, &client);
+		COLORREF under = RGB(0, 0, 0);
+		COLORREF bg = win32_blend(box.background, under);
+		win32_fill(dc, &client, bg);
+		int border = (int)(box.border_top.width * scale + 0.5);
+		if (border > 0) {
+			COLORREF edge = win32_blend(box.border_top.color, bg);
+			RECT e = {0, 0, client.right, border};
+			win32_fill(dc, &e, edge);
+			e = (RECT){0, client.bottom - border, client.right, client.bottom};
+			win32_fill(dc, &e, edge);
+			e = (RECT){0, 0, border, client.bottom};
+			win32_fill(dc, &e, edge);
+			e = (RECT){client.right - border, 0, client.right, client.bottom};
+			win32_fill(dc, &e, edge);
+		}
+		RECT text = {
+			border + (int)(box.padding.left * scale + 0.5),
+			border + (int)(box.padding.top * scale + 0.5),
+			client.right - border - (int)(box.padding.right * scale + 0.5),
+			client.bottom - border - (int)(box.padding.bottom * scale + 0.5),
+		};
+		SetBkMode(dc, TRANSPARENT);
+		SetTextColor(dc, win32_blend(label.color, bg));
+		HGDIOBJ old = SelectObject(dc, tooltip_font(&label, scale));
+		if (tooltip_text) {
+			DrawTextW(dc, tooltip_text, -1, &text, DT_NOPREFIX | DT_EXPANDTABS);
+		}
+		SelectObject(dc, old);
+		EndPaint(hwnd, &ps);
+		return 0;
+	}
+	if (msg == WM_MOUSEACTIVATE) {
+		return MA_NOACTIVATE;
+	}
+	if (msg == WM_NCHITTEST) {
+		return HTTRANSPARENT;
+	}
+	return DefWindowProcW(hwnd, msg, wparam, lparam);
+}
+
+static void tooltip_hide(void) {
+	if (tooltip_hwnd) {
+		ShowWindow(tooltip_hwnd, SW_HIDE);
+	}
+}
+
+// Shows text near the pointer, beside the bar (below a top bar).
+static void tooltip_show(struct bar_window *bw, const char *text, bool mono,
+		POINT pointer) {
+	HINSTANCE instance = GetModuleHandleW(NULL);
+	if (!tooltip_hwnd) {
+		WNDCLASSEXW wc = { .cbSize = sizeof(wc) };
+		wc.lpfnWndProc = tooltip_wndproc;
+		wc.hInstance = instance;
+		wc.lpszClassName = L"swinewm-tooltip";
+		RegisterClassExW(&wc);
+		tooltip_hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST |
+			WS_EX_NOACTIVATE | WS_EX_TRANSPARENT, L"swinewm-tooltip", L"",
+			WS_POPUP, 0, 0, 0, 0, NULL, NULL, instance, NULL);
+		if (!tooltip_hwnd) {
+			return;
+		}
+	}
+	free(tooltip_text);
+	tooltip_text = utf8_to_utf16(text);
+	tooltip_mono = mono;
+	struct swine_style box, label;
+	bar_tooltip_style(&box, &label);
+	double scale = bw->scale > 0 ? bw->scale : 1.0;
+	HDC dc = GetDC(tooltip_hwnd);
+	HGDIOBJ old = SelectObject(dc, tooltip_font(&label, scale));
+	RECT measure = {0, 0, 0, 0};
+	DrawTextW(dc, tooltip_text, -1, &measure,
+		DT_CALCRECT | DT_NOPREFIX | DT_EXPANDTABS);
+	SelectObject(dc, old);
+	ReleaseDC(tooltip_hwnd, dc);
+	int border = (int)(box.border_top.width * scale + 0.5);
+	int w = measure.right + 2 * border +
+		(int)((box.padding.left + box.padding.right) * scale + 0.5);
+	int h = measure.bottom + 2 * border +
+		(int)((box.padding.top + box.padding.bottom) * scale + 0.5);
+	// Beside the bar, at the pointer, kept on the monitor.
+	HMONITOR monitor = MonitorFromPoint(pointer, MONITOR_DEFAULTTONEAREST);
+	MONITORINFO mi = { .cbSize = sizeof(mi) };
+	GetMonitorInfoW(monitor, &mi);
+	int gap = (int)(4 * scale + 0.5);
+	int x = pointer.x - w / 2;
+	int y = bw->rect.y + bw->rect.height + gap;
+	if (y + h > mi.rcMonitor.bottom) {
+		y = bw->rect.y - h - gap;   // a bottom bar
+	}
+	if (x + w > mi.rcMonitor.right) {
+		x = mi.rcMonitor.right - w;
+	}
+	if (x < mi.rcMonitor.left) {
+		x = mi.rcMonitor.left;
+	}
+	SetWindowPos(tooltip_hwnd, HWND_TOPMOST, x, y, w, h,
+		SWP_NOACTIVATE | SWP_SHOWWINDOW);
+	InvalidateRect(tooltip_hwnd, NULL, TRUE);
+}
+
+// The pointer moved over the bar: follow which item it is on, tell tray
+// icons (Explorer's WM_MOUSEMOVE), and wait for the hover delay again.
+static void bar_mouse_move(struct bar_window *bw, int x, int y) {
+	if (!bw->tracking) {
+		TRACKMOUSEEVENT t = { sizeof(t), TME_LEAVE | TME_HOVER, bw->hwnd,
+			HOVER_DEFAULT };
+		TrackMouseEvent(&t);
+		bw->tracking = true;
+	}
+	struct hit *h = hit_test(bw, x, y);
+	POINT screen = {x, y};
+	ClientToScreen(bw->hwnd, &screen);
+	bool same = h && bw->hovering && EqualRect(&h->rect, &bw->hover_rect);
+	if (!same) {
+		tooltip_hide();
+		if (bw->hovering && bw->hover_tray) {
+			win32_tray_hover(bw->hover_tray, TRAY_HOVER_LEAVE, screen);
+		}
+		bw->hovering = h != NULL;
+		bw->hover_rect = h ? h->rect : (RECT){0};
+		bw->hover_tray = h ? h->tray_id : 0;
+		// Restart the hover delay for the new item.
+		TRACKMOUSEEVENT t = { sizeof(t), TME_HOVER, bw->hwnd, HOVER_DEFAULT };
+		TrackMouseEvent(&t);
+	}
+	if (h && h->tray_id) {
+		win32_tray_hover(h->tray_id, TRAY_HOVER_MOVE, screen);
+	}
+}
+
+static void bar_mouse_hover(struct bar_window *bw, int x, int y) {
+	struct hit *h = hit_test(bw, x, y);
+	if (!h) {
+		return;
+	}
+	POINT screen = {x, y};
+	ClientToScreen(bw->hwnd, &screen);
+	bool show = h->tooltip != NULL;
+	if (h->tray_id) {
+		show = win32_tray_hover(h->tray_id, TRAY_HOVER_POPUP, screen) && show;
+	}
+	if (show) {
+		tooltip_show(bw, h->tooltip, h->tooltip_mono, screen);
+	}
+}
+
+static void bar_mouse_leave(struct bar_window *bw) {
+	tooltip_hide();
+	if (bw->hovering && bw->hover_tray) {
+		POINT screen;
+		GetCursorPos(&screen);
+		win32_tray_hover(bw->hover_tray, TRAY_HOVER_LEAVE, screen);
+	}
+	bw->tracking = false;
+	bw->hovering = false;
+	bw->hover_tray = 0;
+}
+
 static LRESULT CALLBACK bar_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 		LPARAM lparam) {
 	struct bar_window *bw = bar_from_hwnd(hwnd);
@@ -331,7 +525,23 @@ static LRESULT CALLBACK bar_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 		return 1;
 	case WM_MOUSEACTIVATE:
 		return MA_NOACTIVATE;   // clicking the bar never takes focus
+	case WM_MOUSEMOVE:
+		if (bw) {
+			bar_mouse_move(bw, (short)LOWORD(lparam), (short)HIWORD(lparam));
+		}
+		return 0;
+	case WM_MOUSEHOVER:
+		if (bw) {
+			bar_mouse_hover(bw, (short)LOWORD(lparam), (short)HIWORD(lparam));
+		}
+		return 0;
+	case WM_MOUSELEAVE:
+		if (bw) {
+			bar_mouse_leave(bw);
+		}
+		return 0;
 	case WM_LBUTTONDOWN:
+		tooltip_hide();
 		tray_mouse(bw, 0, true, lparam);
 		return 0;
 	case WM_MBUTTONDOWN:
@@ -483,6 +693,12 @@ void win32_bar_refresh(void) {
 }
 
 void win32_bar_finish(void) {
+	if (tooltip_hwnd) {
+		DestroyWindow(tooltip_hwnd);
+		tooltip_hwnd = NULL;
+	}
+	free(tooltip_text);
+	tooltip_text = NULL;
 	if (!bars) {
 		return;
 	}

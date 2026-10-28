@@ -2,6 +2,7 @@
 #include <string.h>
 #include "fake_platform.h"
 #include "json.h"
+#include "stringop.h"
 #include "swinewm/bar/bar.h"
 #include "swinewm/bar/css.h"
 #include "swinewm/bar/custom.h"
@@ -744,6 +745,77 @@ static void test_system_modules(void) {
 	fake_teardown();
 }
 
+// Tooltips as Waybar resolves them: tooltip-format-<state>, tooltip-format,
+// the module's default; "tooltip": false.
+static void test_tooltips(void) {
+	fake_setup();
+	config->bar_enabled = true;
+	fake.has_battery = true;
+	fake.battery_capacity = 50;
+	fake.battery_seconds = 2 * 3600 + 5 * 60;
+	fake.has_disk = true;
+	fake.disk = (struct sysinfo_disk){ .total = 1073741824.0 * 100,
+		.free = 1073741824.0 * 40, .avail = 1073741824.0 * 40 };
+	fake.has_temperature = true;
+	fake.temperature = 40;
+	fake.cpu_usage = 12;
+	bar_load_from_strings(
+		"{ \"modules-right\": [\"sway/window\", \"battery\", \"clock\", \"disk\","
+		"   \"temperature\", \"cpu\", \"custom/s\", \"sway/scratchpad\"],\n"
+		"  \"sway/window\": { \"max-length\": 4 },\n"
+		"  \"clock\": { \"format\": \"T\","
+		"     \"tooltip-format\": \"<big>{:%Y}</big>\\n<tt>{calendar}</tt>\" },\n"
+		"  \"temperature\": { \"tooltip\": false },\n"
+		"  \"cpu\": { \"states\": { \"low\": 0 },"
+		"     \"tooltip-format-low\": \"low {usage}\" },\n"
+		"  \"custom/s\": { \"exec\": \"x\", \"interval\": 5, \"return-type\": \"json\" },\n"
+		"  \"sway/scratchpad\": { \"show-empty\": true } }", NULL);
+	fake_map_view("A long title");
+	struct swine_output *output = root->outputs->items[0];
+	struct tm tm = {0};
+	tm.tm_year = 2026 - 1900;
+	tm.tm_mon = 9;      // October 2026 starts on a Thursday
+	tm.tm_mday = 28;
+	tm.tm_wday = 3;     // a Wednesday
+	time_t when = mktime(&tm);
+	bar_scripts_tick(fake.now_ms ? fake.now_ms : 1);
+	bar_script_line(fake.last_script_id,
+		"{\"text\": \"hi\", \"tooltip\": \"line1\\rline2\"}");
+	bar_script_exited(fake.last_script_id, 0);
+	struct bar_model *model = bar_build(output, when);
+	struct bar_item *window = first_item(model, 0);
+	CHECK(window && window->tooltip &&
+		strcmp(window->tooltip, "A long title") == 0);
+	struct bar_item *battery = first_item(model, 1);
+	CHECK(battery && battery->tooltip &&
+		strcmp(battery->tooltip, "Empty in 2 h 5 min") == 0);
+	struct bar_item *clock = first_item(model, 2);
+	CHECK(clock && clock->tooltip_mono);
+	if (clock && clock->tooltip) {
+		CHECK(has_prefix(clock->tooltip,
+			"2026\nMo Tu We Th Fr Sa Su\n          1  2  3  4\n 5  6  7"));
+		CHECK(strstr(clock->tooltip, "\n26 27 28 29 30 31") != NULL);
+	}
+	struct bar_item *disk = first_item(model, 3);
+	CHECK(disk && disk->tooltip &&
+		strcmp(disk->tooltip, "60.0GiB used out of 100.0GiB on / (60%)") == 0);
+	struct bar_item *temp = first_item(model, 4);
+	CHECK(temp && !temp->tooltip);
+	struct bar_item *cpu = first_item(model, 5);
+	CHECK(cpu && cpu->tooltip && strcmp(cpu->tooltip, "low 12") == 0);
+	struct bar_item *custom = first_item(model, 6);
+	CHECK(custom && custom->tooltip &&
+		strcmp(custom->tooltip, "line1\nline2") == 0);
+	bar_model_free(model);
+	run("move scratchpad");
+	model = bar_build(output, when);
+	struct bar_item *scratch = first_item(model, 7);
+	CHECK(scratch && scratch->tooltip &&
+		strcmp(scratch->tooltip, "test.exe: A long title") == 0);
+	bar_model_free(model);
+	fake_teardown();
+}
+
 void test_bar_all(void) {
 	test_bar_config_ipc();
 	test_json_parse();
@@ -757,4 +829,5 @@ void test_bar_all(void) {
 	test_custom_scripts();
 	test_pow_format();
 	test_system_modules();
+	test_tooltips();
 }
