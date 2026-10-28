@@ -156,7 +156,7 @@ if(WIN32)
   target_compile_definitions(swinewm PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN
     WINVER=0x0A00 _WIN32_WINNT=0x0A00)
   target_link_libraries(swinewm PRIVATE swinewm_core user32 gdi32 dwmapi shell32
-    shcore advapi32 ole32 windowscodecs msimg32 uuid iphlpapi wlanapi pdh ws2_32)
+    shcore advapi32 ole32 windowscodecs msimg32 uuid iphlpapi wlanapi pdh ws2_32 powrprof)
 
   add_executable(swinemenu WIN32 swinemenu/main.c swinemenu/apps.c
     swinemenu/openwith.c)

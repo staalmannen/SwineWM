@@ -47,6 +47,9 @@ void win32_scripts_finish(void);
 // draw.c: GDI helpers shared by the bar and notification popups
 // Picks the first installed family from a CSS/Pango family list.
 HFONT win32_font(const char *families, int px, bool bold, bool italic);
+// The same, rotated counter-clockwise by degrees (0, 90, 180, 270).
+HFONT win32_font_rotated(const char *families, int px, bool bold, bool italic,
+		int degrees);
 void win32_fonts_clear(void);
 // A sway "font" description ("pango:DejaVu Sans Mono 10") at a scale.
 HFONT win32_sway_font(const char *desc, double scale);
@@ -102,6 +105,12 @@ void win32_tray_draw(HDC dc, uint64_t id, const char *icon_path,
 void win32_tray_set_host_rect(const RECT *screen);
 // button: 0 left, 1 middle, 2 right
 void win32_tray_mouse(uint64_t id, int button, bool down, POINT screen);
+enum tray_hover {
+	TRAY_HOVER_MOVE,
+	TRAY_HOVER_POPUP,
+	TRAY_HOVER_LEAVE,
+};
+bool win32_tray_hover(uint64_t id, enum tray_hover what, POINT screen);
 
 // window.c
 // The executable's file name ("Discord.exe"), or NULL.

@@ -25,14 +25,19 @@ enum bar_section {
 // then tray_id is set, text is empty and the platform draws the icon.
 struct bar_item {
 	char *text;              // markup already stripped
+	char *tooltip;           // plain text with line breaks, or NULL
+	bool tooltip_mono;       // a fixed-width font (<tt>: the calendar)
 	char *on_click;          // swinewm command for a left click, or NULL
 	char *on_click_middle;
 	char *on_click_right;
 	char *on_scroll_up;
 	char *on_scroll_down;
 	struct swine_style style;
+	struct swine_style hover_style;  // with the pointer over it (:hover)
+	bool has_hover;                  // hover_style looks different
 	uint64_t tray_id;        // struct tray_item id, or 0
 	int icon_size;           // logical px, for tray icons
+	int rotate;              // "rotate": 0, 90, 180 or 270, counter-clockwise
 	char *icon_path;         // "icons" override (an .ico file), or NULL
 };
 
@@ -49,6 +54,7 @@ struct bar_module_view {
 
 struct bar_model {
 	struct swine_style window;   // window#waybar
+	bool vertical;               // a left or right bar: modules top to bottom
 	int spacing;                 // px between modules ("spacing")
 	list_t *modules;             // struct bar_module_view *
 };
@@ -62,6 +68,8 @@ struct bar_theme {
 	struct swine_style urgent;      // #workspaces button.urgent
 };
 void bar_get_theme(struct bar_theme *out);
+// The style of tooltips ("tooltip" and "tooltip label" in style.css).
+void bar_tooltip_style(struct swine_style *box, struct swine_style *label);
 
 // (Re)reads the Waybar config and style sheet. Safe to call repeatedly.
 void bar_load(void);
@@ -70,6 +78,17 @@ void bar_load_from_strings(const char *config_text, const char *style_text);
 void bar_finish(void);
 
 bool bar_enabled(void);
+
+// Waybar's config may hold several bars (an array); they are numbered
+// from 0 in its order. The functions without _n are about bar 0.
+enum bar_position {
+	BAR_TOP,
+	BAR_BOTTOM,
+	BAR_LEFT,
+	BAR_RIGHT,
+};
+int bar_count(void);
+enum bar_position bar_position_n(int index);
 // Whether the bar has a "tray" module, i.e. should host the tray.
 bool bar_has_tray(void);
 // Height in logical pixels; multiply by output->scale for device pixels.
@@ -80,8 +99,12 @@ void bar_update_reservations(void);
 // Where the bar for this output goes; false if it has none or should be
 // hidden (fullscreen window on the output).
 bool bar_get_rect(struct swine_output *output, struct swine_box *out);
+bool bar_get_rect_n(int index, struct swine_output *output,
+		struct swine_box *out);
 
 struct bar_model *bar_build(struct swine_output *output, time_t now);
+struct bar_model *bar_build_n(int index, struct swine_output *output,
+		time_t now);
 void bar_model_free(struct bar_model *model);
 // Reads the system again for every module (after a volume change).
 void bar_refresh_readings(void);
@@ -89,6 +112,8 @@ void bar_refresh_readings(void);
 void bar_module_clicked(int module_index);
 // Another click or a scroll on a module (custom scripts run again).
 void bar_module_event(int module_index);
+// A right click (power-profiles-daemon goes back a profile).
+void bar_module_right_clicked(int module_index);
 // A scroll on a module without on-scroll-up/down: its own action (the
 // pulseaudio volume). Returns true if there was one.
 bool bar_module_scroll(int module_index, bool up);

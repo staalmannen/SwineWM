@@ -49,6 +49,7 @@ enum module_kind {
 	MOD_TEMPERATURE,
 	MOD_IDLE_INHIBITOR,
 	MOD_KEYBOARD_STATE,
+	MOD_POWER_PROFILES,
 	MOD_CUSTOM,
 };
 
@@ -60,6 +61,7 @@ struct bar_module {
 	char *css_class;     // "bat2", or NULL
 	struct json_value *cfg;  // borrowed from the config; may be NULL
 	bool alt;            // showing format-alt
+	int bar;             // which bar (index in bar.bars)
 	struct bar_script *script;  // custom/* with "exec" or "exec-if"
 	// The last system reading (struct sysinfo_*), read again when due.
 	void *reading;
@@ -75,15 +77,24 @@ static struct {
 	long long deadline;   // platform_now_ms when "timeout" ends it, or 0
 } idle_inhibit;
 
+// One bar of the config (Waybar's config may hold an array of them).
+struct bar_instance {
+	struct json_value *cfg;     // its object in the config
+	int position;               // -1 unset (sway's "bar position"), else
+	                            // enum bar_position
+	int height;                 // logical px: the thickness of a top or
+	int width;                  // bottom bar, and of a left or right one
+	int spacing;
+	struct side_gaps margin;    // "margin", "margin-top", ...
+	bool exclusive;             // the tiling area leaves its space free
+};
+
 static struct {
 	bool loaded;
 	struct json_value *root;
-	struct json_value *bar;     // the bar object inside root
 	struct css_stylesheet *css;
-	list_t *modules;            // struct bar_module *
-	int height;
-	int spacing;
-	int position;               // 0 unset, 1 top, 2 bottom
+	list_t *bars;               // struct bar_instance *
+	list_t *modules;            // struct bar_module *, of every bar
 } bar = {0};
 
 static void free_modules(void) {
@@ -105,6 +116,9 @@ static void free_modules(void) {
 
 void bar_finish(void) {
 	free_modules();
+	if (bar.bars) {
+		list_free_items_and_destroy(bar.bars);
+	}
 	json_value_free(bar.root);
 	css_free(bar.css);
 	memset(&bar, 0, sizeof(bar));
@@ -121,6 +135,7 @@ static bool module_kind_from_name(const char *name, enum module_kind *kind) {
 		{"disk", MOD_DISK}, {"temperature", MOD_TEMPERATURE},
 		{"idle_inhibitor", MOD_IDLE_INHIBITOR},
 		{"keyboard-state", MOD_KEYBOARD_STATE},
+		{"power-profiles-daemon", MOD_POWER_PROFILES},
 	};
 	if (has_prefix(name, "custom/")) {
 		*kind = MOD_CUSTOM;
@@ -137,8 +152,10 @@ static bool module_kind_from_name(const char *name, enum module_kind *kind) {
 	return false;
 }
 
-static void add_modules(const char *key, enum bar_section section) {
-	struct json_value *list = json_object_get(bar.bar, key);
+static void add_modules(int bar_index, const char *key,
+		enum bar_section section) {
+	struct bar_instance *b = bar.bars->items[bar_index];
+	struct json_value *list = json_object_get(b->cfg, key);
 	if (!list || list->type != JSON_ARRAY) {
 		return;
 	}
@@ -174,7 +191,8 @@ static void add_modules(const char *key, enum bar_section section) {
 			m->css_id = swine_strdup(slash ? slash + 1 : base);
 			free(base);
 		}
-		m->cfg = json_object_get(bar.bar, v->string);
+		m->cfg = json_object_get(b->cfg, v->string);
+		m->bar = bar_index;
 		if (kind == MOD_IDLE_INHIBITOR && config->bar_enabled &&
 				json_get_bool(m->cfg, "start-activated", false) &&
 				!idle_inhibit.active) {
@@ -190,6 +208,74 @@ static void add_modules(const char *key, enum bar_section section) {
 		}
 		list_add(bar.modules, m);
 	}
+}
+
+// Waybar's "margin": a number, or a CSS-like string of one to four
+// numbers; then "margin-top" and the others.
+static struct side_gaps bar_margin(const struct json_value *cfg) {
+	struct side_gaps m = {0, 0, 0, 0};
+	struct json_value *v = json_object_get(cfg, "margin");
+	if (v && v->type == JSON_NUMBER) {
+		m.top = m.right = m.bottom = m.left = (int)v->number;
+	} else if (v && v->type == JSON_STRING) {
+		int n[4];
+		int count = sscanf(v->string, "%d %d %d %d", &n[0], &n[1], &n[2], &n[3]);
+		if (count == 1) {
+			m.top = m.right = m.bottom = m.left = n[0];
+		} else if (count == 2) {
+			m.top = m.bottom = n[0];
+			m.right = m.left = n[1];
+		} else if (count == 3) {
+			m.top = n[0];
+			m.right = m.left = n[1];
+			m.bottom = n[2];
+		} else if (count == 4) {
+			m.top = n[0];
+			m.right = n[1];
+			m.bottom = n[2];
+			m.left = n[3];
+		}
+	}
+	m.top = (int)json_get_number(cfg, "margin-top", m.top);
+	m.right = (int)json_get_number(cfg, "margin-right", m.right);
+	m.bottom = (int)json_get_number(cfg, "margin-bottom", m.bottom);
+	m.left = (int)json_get_number(cfg, "margin-left", m.left);
+	return m;
+}
+
+static void add_bar(struct json_value *cfg) {
+	struct bar_instance *b = calloc(1, sizeof(*b));
+	b->cfg = cfg;
+	// Auto size: Waybar sizes to the content; estimate it from the font.
+	struct swine_style window;
+	struct css_element el = {"window", "waybar", NULL, NULL};
+	css_compute(bar.css, &el, NULL, &window);
+	int line = (int)ceil(window.font_size * 1.6) + 6;
+	const char *position = json_get_string(cfg, "position", NULL);
+	b->position = !position ? -1 :
+		strcmp(position, "bottom") == 0 ? BAR_BOTTOM :
+		strcmp(position, "left") == 0 ? BAR_LEFT :
+		strcmp(position, "right") == 0 ? BAR_RIGHT : BAR_TOP;
+	bool vertical = b->position == BAR_LEFT || b->position == BAR_RIGHT;
+	// "height" is the thickness of a horizontal bar, "width" of a vertical
+	// one; the other is its length, which is always the whole monitor here.
+	b->height = vertical ? 0 : (int)json_get_number(cfg, "height", 0);
+	if (b->height <= 0) {
+		b->height = line + window.border_bottom.width + window.border_top.width;
+	}
+	b->width = vertical ? (int)json_get_number(cfg, "width", 0) : 0;
+	if (b->width <= 0) {
+		b->width = 2 * line + window.border_left.width +
+			window.border_right.width;
+	}
+	b->spacing = (int)json_get_number(cfg, "spacing", 4);
+	b->margin = bar_margin(cfg);
+	b->exclusive = json_get_bool(cfg, "exclusive", true);
+	int index = bar.bars->length;
+	list_add(bar.bars, b);
+	add_modules(index, "modules-left", BAR_SECTION_LEFT);
+	add_modules(index, "modules-center", BAR_SECTION_CENTER);
+	add_modules(index, "modules-right", BAR_SECTION_RIGHT);
 }
 
 // Applies config (JSONC) and style (CSS) text; NULL selects the default.
@@ -208,29 +294,19 @@ void bar_load_from_strings(const char *config_text, const char *style_text) {
 	if (!bar.root) {
 		bar.root = json_parse(default_bar_config, NULL);
 	}
-	// The config may hold several bars; the first one is used for now.
-	bar.bar = bar.root;
-	if (bar.root && bar.root->type == JSON_ARRAY) {
-		bar.bar = bar.root->items->length ? bar.root->items->items[0] : NULL;
-	}
 	bar.css = css_parse(style_text ? style_text : default_bar_style);
-
-	bar.height = (int)json_get_number(bar.bar, "height", 0);
-	if (bar.height <= 0) {
-		// Auto height: Waybar sizes to the content; estimate from the font.
-		struct swine_style window;
-		struct css_element el = {"window", "waybar", NULL, NULL};
-		css_compute(bar.css, &el, NULL, &window);
-		bar.height = (int)ceil(window.font_size * 1.6) + 6 +
-			window.border_bottom.width + window.border_top.width;
+	bar.bars = create_list();
+	// One bar, or an array of them.
+	if (bar.root && bar.root->type == JSON_ARRAY) {
+		for (int i = 0; i < bar.root->items->length; ++i) {
+			struct json_value *cfg = bar.root->items->items[i];
+			if (cfg->type == JSON_OBJECT) {
+				add_bar(cfg);
+			}
+		}
+	} else if (bar.root && bar.root->type == JSON_OBJECT) {
+		add_bar(bar.root);
 	}
-	bar.spacing = (int)json_get_number(bar.bar, "spacing", 4);
-	const char *position = json_get_string(bar.bar, "position", NULL);
-	bar.position = !position ? 0 : strcmp(position, "bottom") == 0 ? 2 : 1;
-
-	add_modules("modules-left", BAR_SECTION_LEFT);
-	add_modules("modules-center", BAR_SECTION_CENTER);
-	add_modules("modules-right", BAR_SECTION_RIGHT);
 }
 
 void bar_load(void) {
@@ -293,23 +369,60 @@ void bar_get_theme(struct bar_theme *out) {
 	css_compute(bar.css, &el, &box, &out->urgent);
 }
 
+void bar_tooltip_style(struct swine_style *box, struct swine_style *label) {
+	ensure_loaded();
+	// GTK draws tooltips in their own window: "tooltip" and "tooltip label"
+	struct css_element tooltip_el = {"tooltip", NULL, NULL, NULL};
+	css_compute(bar.css, &tooltip_el, NULL, box);
+	struct css_element label_el = {"label", NULL, NULL, &tooltip_el};
+	css_compute(bar.css, &label_el, box, label);
+	if (box->background.a == 0) {
+		// A theme without tooltip rules: GTK's dark default.
+		box->background = (struct swine_color){43, 48, 59, 242};
+	}
+}
+
 bool bar_enabled(void) {
 	return config && config->bar_enabled && !config->bar_invisible;
 }
 
+int bar_count(void) {
+	ensure_loaded();
+	return bar.bars->length;
+}
+
+static enum bar_position instance_position(const struct bar_instance *b) {
+	if (b->position >= 0) {
+		return (enum bar_position)b->position;
+	}
+	return config->bar_position == 2 ? BAR_BOTTOM : BAR_TOP;
+}
+
+enum bar_position bar_position_n(int index) {
+	ensure_loaded();
+	if (index < 0 || index >= bar.bars->length) {
+		return BAR_TOP;
+	}
+	return instance_position(bar.bars->items[index]);
+}
+
 int bar_height(void) {
 	ensure_loaded();
-	return bar.height;
+	if (!bar.bars->length) {
+		return 0;
+	}
+	struct bar_instance *b = bar.bars->items[0];
+	enum bar_position pos = instance_position(b);
+	return pos == BAR_LEFT || pos == BAR_RIGHT ? b->width : b->height;
 }
 
 bool bar_at_top(void) {
-	ensure_loaded();
-	int position = bar.position ? bar.position : config->bar_position;
-	return position != 2;
+	return bar_position_n(0) != BAR_BOTTOM;
 }
 
-static bool output_allowed(struct swine_output *output) {
-	struct json_value *filter = json_object_get(bar.bar, "output");
+static bool output_allowed(const struct bar_instance *b,
+		struct swine_output *output) {
+	struct json_value *filter = json_object_get(b->cfg, "output");
 	if (!filter) {
 		return true;
 	}
@@ -341,9 +454,75 @@ static bool output_allowed(struct swine_output *output) {
 	return matched || !any_positive;
 }
 
-static int scaled_height(struct swine_output *output) {
+// Places the bars of an output in order, as layer-shell does: each takes
+// its edge of the area the bars before it left free, and an exclusive bar
+// takes its space (with its margins) out of that area. Returns the rect of
+// bar `want` (false if it has none there), and the space all of them take.
+static bool place_bars(struct swine_output *output, int want,
+		struct swine_box *rect, struct side_gaps *taken) {
 	double scale = output->scale > 0 ? output->scale : 1.0;
-	return (int)(bar.height * scale + 0.5);
+	struct swine_box area = output->usable;
+	struct side_gaps used = {0, 0, 0, 0};
+	bool found = false;
+	for (int i = 0; i < bar.bars->length; ++i) {
+		struct bar_instance *b = bar.bars->items[i];
+		if (!output_allowed(b, output)) {
+			continue;
+		}
+		enum bar_position pos = instance_position(b);
+		int mt = (int)(b->margin.top * scale + 0.5);
+		int mr = (int)(b->margin.right * scale + 0.5);
+		int mb = (int)(b->margin.bottom * scale + 0.5);
+		int ml = (int)(b->margin.left * scale + 0.5);
+		struct swine_box r;
+		int zone;
+		if (pos == BAR_LEFT || pos == BAR_RIGHT) {
+			int w = (int)(b->width * scale + 0.5);
+			r.y = area.y + mt;
+			r.height = area.height - mt - mb;
+			r.width = w;
+			r.x = pos == BAR_LEFT ? area.x + ml : area.x + area.width - mr - w;
+			zone = w + ml + mr;
+		} else {
+			int h = (int)(b->height * scale + 0.5);
+			r.x = area.x + ml;
+			r.width = area.width - ml - mr;
+			r.height = h;
+			r.y = pos == BAR_TOP ? area.y + mt : area.y + area.height - mb - h;
+			zone = h + mt + mb;
+		}
+		if (i == want) {
+			*rect = r;
+			found = true;
+		}
+		if (!b->exclusive) {
+			continue;
+		}
+		switch (pos) {
+		case BAR_TOP:
+			area.y += zone;
+			area.height -= zone;
+			used.top += zone;
+			break;
+		case BAR_BOTTOM:
+			area.height -= zone;
+			used.bottom += zone;
+			break;
+		case BAR_LEFT:
+			area.x += zone;
+			area.width -= zone;
+			used.left += zone;
+			break;
+		case BAR_RIGHT:
+			area.width -= zone;
+			used.right += zone;
+			break;
+		}
+	}
+	if (taken) {
+		*taken = used;
+	}
+	return found;
 }
 
 void bar_update_reservations(void) {
@@ -354,18 +533,16 @@ void bar_update_reservations(void) {
 	for (int i = 0; i < root->outputs->length; ++i) {
 		struct swine_output *output = root->outputs->items[i];
 		output->reserved = (struct side_gaps){0};
-		if (enabled && output_allowed(output)) {
-			if (bar_at_top()) {
-				output->reserved.top = scaled_height(output);
-			} else {
-				output->reserved.bottom = scaled_height(output);
-			}
+		if (enabled) {
+			struct swine_box unused;
+			place_bars(output, -1, &unused, &output->reserved);
 		}
 	}
 }
 
-bool bar_get_rect(struct swine_output *output, struct swine_box *out) {
-	if (!bar_enabled() || !output->enabled || !output_allowed(output)) {
+bool bar_get_rect_n(int index, struct swine_output *output,
+		struct swine_box *out) {
+	if (!bar_enabled() || !output->enabled) {
 		return false;
 	}
 	struct swine_workspace *ws = output_get_active_workspace(output);
@@ -373,12 +550,11 @@ bool bar_get_rect(struct swine_output *output, struct swine_box *out) {
 		return false;
 	}
 	ensure_loaded();
-	out->x = output->usable.x;
-	out->width = output->usable.width;
-	out->height = scaled_height(output);
-	out->y = bar_at_top() ? output->usable.y :
-		output->usable.y + output->usable.height - out->height;
-	return true;
+	return place_bars(output, index, out, NULL);
+}
+
+bool bar_get_rect(struct swine_output *output, struct swine_box *out) {
+	return bar_get_rect_n(0, output, out);
 }
 
 // --- model building -------------------------------------------------------
@@ -392,6 +568,43 @@ struct build_ctx {
 	time_t now;
 	struct tm tm;
 };
+
+static bool color_equal(struct swine_color a, struct swine_color b) {
+	return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+}
+
+static bool edge_equal(struct css_edge a, struct css_edge b) {
+	return a.width == b.width && color_equal(a.color, b.color);
+}
+
+// What a :hover rule may change that the platform draws differently.
+static bool look_equal(const struct swine_style *a, const struct swine_style *b) {
+	return color_equal(a->background, b->background) &&
+		color_equal(a->color, b->color) && a->bold == b->bold &&
+		a->italic == b->italic && edge_equal(a->border_top, b->border_top) &&
+		edge_equal(a->border_right, b->border_right) &&
+		edge_equal(a->border_bottom, b->border_bottom) &&
+		edge_equal(a->border_left, b->border_left) &&
+		a->inset_bottom == b->inset_bottom && a->inset_top == b->inset_top &&
+		color_equal(a->inset_color, b->inset_color);
+}
+
+// An item's style, and its style while the pointer is over it (:hover).
+static void compute_item_style(const struct css_element *el,
+		const struct swine_style *parent, struct bar_item *item) {
+	css_compute(bar.css, el, parent, &item->style);
+	const char *classes[MAX_CLASSES + 4];
+	int n = 0;
+	for (int i = 0; el->classes && el->classes[i] && n < MAX_CLASSES + 2; ++i) {
+		classes[n++] = el->classes[i];
+	}
+	classes[n++] = CSS_HOVER;
+	classes[n] = NULL;
+	struct css_element hovered = *el;
+	hovered.classes = classes;
+	css_compute(bar.css, &hovered, parent, &item->hover_style);
+	item->has_hover = !look_equal(&item->style, &item->hover_style);
+}
 
 static struct bar_module_view *new_view(struct bar_module *m, int index) {
 	struct bar_module_view *view = calloc(1, sizeof(*view));
@@ -425,11 +638,11 @@ static char *truncate_utf8(char *text, int max_chars) {
 
 // Adds a single-label module. Takes ownership of text; NULL or empty text
 // hides the module (as an empty format does in Waybar).
-static void add_label(struct build_ctx *ctx, struct bar_module *m, int index,
-		char *text, const char **classes) {
+static struct bar_item *add_label(struct build_ctx *ctx, struct bar_module *m,
+		int index, char *text, const char **classes) {
 	if (!text || !*text) {
 		free(text);
-		return;
+		return NULL;
 	}
 	char *plain = markup_strip(text);
 	free(text);
@@ -449,7 +662,8 @@ static void add_label(struct build_ctx *ctx, struct bar_module *m, int index,
 	struct css_element el = {"label", m->css_id, all, &ctx->window_el};
 	struct bar_item *item = calloc(1, sizeof(*item));
 	item->text = plain;
-	css_compute(bar.css, &el, &ctx->model->window, &item->style);
+	item->rotate = ((int)json_get_number(m->cfg, "rotate", 0) % 360 + 360) % 360;
+	compute_item_style(&el, &ctx->model->window, item);
 	view->style = item->style;
 	const char *on_click = json_get_string(m->cfg, "on-click", NULL);
 	if (on_click) {
@@ -465,6 +679,59 @@ static void add_label(struct build_ctx *ctx, struct bar_module *m, int index,
 	item->on_scroll_down = down ? format_str("exec %s", down) : NULL;
 	list_add(view->items, item);
 	list_add(ctx->model->modules, view);
+	return item;
+}
+
+// Tooltip text from Pango markup: tags dropped, "\r" (which Waybar's
+// scripts use for line breaks) made a line break. NULL if empty.
+static char *tooltip_text(const char *markup) {
+	char *text = markup_strip(markup);
+	char *o = text;
+	for (const char *p = text; *p; ++p) {
+		if (*p == '\r') {
+			if (p[1] != '\n') {
+				*o++ = '\n';
+			}
+			continue;
+		}
+		*o++ = *p;
+	}
+	*o = '\0';
+	while (o > text && (o[-1] == '\n' || o[-1] == ' ')) {
+		*--o = '\0';
+	}
+	if (!*text) {
+		free(text);
+		return NULL;
+	}
+	return text;
+}
+
+// Waybar's tooltip: none with "tooltip": false, else tooltip-format-<state>,
+// tooltip-format, the module's default format (with the label's arguments),
+// or default_text.
+static void set_tooltip(struct build_ctx *ctx, struct bar_module *m,
+		struct bar_item *item, const char *state, const char *default_format,
+		const struct fmt_arg *args, int nargs, const char *default_text) {
+	if (!item || !json_get_bool(m->cfg, "tooltip", true)) {
+		return;
+	}
+	const char *format = NULL;
+	if (state) {
+		char key[96];
+		snprintf(key, sizeof(key), "tooltip-format-%s", state);
+		format = json_get_string(m->cfg, key, NULL);
+	}
+	if (!format) {
+		format = json_get_string(m->cfg, "tooltip-format", default_format);
+	}
+	char *raw = format ? format_waybar(format, args, nargs, &ctx->tm) :
+		swine_strdup(default_text ? default_text : "");
+	// <tt> asks for a fixed-width font (the clock's calendar).
+	item->tooltip_mono = strstr(format ? format : raw, "<tt>") != NULL;
+	free(item->tooltip);
+	item->tooltip = tooltip_text(raw);
+	free(raw);
 }
 
 // Waybar "states": {"warning": 30, "critical": 15}. For battery a state
@@ -644,7 +911,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			item->text = markup_strip(text);
 			free(text);
 			struct css_element el = {"button", NULL, classes, &box_el};
-			css_compute(bar.css, &el, &view->style, &item->style);
+			compute_item_style(&el, &view->style, item);
 			if (!disable_click) {
 				item->on_click = format_str(
 					"workspace --no-auto-back-and-forth \"%s\"", ws->name);
@@ -778,11 +1045,12 @@ static void build_tray(struct build_ctx *ctx, struct bar_module *m,
 		struct bar_item *item = calloc(1, sizeof(*item));
 		item->text = swine_strdup("");
 		item->tray_id = t->id;
+		item->tooltip = t->title && t->title[0] ? swine_strdup(t->title) : NULL;
 		item->icon_size = icon_size;
 		item->icon_path = entries[i].icon_path ?
 			platform_expand_path(entries[i].icon_path) : NULL;
 		struct css_element el = {"widget", NULL, classes, &box_el};
-		css_compute(bar.css, &el, &view->style, &item->style);
+		compute_item_style(&el, &view->style, item);
 		list_add(view->items, item);
 	}
 	free(entries);
@@ -822,8 +1090,23 @@ static void build_custom(struct build_ctx *ctx, struct bar_module *m,
 		classes[n++] = r.classes->items[i];
 	}
 	classes[n] = NULL;
-	add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL, "{}"),
-		args, 5, &ctx->tm), classes);
+	char *label = format_waybar(module_format(m, NULL, NULL, "{}"), args, 5,
+		&ctx->tm);
+	char *label_copy = swine_strdup(label);
+	struct bar_item *item = add_label(ctx, m, index, label, classes);
+	// Waybar: tooltip-format (with {tooltip}), else the script's tooltip,
+	// or the label when the script gave none.
+	struct fmt_arg tip_args[] = {
+		{NULL, false, r.text, 0},
+		{"text", false, r.text, 0},
+		{"tooltip", false, r.tooltip, 0},
+		{"alt", false, r.alt, 0},
+		{"icon", false, args[3].str, 0},
+		{"percentage", true, NULL, r.percentage},
+	};
+	set_tooltip(ctx, m, item, NULL, NULL, tip_args, 6,
+		strcmp(r.text, r.tooltip) == 0 ? label_copy : r.tooltip);
+	free(label_copy);
 	bar_script_result_finish(&r);
 }
 
@@ -974,9 +1257,24 @@ static void build_network(struct build_ctx *ctx, struct bar_module *m,
 		{"linkSpeed", FMT_POW_SKIP_DECIMAL, "b/s", n->link_speed},
 	};
 	const char *classes[] = {state, threshold, NULL};
-	add_label(ctx, m, index, format_waybar(state_format(m, state, threshold,
-		"{ifname}"), args, (int)(sizeof(args) / sizeof(args[0])), &ctx->tm),
-		classes);
+	int nargs = (int)(sizeof(args) / sizeof(args[0]));
+	char *label = format_waybar(state_format(m, state, threshold, "{ifname}"),
+		args, nargs, &ctx->tm);
+	char *label_copy = swine_strdup(label);
+	struct bar_item *item = add_label(ctx, m, index, label, classes);
+	// tooltip-format-<state>-<threshold> first, as for the label
+	const char *tip_state = state;
+	char combined[96];
+	if (threshold) {
+		snprintf(combined, sizeof(combined), "tooltip-format-%s-%s", state,
+			threshold);
+		if (json_object_get(m->cfg, combined)) {
+			snprintf(combined, sizeof(combined), "%s-%s", state, threshold);
+			tip_state = combined;
+		}
+	}
+	set_tooltip(ctx, m, item, tip_state, NULL, args, nargs, label_copy);
+	free(label_copy);
 }
 
 // Waybar's pulseaudio module (and wireplumber, which reads the same).
@@ -1059,8 +1357,10 @@ static void build_pulseaudio(struct build_ctx *ctx, struct bar_module *m,
 	if (a->source_muted) classes[c++] = "source-muted";
 	if (state) classes[c++] = state;
 	classes[c] = NULL;
-	add_label(ctx, m, index, format_waybar(format, args,
-		(int)(sizeof(args) / sizeof(args[0])), &ctx->tm), classes);
+	int nargs = (int)(sizeof(args) / sizeof(args[0]));
+	struct bar_item *item = add_label(ctx, m, index,
+		format_waybar(format, args, nargs, &ctx->tm), classes);
+	set_tooltip(ctx, m, item, NULL, NULL, args, nargs, a->desc);
 	free(format_source);
 }
 
@@ -1109,7 +1409,8 @@ static double disk_divisor(const char *unit) {
 
 // One path of Waybar's disk module. Returns NULL if it cannot be read.
 static char *disk_text(struct bar_module *m, const char *path,
-		const char *format, const char **state_out, struct tm *tm) {
+		const char *format, const char **state_out, struct tm *tm,
+		char **tooltip) {
 	char *real = disk_path(path);
 	struct sysinfo_disk d = {0};
 	bool ok = real && sysinfo_disk(real, &d) && d.total > 0;
@@ -1142,7 +1443,13 @@ static char *disk_text(struct bar_module *m, const char *path,
 		snprintf(key, sizeof(key), "format-%s", state);
 		format = json_get_string(m->cfg, key, format);
 	}
-	return format_waybar(format, args, (int)(sizeof(args) / sizeof(args[0])), tm);
+	int nargs = (int)(sizeof(args) / sizeof(args[0]));
+	if (tooltip) {
+		*tooltip = format_waybar(json_get_string(m->cfg, "tooltip-format",
+			"{used} used out of {total} on {path} ({percentage_used}%)"),
+			args, nargs, tm);
+	}
+	return format_waybar(format, args, nargs, tm);
 }
 
 // Waybar's disk module: "path", or "paths" joined by "separator" after
@@ -1153,12 +1460,18 @@ static void build_disk(struct build_ctx *ctx, struct bar_module *m,
 	struct json_value *paths = json_object_get(m->cfg, "paths");
 	const char *state = NULL;
 	if (!paths || paths->type != JSON_ARRAY || !paths->items->length) {
+		char *tooltip = NULL;
 		char *text = disk_text(m, json_get_string(m->cfg, "path", "/"), format,
-			&state, &ctx->tm);
+			&state, &ctx->tm, &tooltip);
 		const char *classes[] = {state, NULL};
-		add_label(ctx, m, index, text, classes);
+		struct bar_item *item = add_label(ctx, m, index, text, classes);
+		if (item && tooltip && json_get_bool(m->cfg, "tooltip", true)) {
+			item->tooltip = tooltip_text(tooltip);
+		}
+		free(tooltip);
 		return;
 	}
+	char *tooltips = swine_strdup("");
 	const char *separator = json_get_string(m->cfg, "separator", " ");
 	const char *header = json_get_string(m->cfg, "header", "");
 	size_t len = strlen(header), cap = len + 64;
@@ -1170,10 +1483,18 @@ static void build_disk(struct build_ctx *ctx, struct bar_module *m,
 		if (p->type != JSON_STRING) {
 			continue;
 		}
-		char *text = disk_text(m, p->string, format, NULL, &ctx->tm);
+		char *tooltip = NULL;
+		char *text = disk_text(m, p->string, format, NULL, &ctx->tm, &tooltip);
 		if (!text) {
 			continue;
 		}
+		size_t tlen = strlen(tooltips);
+		tooltips = realloc(tooltips, tlen + strlen(tooltip) + 2);
+		if (tlen) {
+			strcat(tooltips, "\n");
+		}
+		strcat(tooltips, tooltip);
+		free(tooltip);
 		size_t need = len + strlen(separator) + strlen(text) + 1;
 		if (need > cap) {
 			cap = need * 2;
@@ -1187,7 +1508,11 @@ static void build_disk(struct build_ctx *ctx, struct bar_module *m,
 		first = false;
 		free(text);
 	}
-	add_label(ctx, m, index, all, NULL);
+	struct bar_item *item = add_label(ctx, m, index, all, NULL);
+	if (item && json_get_bool(m->cfg, "tooltip", true)) {
+		item->tooltip = tooltip_text(tooltips);
+	}
+	free(tooltips);
 }
 
 // Waybar's temperature module.
@@ -1230,7 +1555,9 @@ static void build_temperature(struct build_ctx *ctx, struct bar_module *m,
 		{"icon", FMT_STRING, module_icon(m, c, NULL, max_temp), 0},
 	};
 	const char *classes[] = {cls, NULL};
-	add_label(ctx, m, index, format_waybar(format, args, 4, &ctx->tm), classes);
+	struct bar_item *item = add_label(ctx, m, index,
+		format_waybar(format, args, 4, &ctx->tm), classes);
+	set_tooltip(ctx, m, item, NULL, "{temperatureC}°C", args, 4, NULL);
 }
 
 static void idle_inhibit_set(bool active, struct bar_module *m) {
@@ -1263,8 +1590,71 @@ static void build_idle_inhibitor(struct build_ctx *ctx, struct bar_module *m,
 			(const char *const[]){status, NULL}, 0), 0},
 	};
 	const char *classes[] = {status, NULL};
-	add_label(ctx, m, index, format_waybar(module_format(m, NULL, status,
-		"{status}"), args, 4, &ctx->tm), classes);
+	struct bar_item *item = add_label(ctx, m, index, format_waybar(
+		module_format(m, NULL, status, "{status}"), args, 4, &ctx->tm), classes);
+	set_tooltip(ctx, m, item, status, "{status}", args, 4, NULL);
+}
+
+// power-profiles-daemon's profiles, in its order (a click cycles them).
+static const char *const power_profiles[] = {"power-saver", "balanced",
+	"performance"};
+
+struct power_reading {
+	bool known;
+	char profile[32];
+	char driver[64];
+};
+
+// Waybar's power-profiles-daemon module: Windows' power mode.
+static void build_power_profiles(struct build_ctx *ctx, struct bar_module *m,
+		int index) {
+	struct power_reading *r = cached_reading(m, sizeof(*r), 2, 2);
+	if (!r) {
+		r = m->reading;
+		r->known = sysinfo_power_profile(r->profile, sizeof(r->profile),
+			r->driver, sizeof(r->driver));
+	}
+	if (!r->known) {
+		return;
+	}
+	const char *icon = module_icon(m, 0,
+		(const char *const[]){r->profile, NULL}, 0);
+	if (!json_object_get(m->cfg, "format-icons")) {
+		// Waybar's default icons need Font Awesome, which Windows lacks.
+		icon = strcmp(r->profile, "performance") == 0 ? "PERF" :
+			strcmp(r->profile, "power-saver") == 0 ? "SAVE" : "BAL";
+	}
+	struct fmt_arg args[] = {
+		{"profile", FMT_STRING, r->profile, 0},
+		{"icon", FMT_STRING, icon, 0},
+		{"driver", FMT_STRING, r->driver, 0},
+		{"cpu_driver", FMT_STRING, r->driver, 0},
+		{"platform_driver", FMT_STRING, r->driver, 0},
+	};
+	const char *classes[] = {r->profile, NULL};
+	struct bar_item *item = add_label(ctx, m, index, format_waybar(
+		module_format(m, NULL, NULL, "{icon}"), args, 5, &ctx->tm), classes);
+	set_tooltip(ctx, m, item, NULL,
+		"Power profile: {profile}\nDriver: {driver}", args, 5, NULL);
+}
+
+// The next (or previous) power profile, as Waybar's left (right) click.
+static void power_profiles_cycle(struct bar_module *m, int step) {
+	char profile[32], driver[64];
+	if (!sysinfo_power_profile(profile, sizeof(profile), driver,
+			sizeof(driver))) {
+		return;
+	}
+	int n = (int)(sizeof(power_profiles) / sizeof(power_profiles[0]));
+	int current = 1;
+	for (int i = 0; i < n; ++i) {
+		if (strcmp(profile, power_profiles[i]) == 0) {
+			current = i;
+		}
+	}
+	sysinfo_set_power_profile(power_profiles[(current + step + n) % n]);
+	free(m->reading);
+	m->reading = NULL;
 }
 
 // Waybar's keyboard-state: a label for each lock that is enabled.
@@ -1306,7 +1696,7 @@ static void build_keyboard_state(struct build_ctx *ctx, struct bar_module *m,
 		free(text);
 		const char *classes[] = {keys[i], locks[i] ? "locked" : NULL, NULL};
 		struct css_element el = {"label", NULL, classes, &box_el};
-		css_compute(bar.css, &el, &view->style, &item->style);
+		compute_item_style(&el, &view->style, item);
 		list_add(view->items, item);
 	}
 	if (!view->items->length) {
@@ -1367,8 +1757,38 @@ static void build_language(struct build_ctx *ctx, struct bar_module *m,
 		{"flag", false, flag, 0},
 	};
 	const char *classes[] = {l->short_name, NULL};
-	add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL, "{}"),
-		args, 6, &ctx->tm), classes);
+	char *label = format_waybar(module_format(m, NULL, NULL, "{}"), args, 6,
+		&ctx->tm);
+	char *label_copy = swine_strdup(label);
+	struct bar_item *item = add_label(ctx, m, index, label, classes);
+	set_tooltip(ctx, m, item, NULL, NULL, args, 6, label_copy);
+	free(label_copy);
+}
+
+// Waybar's {calendar}: the month of tm, weeks from Monday.
+static char *month_calendar(const struct tm *tm) {
+	static const int days_in[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+	int year = tm->tm_year + 1900;
+	int days = days_in[tm->tm_mon];
+	if (tm->tm_mon == 1 && ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0)) {
+		days = 29;
+	}
+	// Weekday of the 1st (Monday 0), from today's.
+	int first = ((tm->tm_wday + 6) % 7 - (tm->tm_mday - 1) % 7 + 7) % 7;
+	char *out = malloc(8 * 21 + 1);
+	char *o = out;
+	o += sprintf(o, "Mo Tu We Th Fr Sa Su");
+	int column = 0;
+	for (int i = 0; i < first; ++i, ++column) {
+		o += sprintf(o, "%s  ", column == 0 ? "\n" : " ");
+	}
+	for (int day = 1; day <= days; ++day, ++column) {
+		if (column == 7) {
+			column = 0;
+		}
+		o += sprintf(o, "%s%2d", column == 0 ? "\n" : " ", day);
+	}
+	return out;
 }
 
 static void build_module(struct build_ctx *ctx, struct bar_module *m,
@@ -1383,8 +1803,9 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			return;
 		}
 		struct fmt_arg args[] = {{NULL, false, mode, 0}};
-		add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL, "{}"),
-			args, 1, &ctx->tm), NULL);
+		struct bar_item *item = add_label(ctx, m, index, format_waybar(
+			module_format(m, NULL, NULL, "{}"), args, 1, &ctx->tm), NULL);
+		set_tooltip(ctx, m, item, NULL, NULL, args, 1, mode);
 		return;
 	}
 	case MOD_WINDOW: {
@@ -1400,8 +1821,10 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			{"app_id", false, view->app_id, 0},
 			{"shell", false, "native", 0},
 		};
-		add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL, "{}"),
-			args, 3, &ctx->tm), NULL);
+		struct bar_item *item = add_label(ctx, m, index, format_waybar(
+			module_format(m, NULL, NULL, "{}"), args, 3, &ctx->tm), NULL);
+		// The whole title, which max-length may have cut.
+		set_tooltip(ctx, m, item, NULL, NULL, args, 3, view->title);
 		return;
 	}
 	case MOD_SCRATCHPAD: {
@@ -1421,14 +1844,50 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			{"icon", false, icon, 0},
 		};
 		const char *classes[] = {count == 0 ? "empty" : NULL, NULL};
-		add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL,
-			"{icon} {count}"), args, 2, &ctx->tm), classes);
+		struct bar_item *item = add_label(ctx, m, index, format_waybar(
+			module_format(m, NULL, NULL, "{icon} {count}"), args, 2, &ctx->tm),
+			classes);
+		if (item && json_get_bool(m->cfg, "tooltip", true)) {
+			// Waybar: one line per window, "{app}: {title}"
+			const char *line = json_get_string(m->cfg, "tooltip-format",
+				"{app}: {title}");
+			size_t len = 0;
+			char *all = swine_strdup("");
+			for (int i = 0; i < count; ++i) {
+				struct swine_container *con = root->scratchpad->items[i];
+				if (!con->view) {
+					continue;
+				}
+				struct fmt_arg wargs[] = {
+					{"app", false, con->view->app_id, 0},
+					{"title", false, con->view->title, 0},
+				};
+				char *text = format_waybar(line, wargs, 2, &ctx->tm);
+				all = realloc(all, len + strlen(text) + 2);
+				if (len) {
+					all[len++] = '\n';
+				}
+				strcpy(all + len, text);
+				len += strlen(text);
+				free(text);
+			}
+			item->tooltip = tooltip_text(all);
+			free(all);
+		}
 		return;
 	}
-	case MOD_CLOCK:
-		add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL,
-			"{:%H:%M}"), NULL, 0, &ctx->tm), NULL);
+	case MOD_CLOCK: {
+		struct bar_item *item = add_label(ctx, m, index, format_waybar(
+			module_format(m, NULL, NULL, "{:%H:%M}"), NULL, 0, &ctx->tm), NULL);
+		// Waybar's clock has a tooltip only with tooltip-format.
+		if (item && json_object_get(m->cfg, "tooltip-format")) {
+			char *calendar = month_calendar(&ctx->tm);
+			struct fmt_arg args[] = {{"calendar", false, calendar, 0}};
+			set_tooltip(ctx, m, item, NULL, NULL, args, 1, NULL);
+			free(calendar);
+		}
 		return;
+	}
 	case MOD_CPU: {
 		int usage = 0;
 		if (!sysinfo_cpu(&usage)) {
@@ -1440,8 +1899,9 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		};
 		const char *state = module_state(m, usage, false);
 		const char *classes[] = {state, NULL};
-		add_label(ctx, m, index, format_waybar(module_format(m, state, NULL,
-			"{usage}%"), args, 2, &ctx->tm), classes);
+		struct bar_item *item = add_label(ctx, m, index, format_waybar(
+			module_format(m, state, NULL, "{usage}%"), args, 2, &ctx->tm), classes);
+		set_tooltip(ctx, m, item, state, "{usage}%", args, 2, NULL);
 		return;
 	}
 	case MOD_MEMORY: {
@@ -1458,8 +1918,10 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		};
 		const char *state = module_state(m, mem.percentage, false);
 		const char *classes[] = {state, NULL};
-		add_label(ctx, m, index, format_waybar(module_format(m, state, NULL,
-			"{percentage}%"), args, 5, &ctx->tm), classes);
+		struct bar_item *item = add_label(ctx, m, index, format_waybar(
+			module_format(m, state, NULL, "{percentage}%"), args, 5, &ctx->tm),
+			classes);
+		set_tooltip(ctx, m, item, state, "{used:0.1f}GiB used", args, 5, NULL);
 		return;
 	}
 	case MOD_BATTERY: {
@@ -1471,14 +1933,45 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			bat.plugged ? (bat.capacity >= 100 ? "full" : "plugged") :
 			"discharging";
 		const char *state = module_state(m, bat.capacity, true);
+		// Waybar's format-time, "{H} h {M} min"
+		char time_text[64] = "";
+		if (bat.seconds_left > 0) {
+			struct fmt_arg targs[] = {
+				{"H", true, NULL, bat.seconds_left / 3600},
+				{"M", true, NULL, (bat.seconds_left / 60) % 60},
+				{"m", true, NULL, (bat.seconds_left / 60) % 60},
+			};
+			char *t = format_waybar(json_get_string(m->cfg, "format-time",
+				"{H} h {M} min"), targs, 3, NULL);
+			snprintf(time_text, sizeof(time_text), "%s", t);
+			free(t);
+		}
+		static const char *const pretty[][2] = {
+			{"charging", "Charging"}, {"discharging", "Discharging"},
+			{"full", "Full"}, {"plugged", "Not charging"},
+		};
+		const char *time_to = status;
+		for (size_t i = 0; i < sizeof(pretty) / sizeof(pretty[0]); ++i) {
+			if (strcmp(status, pretty[i][0]) == 0) {
+				time_to = pretty[i][1];
+			}
+		}
+		char empty_in[96];
+		if (time_text[0] && strcmp(status, "discharging") == 0) {
+			snprintf(empty_in, sizeof(empty_in), "Empty in %s", time_text);
+			time_to = empty_in;
+		}
 		struct fmt_arg args[] = {
 			{"capacity", true, NULL, bat.capacity},
 			{"icon", false, icon_for_percent(m, bat.capacity), 0},
-			{"time", false, "", 0},
+			{"time", false, time_text, 0},
+			{"timeTo", false, time_to, 0},
 		};
 		const char *classes[] = {status, state, NULL};
-		add_label(ctx, m, index, format_waybar(module_format(m, state, status,
-			"{capacity}%"), args, 3, &ctx->tm), classes);
+		struct bar_item *item = add_label(ctx, m, index, format_waybar(
+			module_format(m, state, status, "{capacity}%"), args, 4, &ctx->tm),
+			classes);
+		set_tooltip(ctx, m, item, status, "{timeTo}", args, 4, NULL);
 		return;
 	}
 	case MOD_TRAY:
@@ -1505,30 +1998,51 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 	case MOD_KEYBOARD_STATE:
 		build_keyboard_state(ctx, m, index);
 		return;
+	case MOD_POWER_PROFILES:
+		build_power_profiles(ctx, m, index);
+		return;
 	case MOD_CUSTOM:
 		build_custom(ctx, m, index);
 		return;
 	}
 }
 
-struct bar_model *bar_build(struct swine_output *output, time_t now) {
+struct bar_model *bar_build_n(int index, struct swine_output *output,
+		time_t now) {
 	ensure_loaded();
 	struct build_ctx ctx = {0};
 	ctx.model = calloc(1, sizeof(*ctx.model));
 	ctx.model->modules = create_list();
-	ctx.model->spacing = bar.spacing;
 	ctx.output = output;
 	ctx.now = now;
 	struct tm *tm = localtime(&now);
 	if (tm) {
 		ctx.tm = *tm;
 	}
-	ctx.window_el = (struct css_element){"window", "waybar", NULL, NULL};
+	if (index < 0 || index >= bar.bars->length) {
+		return ctx.model;
+	}
+	struct bar_instance *b = bar.bars->items[index];
+	enum bar_position pos = instance_position(b);
+	ctx.model->spacing = b->spacing;
+	ctx.model->vertical = pos == BAR_LEFT || pos == BAR_RIGHT;
+	// Waybar: window#waybar.<position>.<name>
+	static const char *const positions[] = {"top", "bottom", "left", "right"};
+	const char *classes[] = {positions[pos],
+		json_get_string(b->cfg, "name", NULL), NULL};
+	ctx.window_el = (struct css_element){"window", "waybar", classes, NULL};
 	css_compute(bar.css, &ctx.window_el, NULL, &ctx.model->window);
 	for (int i = 0; i < bar.modules->length; ++i) {
-		build_module(&ctx, bar.modules->items[i], i);
+		struct bar_module *m = bar.modules->items[i];
+		if (m->bar == index) {
+			build_module(&ctx, m, i);
+		}
 	}
 	return ctx.model;
+}
+
+struct bar_model *bar_build(struct swine_output *output, time_t now) {
+	return bar_build_n(0, output, now);
 }
 
 void bar_model_free(struct bar_model *model) {
@@ -1540,6 +2054,7 @@ void bar_model_free(struct bar_model *model) {
 		for (int j = 0; j < view->items->length; ++j) {
 			struct bar_item *item = view->items->items[j];
 			free(item->text);
+			free(item->tooltip);
 			free(item->on_click);
 			free(item->on_click_middle);
 			free(item->on_click_right);
@@ -1565,6 +2080,20 @@ void bar_module_clicked(int module_index) {
 	}
 	if (m->kind == MOD_IDLE_INHIBITOR) {
 		idle_inhibit_set(!idle_inhibit.active, m);
+	}
+	if (m->kind == MOD_POWER_PROFILES) {
+		power_profiles_cycle(m, 1);
+	}
+	bar_script_event(m->script);
+}
+
+void bar_module_right_clicked(int module_index) {
+	if (!bar.modules || module_index < 0 || module_index >= bar.modules->length) {
+		return;
+	}
+	struct bar_module *m = bar.modules->items[module_index];
+	if (m->kind == MOD_POWER_PROFILES) {
+		power_profiles_cycle(m, -1);
 	}
 	bar_script_event(m->script);
 }

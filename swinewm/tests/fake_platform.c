@@ -282,6 +282,7 @@ bool sysinfo_battery(struct sysinfo_battery *out) {
 	out->capacity = fake.battery_capacity;
 	out->charging = fake.battery_charging;
 	out->plugged = fake.battery_charging;
+	out->seconds_left = fake.battery_seconds;
 	return true;
 }
 
@@ -325,6 +326,15 @@ void sysinfo_audio_set_mute(bool source, int mode) {
 	fake.mute_calls++;
 	bool *muted = source ? &fake.audio.source_muted : &fake.audio.muted;
 	*muted = mode < 0 ? !*muted : mode == 1;
+}
+bool sysinfo_power_profile(char *profile, size_t size, char *driver,
+		size_t driver_size) {
+	snprintf(profile, size, "%s", fake.power_profile);
+	snprintf(driver, driver_size, "fake");
+	return fake.power_profile[0] != '\0';
+}
+void sysinfo_set_power_profile(const char *profile) {
+	snprintf(fake.power_profile, sizeof(fake.power_profile), "%s", profile);
 }
 void sysinfo_inhibit_idle(bool enable) {
 	fake.idle_inhibited = enable;

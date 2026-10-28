@@ -8,8 +8,27 @@ the MSI and zip with the matching section below as release notes.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-28
+
 ### Added
 
+- Bar tooltips, as in Waybar: `tooltip-format`, `tooltip-format-<state>`
+  and each module's default tooltip (the whole window title, battery time
+  left, the clock's `{calendar}`, disk usage, a script's `tooltip`,
+  scratchpad windows), styled by `tooltip` in style.css. Tray icons show
+  their program's tooltip, or get `NIN_POPUPOPEN` to show their own, and
+  receive the pointer's movements as from Explorer.
+- The bar is translucent where its style says so (Waybar's default
+  `rgba(43, 48, 59, 0.5)`): it is a layered window with per-pixel alpha,
+  where it used to blend such colours over black.
+- Several bars from one Waybar config (an array), each with its own
+  modules and outputs; `left` and `right` positions with the modules top
+  to bottom; `margin`, `width` and `exclusive`; `rotate` for text modules.
+- Waybar's `power-profiles-daemon` module shows and cycles Windows' power
+  mode (or the power plan): power-saver, balanced, performance.
+- `:hover` and `:not(.class)` in the bar's style.css; the default style
+  has Waybar's hover rules (workspace buttons, `#pulseaudio`). Waybar's
+  `#battery.critical:not(.charging)` now turns a low battery red.
 - Keyboard layouts: Waybar's `sway/language` module shows the active
   Windows keyboard layout (in the default bar when more than one is
   installed; a click switches to the next), and sway's
@@ -301,7 +320,8 @@ built-in Waybar (config.jsonc, CSS subset, common modules) and Mako
 (config, criteria, modes, `notify-send`, `makoctl`), wallpapers,
 running as the Windows shell (`--set-shell`), and an MSI installer.
 
-[Unreleased]: https://github.com/staalmannen/SwineWM/compare/0.4.0...HEAD
+[Unreleased]: https://github.com/staalmannen/SwineWM/compare/0.5.0...HEAD
+[0.5.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.5.0
 [0.4.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.4.0
 [0.3.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.3.0
 [0.2.0]: https://github.com/staalmannen/SwineWM/releases/tag/0.2.0

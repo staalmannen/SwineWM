@@ -1,7 +1,9 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "fake_platform.h"
 #include "json.h"
+#include "stringop.h"
 #include "swinewm/bar/bar.h"
 #include "swinewm/bar/css.h"
 #include "swinewm/bar/custom.h"
@@ -67,8 +69,14 @@ static void test_css(void) {
 	css_compute(sheet, &btn_el, &box, &button);
 	CHECK_INT(button.padding.left, 5);
 	CHECK_INT(button.padding.top, 0);
-	CHECK_INT(button.background.a, 0);   // :hover never applies
+	CHECK_INT(button.background.a, 0);   // :hover only with the pointer
 	CHECK_INT(button.color.r, 255);
+	const char *hovered[] = {CSS_HOVER, NULL};
+	struct css_element hover_el = {"button", NULL, hovered, &box_el};
+	struct swine_style hover;
+	css_compute(sheet, &hover_el, &box, &hover);
+	CHECK_INT(hover.background.r, 0x12);
+	CHECK_INT(hover.background.a, 255);
 
 	const char *classes[] = {"focused", NULL};
 	struct css_element focused_el = {"button", NULL, classes, &box_el};
@@ -225,10 +233,10 @@ static void test_bar_model(void) {
 	CHECK_STR(item_text(model, 5), "D");
 	struct bar_module_view *bat = find_view(model, 4);
 	if (bat) {
-		// default style: #battery.critical:not(.charging) never matches
-		// (unsupported pseudo-class), #battery is white
+		// default style: #battery.critical:not(.charging) is red
 		struct bar_item *item = bat->items->items[0];
-		CHECK_INT(item->style.background.r, 255);
+		CHECK_INT(item->style.background.r, 0xf5);
+		CHECK_INT(item->style.background.g, 0x3c);
 	}
 	bar_model_free(model);
 
@@ -744,6 +752,175 @@ static void test_system_modules(void) {
 	fake_teardown();
 }
 
+// Tooltips as Waybar resolves them: tooltip-format-<state>, tooltip-format,
+// the module's default; "tooltip": false.
+static void test_tooltips(void) {
+	fake_setup();
+	config->bar_enabled = true;
+	fake.has_battery = true;
+	fake.battery_capacity = 50;
+	fake.battery_seconds = 2 * 3600 + 5 * 60;
+	fake.has_disk = true;
+	fake.disk = (struct sysinfo_disk){ .total = 1073741824.0 * 100,
+		.free = 1073741824.0 * 40, .avail = 1073741824.0 * 40 };
+	fake.has_temperature = true;
+	fake.temperature = 40;
+	fake.cpu_usage = 12;
+	bar_load_from_strings(
+		"{ \"modules-right\": [\"sway/window\", \"battery\", \"clock\", \"disk\","
+		"   \"temperature\", \"cpu\", \"custom/s\", \"sway/scratchpad\"],\n"
+		"  \"sway/window\": { \"max-length\": 4 },\n"
+		"  \"clock\": { \"format\": \"T\","
+		"     \"tooltip-format\": \"<big>{:%Y}</big>\\n<tt>{calendar}</tt>\" },\n"
+		"  \"temperature\": { \"tooltip\": false },\n"
+		"  \"cpu\": { \"states\": { \"low\": 0 },"
+		"     \"tooltip-format-low\": \"low {usage}\" },\n"
+		"  \"custom/s\": { \"exec\": \"x\", \"interval\": 5, \"return-type\": \"json\" },\n"
+		"  \"sway/scratchpad\": { \"show-empty\": true } }", NULL);
+	fake_map_view("A long title");
+	struct swine_output *output = root->outputs->items[0];
+	struct tm tm = {0};
+	tm.tm_year = 2026 - 1900;
+	tm.tm_mon = 9;      // October 2026 starts on a Thursday
+	tm.tm_mday = 28;
+	tm.tm_wday = 3;     // a Wednesday
+	time_t when = mktime(&tm);
+	bar_scripts_tick(fake.now_ms ? fake.now_ms : 1);
+	bar_script_line(fake.last_script_id,
+		"{\"text\": \"hi\", \"tooltip\": \"line1\\rline2\"}");
+	bar_script_exited(fake.last_script_id, 0);
+	struct bar_model *model = bar_build(output, when);
+	struct bar_item *window = first_item(model, 0);
+	CHECK(window && window->tooltip &&
+		strcmp(window->tooltip, "A long title") == 0);
+	struct bar_item *battery = first_item(model, 1);
+	CHECK(battery && battery->tooltip &&
+		strcmp(battery->tooltip, "Empty in 2 h 5 min") == 0);
+	struct bar_item *clock = first_item(model, 2);
+	CHECK(clock && clock->tooltip_mono);
+	if (clock && clock->tooltip) {
+		CHECK(has_prefix(clock->tooltip,
+			"2026\nMo Tu We Th Fr Sa Su\n          1  2  3  4\n 5  6  7"));
+		CHECK(strstr(clock->tooltip, "\n26 27 28 29 30 31") != NULL);
+	}
+	struct bar_item *disk = first_item(model, 3);
+	CHECK(disk && disk->tooltip &&
+		strcmp(disk->tooltip, "60.0GiB used out of 100.0GiB on / (60%)") == 0);
+	struct bar_item *temp = first_item(model, 4);
+	CHECK(temp && !temp->tooltip);
+	struct bar_item *cpu = first_item(model, 5);
+	CHECK(cpu && cpu->tooltip && strcmp(cpu->tooltip, "low 12") == 0);
+	struct bar_item *custom = first_item(model, 6);
+	CHECK(custom && custom->tooltip &&
+		strcmp(custom->tooltip, "line1\nline2") == 0);
+	bar_model_free(model);
+	run("move scratchpad");
+	model = bar_build(output, when);
+	struct bar_item *scratch = first_item(model, 7);
+	CHECK(scratch && scratch->tooltip &&
+		strcmp(scratch->tooltip, "test.exe: A long title") == 0);
+	bar_model_free(model);
+	fake_teardown();
+}
+
+// power-profiles-daemon: Windows' power mode; clicks cycle it.
+static void test_power_profiles(void) {
+	fake_setup();
+	config->bar_enabled = true;
+	snprintf(fake.power_profile, sizeof(fake.power_profile), "balanced");
+	bar_load_from_strings("{ \"modules-right\": [\"power-profiles-daemon\","
+		" \"power-profiles-daemon#name\"],"
+		" \"power-profiles-daemon#name\": { \"format\": \"{icon} {profile}\","
+		"   \"format-icons\": { \"default\": \"?\", \"performance\": \"P\" } } }",
+		NULL);
+	struct swine_output *output = root->outputs->items[0];
+	struct bar_model *model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "BAL");
+	CHECK_STR(item_text(model, 1), "? balanced");
+	struct bar_item *item = first_item(model, 0);
+	CHECK(item && item->tooltip &&
+		strcmp(item->tooltip, "Power profile: balanced\nDriver: fake") == 0);
+	bar_model_free(model);
+	bar_module_clicked(1);
+	CHECK_STR(fake.power_profile, "performance");
+	bar_module_clicked(1);
+	CHECK_STR(fake.power_profile, "power-saver");
+	bar_module_right_clicked(0);
+	CHECK_STR(fake.power_profile, "performance");
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 1), "P performance");
+	bar_model_free(model);
+	fake.power_profile[0] = '\0';   // unknown: hidden
+	fake.now_ms += 5000;
+	model = bar_build(output, 0);
+	CHECK_INT(model->modules->length, 0);
+	bar_model_free(model);
+	fake_teardown();
+}
+
+// Several bars: stacked on their edges in order, as layer-shell places
+// them, with margins, "exclusive" and per-bar outputs and modules.
+static void test_multiple_bars(void) {
+	fake_setup_two_outputs();
+	config->bar_enabled = true;
+	bar_load_from_strings(
+		"[ { \"name\": \"main\", \"height\": 20, \"modules-left\": [\"clock\"],"
+		"    \"clock\": { \"rotate\": -90 } },\n"
+		"  { \"position\": \"top\", \"height\": 10, \"margin\": \"2 4\","
+		"    \"output\": \"DISPLAY1\", \"modules-left\": [\"cpu\"] },\n"
+		"  { \"position\": \"left\", \"width\": 50, \"modules-left\": [\"sway/workspaces\"] },\n"
+		"  { \"position\": \"bottom\", \"height\": 15, \"exclusive\": false } ]",
+		"window#waybar.left { color: #ff0000; }\n");
+	CHECK_INT(bar_count(), 4);
+	CHECK(bar_position_n(2) == BAR_LEFT);
+	CHECK_INT(bar_height(), 20);
+	struct swine_output *one = root->outputs->items[0];
+	struct swine_output *two = root->outputs->items[1];
+	bar_update_reservations();
+	// top: 20 + (2 + 10 + 2); left: 50; the bottom bar is not exclusive
+	CHECK_INT(one->reserved.top, 34);
+	CHECK_INT(one->reserved.left, 50);
+	CHECK_INT(one->reserved.bottom, 0);
+	CHECK_INT(two->reserved.top, 20);   // bar 1 is only on DISPLAY1
+	struct swine_box r;
+	CHECK(bar_get_rect_n(1, one, &r));
+	CHECK_INT(r.y, 22);
+	CHECK_INT(r.x, 4);
+	CHECK_INT(r.width, 1000 - 8);
+	CHECK_INT(r.height, 10);
+	CHECK(!bar_get_rect_n(1, two, &r));
+	// The left bar starts below the top bars.
+	CHECK(bar_get_rect_n(2, one, &r));
+	CHECK_INT(r.x, 0);
+	CHECK_INT(r.y, 34);
+	CHECK_INT(r.width, 50);
+	CHECK_INT(r.height, 800 - 34);
+	CHECK(bar_get_rect_n(3, one, &r));
+	CHECK_INT(r.y, 800 - 15);
+	CHECK_INT(r.x, 50);
+	// Each bar has its own modules; window#waybar has its position class.
+	struct bar_model *model = bar_build_n(2, one, 0);
+	CHECK(model->vertical);
+	CHECK_INT(model->window.color.r, 255);
+	CHECK_INT(model->window.color.g, 0);
+	CHECK_INT(model->modules->length, 1);
+	struct bar_module_view *ws = model->modules->items[0];
+	CHECK(ws->is_box);
+	bar_model_free(model);
+	model = bar_build_n(0, one, 0);
+	CHECK(!model->vertical);
+	CHECK_INT(model->modules->length, 1);
+	struct bar_module_view *clock = model->modules->items[0];
+	CHECK_INT(clock->module_index, 0);
+	CHECK_INT(((struct bar_item *)clock->items->items[0])->rotate, 270);
+	bar_model_free(model);
+	model = bar_build_n(1, one, 0);
+	struct bar_module_view *cpu = model->modules->items[0];
+	CHECK_INT(cpu->module_index, 1);   // indexes count across bars
+	bar_model_free(model);
+	fake_teardown();
+}
+
 void test_bar_all(void) {
 	test_bar_config_ipc();
 	test_json_parse();
@@ -757,4 +934,7 @@ void test_bar_all(void) {
 	test_custom_scripts();
 	test_pow_format();
 	test_system_modules();
+	test_tooltips();
+	test_power_profiles();
+	test_multiple_bars();
 }

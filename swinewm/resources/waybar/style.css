@@ -24,6 +24,15 @@ window#waybar {
     color: #ffffff;
 }
 
+/* As Waybar's default: an underline on hover */
+button:hover {
+    box-shadow: inset 0 -3px #ffffff;
+}
+
+#workspaces button:hover {
+    background: rgba(0, 0, 0, 0.2);
+}
+
 #workspaces button.focused {
     background-color: #64727D;
     box-shadow: inset 0 -3px #ffffff;
@@ -105,6 +114,11 @@ window#waybar {
     color: #000000;
 }
 
+/* A style on hover works for any module like this */
+#pulseaudio:hover {
+    background-color: #a37800;
+}
+
 #pulseaudio.muted {
     background-color: #90b1b1;
     color: #2a5c45;
@@ -167,4 +181,15 @@ window#waybar {
 
 #tray > .needs-attention {
     background-color: #eb4d4b;
+}
+
+/* Tooltips: Waybar leaves them to the GTK theme. */
+tooltip {
+    background-color: rgba(43, 48, 59, 0.95);
+    border: 1px solid rgba(100, 114, 125, 0.8);
+    padding: 4px 8px;
+}
+
+tooltip label {
+    color: #ffffff;
 }

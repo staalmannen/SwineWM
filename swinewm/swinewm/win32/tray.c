@@ -82,6 +82,8 @@ struct tray_icon {
 	UINT version;
 	HICON icon;
 	wchar_t tip[128];
+	bool show_tip;          // version 4: NIF_SHOWTIP, Explorer's tooltip
+	bool popup_open;        // NIN_POPUPOPEN sent, NIN_POPUPCLOSE owed
 	bool hidden;
 	DWORD pid;
 	char *app_id;
@@ -250,6 +252,9 @@ static BOOL handle_notify(DWORD message, const struct tray_nid *in,
 		if (nid.uFlags & NIF_TIP) {
 			wcscpy(icon->tip, nid.szTip);
 		}
+		// Version 4 icons without NIF_SHOWTIP draw their own popup
+		// (NIN_POPUPOPEN); the flag comes with every NIM_MODIFY.
+		icon->show_tip = (nid.uFlags & NIF_SHOWTIP) != 0;
 		if (nid.uFlags & NIF_STATE) {
 			DWORD mask = nid.dwStateMask ? nid.dwStateMask : NIS_HIDDEN;
 			if (mask & NIS_HIDDEN) {
@@ -768,6 +773,45 @@ void win32_tray_set_host_rect(const RECT *screen) {
 // Mouse buttons on an icon, encoded the way Explorer does (ManagedShell's
 // NotifyIcon.IconMouseDown/Up): version 4 icons get the position in wParam
 // and the icon id in the high word of lParam, older ones the id in wParam.
+// The pointer over an icon, as Explorer reports it: WM_MOUSEMOVE as it
+// moves (TRAY_HOVER_MOVE); after the hover delay (TRAY_HOVER_POPUP)
+// NIN_POPUPOPEN for version 4 icons that show their own popup, and true if
+// swinewm should show the tooltip text instead; NIN_POPUPCLOSE when it
+// leaves (TRAY_HOVER_LEAVE).
+bool win32_tray_hover(uint64_t id, enum tray_hover what, POINT screen) {
+	if (!thread) {
+		return false;
+	}
+	EnterCriticalSection(&lock);
+	struct tray_icon *icon = find_by_id(id);
+	if (!icon) {
+		LeaveCriticalSection(&lock);
+		return false;
+	}
+	HWND hwnd = icon->hwnd;
+	UINT callback = icon->callback, uid = icon->uid, version = icon->version;
+	bool own_popup = version > 3 && !icon->show_tip;
+	bool show_text = !own_popup && icon->tip[0];
+	UINT msg = 0;
+	if (what == TRAY_HOVER_MOVE) {
+		msg = WM_MOUSEMOVE;
+	} else if (what == TRAY_HOVER_POPUP && own_popup && !icon->popup_open) {
+		msg = NIN_POPUPOPEN;
+		icon->popup_open = true;
+	} else if (what == TRAY_HOVER_LEAVE && icon->popup_open) {
+		msg = NIN_POPUPCLOSE;
+		icon->popup_open = false;
+	}
+	LeaveCriticalSection(&lock);
+	if (msg && IsWindow(hwnd) && callback) {
+		WPARAM wparam = version > 3 ?
+			MAKEWPARAM((WORD)screen.x, (WORD)screen.y) : (WPARAM)uid;
+		LPARAM high = version > 3 ? (LPARAM)uid << 16 : 0;
+		SendNotifyMessageW(hwnd, callback, wparam, (LPARAM)msg | high);
+	}
+	return what == TRAY_HOVER_POPUP && show_text;
+}
+
 void win32_tray_mouse(uint64_t id, int button, bool down, POINT screen) {
 	static const UINT down_msg[3] = {WM_LBUTTONDOWN, WM_MBUTTONDOWN,
 		WM_RBUTTONDOWN};
