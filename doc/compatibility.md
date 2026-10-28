@@ -144,7 +144,7 @@ Unicode properties (`\p{…}`).
 | `on-click`, `on-click-middle`, `on-click-right`, `on-scroll-up/down` | ✅ | Run through `exec`; `swaymsg <command>`, `pkill -<signal> waybar` and the volume commands `pactl set-sink-volume\|set-sink-mute\|set-source-volume\|set-source-mute`, `wpctl set-volume\|set-mute` and `pamixer -i\|-d\|--set-volume\|-t\|-m\|-u` (on the default Windows devices) run inside swinewm. A Waybar signal through `pkill`: `RTMIN+n` (custom modules), `USR1` (show or hide the bar), `USR2` (reload the bar) |
 | Tooltips | ✅ | After the hover delay, below a top bar (above a bottom one). `tooltip` (`false` turns it off), `tooltip-format`, `tooltip-format-<state>` and each module's Waybar default (window: the whole title; battery: `{timeTo}`; disk: `{used} used out of {total} on {path} ({percentage_used}%)`; scratchpad: one `{app}: {title}` line per window; custom: the script's `tooltip`, lines split by `\r`). Styled by `tooltip` and `tooltip label` in style.css; markup is stripped |
 | `rotate`, markup beyond stripping | ❌ | |
-| `style.css` | 🟡 | Selectors by type/#id/.class with descendants; `@define-color`, `alpha()`; colours, fonts, padding, margin, borders, `box-shadow: inset`; no `:hover`, animations, transparency (blended over black) |
+| `style.css` | 🟡 | Selectors by type/#id/.class with descendants; `@define-color`, `alpha()`; colours, fonts, padding, margin, borders, `box-shadow: inset`; `:hover` (colours and borders; it does not change sizes) and `:not(.class)`; no other pseudo-classes (`:first-child`, …), animations, transparency (blended over black) |
 
 ## Notifications (mako config)
 

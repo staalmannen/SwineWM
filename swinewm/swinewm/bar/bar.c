@@ -406,6 +406,43 @@ struct build_ctx {
 	struct tm tm;
 };
 
+static bool color_equal(struct swine_color a, struct swine_color b) {
+	return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+}
+
+static bool edge_equal(struct css_edge a, struct css_edge b) {
+	return a.width == b.width && color_equal(a.color, b.color);
+}
+
+// What a :hover rule may change that the platform draws differently.
+static bool look_equal(const struct swine_style *a, const struct swine_style *b) {
+	return color_equal(a->background, b->background) &&
+		color_equal(a->color, b->color) && a->bold == b->bold &&
+		a->italic == b->italic && edge_equal(a->border_top, b->border_top) &&
+		edge_equal(a->border_right, b->border_right) &&
+		edge_equal(a->border_bottom, b->border_bottom) &&
+		edge_equal(a->border_left, b->border_left) &&
+		a->inset_bottom == b->inset_bottom && a->inset_top == b->inset_top &&
+		color_equal(a->inset_color, b->inset_color);
+}
+
+// An item's style, and its style while the pointer is over it (:hover).
+static void compute_item_style(const struct css_element *el,
+		const struct swine_style *parent, struct bar_item *item) {
+	css_compute(bar.css, el, parent, &item->style);
+	const char *classes[MAX_CLASSES + 4];
+	int n = 0;
+	for (int i = 0; el->classes && el->classes[i] && n < MAX_CLASSES + 2; ++i) {
+		classes[n++] = el->classes[i];
+	}
+	classes[n++] = CSS_HOVER;
+	classes[n] = NULL;
+	struct css_element hovered = *el;
+	hovered.classes = classes;
+	css_compute(bar.css, &hovered, parent, &item->hover_style);
+	item->has_hover = !look_equal(&item->style, &item->hover_style);
+}
+
 static struct bar_module_view *new_view(struct bar_module *m, int index) {
 	struct bar_module_view *view = calloc(1, sizeof(*view));
 	view->section = m->section;
@@ -462,7 +499,7 @@ static struct bar_item *add_label(struct build_ctx *ctx, struct bar_module *m,
 	struct css_element el = {"label", m->css_id, all, &ctx->window_el};
 	struct bar_item *item = calloc(1, sizeof(*item));
 	item->text = plain;
-	css_compute(bar.css, &el, &ctx->model->window, &item->style);
+	compute_item_style(&el, &ctx->model->window, item);
 	view->style = item->style;
 	const char *on_click = json_get_string(m->cfg, "on-click", NULL);
 	if (on_click) {
@@ -710,7 +747,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			item->text = markup_strip(text);
 			free(text);
 			struct css_element el = {"button", NULL, classes, &box_el};
-			css_compute(bar.css, &el, &view->style, &item->style);
+			compute_item_style(&el, &view->style, item);
 			if (!disable_click) {
 				item->on_click = format_str(
 					"workspace --no-auto-back-and-forth \"%s\"", ws->name);
@@ -849,7 +886,7 @@ static void build_tray(struct build_ctx *ctx, struct bar_module *m,
 		item->icon_path = entries[i].icon_path ?
 			platform_expand_path(entries[i].icon_path) : NULL;
 		struct css_element el = {"widget", NULL, classes, &box_el};
-		css_compute(bar.css, &el, &view->style, &item->style);
+		compute_item_style(&el, &view->style, item);
 		list_add(view->items, item);
 	}
 	free(entries);
@@ -1433,7 +1470,7 @@ static void build_keyboard_state(struct build_ctx *ctx, struct bar_module *m,
 		free(text);
 		const char *classes[] = {keys[i], locks[i] ? "locked" : NULL, NULL};
 		struct css_element el = {"label", NULL, classes, &box_el};
-		css_compute(bar.css, &el, &view->style, &item->style);
+		compute_item_style(&el, &view->style, item);
 		list_add(view->items, item);
 	}
 	if (!view->items->length) {

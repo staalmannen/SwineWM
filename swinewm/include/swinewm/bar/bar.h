@@ -33,6 +33,8 @@ struct bar_item {
 	char *on_scroll_up;
 	char *on_scroll_down;
 	struct swine_style style;
+	struct swine_style hover_style;  // with the pointer over it (:hover)
+	bool has_hover;                  // hover_style looks different
 	uint64_t tray_id;        // struct tray_item id, or 0
 	int icon_size;           // logical px, for tray icons
 	char *icon_path;         // "icons" override (an .ico file), or NULL

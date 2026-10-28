@@ -41,6 +41,10 @@ struct swine_style {
 	double opacity;
 };
 
+// The class an element has while the pointer is over it: ":hover" in a
+// selector requires it (no real class can contain a colon).
+#define CSS_HOVER ":hover"
+
 // Element being styled, with a link to its parent for descendant matching.
 struct css_element {
 	const char *type;              // "window", "box", "label", "button"

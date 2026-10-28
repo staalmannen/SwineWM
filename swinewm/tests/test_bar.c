@@ -68,8 +68,14 @@ static void test_css(void) {
 	css_compute(sheet, &btn_el, &box, &button);
 	CHECK_INT(button.padding.left, 5);
 	CHECK_INT(button.padding.top, 0);
-	CHECK_INT(button.background.a, 0);   // :hover never applies
+	CHECK_INT(button.background.a, 0);   // :hover only with the pointer
 	CHECK_INT(button.color.r, 255);
+	const char *hovered[] = {CSS_HOVER, NULL};
+	struct css_element hover_el = {"button", NULL, hovered, &box_el};
+	struct swine_style hover;
+	css_compute(sheet, &hover_el, &box, &hover);
+	CHECK_INT(hover.background.r, 0x12);
+	CHECK_INT(hover.background.a, 255);
 
 	const char *classes[] = {"focused", NULL};
 	struct css_element focused_el = {"button", NULL, classes, &box_el};
@@ -226,10 +232,10 @@ static void test_bar_model(void) {
 	CHECK_STR(item_text(model, 5), "D");
 	struct bar_module_view *bat = find_view(model, 4);
 	if (bat) {
-		// default style: #battery.critical:not(.charging) never matches
-		// (unsupported pseudo-class), #battery is white
+		// default style: #battery.critical:not(.charging) is red
 		struct bar_item *item = bat->items->items[0];
-		CHECK_INT(item->style.background.r, 255);
+		CHECK_INT(item->style.background.r, 0xf5);
+		CHECK_INT(item->style.background.g, 0x3c);
 	}
 	bar_model_free(model);
 

@@ -9,7 +9,8 @@
 struct css_compound {
 	char *type;        // NULL or "*" matches any
 	char *id;
-	list_t *classes;   // char *
+	list_t *classes;   // char *; ":hover" (CSS_HOVER) is one of them
+	list_t *not_classes; // :not(.a): the element must not have them
 };
 
 struct css_selector {
@@ -44,6 +45,7 @@ static void free_compound(struct css_compound *c) {
 	free(c->type);
 	free(c->id);
 	list_free_items_and_destroy(c->classes);
+	list_free_items_and_destroy(c->not_classes);
 	free(c);
 }
 
@@ -116,6 +118,7 @@ static struct css_selector *parse_selector(const char *text) {
 		}
 		struct css_compound *c = calloc(1, sizeof(*c));
 		c->classes = create_list();
+		c->not_classes = create_list();
 		if (*p == '*') {
 			p++;
 		} else if (is_ident_char(*p)) {
@@ -142,8 +145,31 @@ static struct css_selector *parse_selector(const char *text) {
 			} else if (kind == '.') {
 				list_add(c->classes, name);
 				sel->specificity += 10;
+			} else if (strcmp(name, "hover") == 0) {
+				// The platform adds CSS_HOVER to the item under the pointer.
+				free(name);
+				list_add(c->classes, swine_strdup(CSS_HOVER));
+				sel->specificity += 10;
+			} else if (strcmp(name, "not") == 0 && *p == '(') {
+				// :not(.a.b) of classes; anything else is unsupported
+				free(name);
+				p++;
+				while (*p == ' ') p++;
+				while (*p == '.') {
+					p++;
+					list_add(c->not_classes, read_ident(&p));
+					sel->specificity += 10;
+				}
+				while (*p == ' ') p++;
+				if (*p == ')') {
+					p++;
+				} else {
+					sel->never = true;
+					while (*p && *p != ')') p++;
+					if (*p) p++;
+				}
 			} else {
-				// :hover, :first-child, ... never match in a static bar
+				// :first-child, :focus, ... never match
 				free(name);
 				if (*p == '(') {
 					int depth = 0;
@@ -156,7 +182,8 @@ static struct css_selector *parse_selector(const char *text) {
 				sel->never = true;
 			}
 		}
-		if (!c->type && !c->id && !c->classes->length && !sel->never &&
+		if (!c->type && !c->id && !c->classes->length &&
+				!c->not_classes->length && !sel->never &&
 				p > text && p[-1] != '*') {
 			// Not a valid compound; skip a character to make progress.
 			free_compound(c);
@@ -321,6 +348,11 @@ static bool compound_matches(const struct css_compound *c,
 	}
 	for (int i = 0; i < c->classes->length; ++i) {
 		if (!element_has_class(el, c->classes->items[i])) {
+			return false;
+		}
+	}
+	for (int i = 0; i < c->not_classes->length; ++i) {
+		if (element_has_class(el, c->not_classes->items[i])) {
 			return false;
 		}
 	}

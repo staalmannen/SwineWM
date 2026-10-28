@@ -22,6 +22,7 @@ struct hit {
 	char *on_scroll_down;
 	char *tooltip;
 	bool tooltip_mono;
+	bool has_hover;   // a :hover style that looks different
 };
 
 struct bar_window {
@@ -171,6 +172,10 @@ static int draw_item(struct bar_window *bw, HDC dc, int x, int top, int bottom,
 	int outer = item_outer_width(bw, dc, item, &inner);
 	RECT box = {x + px(bw, s->margin.left), top + px(bw, s->margin.top),
 		x + px(bw, s->margin.left) + inner, bottom - px(bw, s->margin.bottom)};
+	// :hover changes the look, never the size.
+	if (item->has_hover && bw->hovering && EqualRect(&box, &bw->hover_rect)) {
+		s = &item->hover_style;
+	}
 	COLORREF bg = win32_blend(s->background, under);
 	if (s->background.a) {
 		win32_fill(dc, &box, bg);
@@ -212,6 +217,7 @@ static int draw_item(struct bar_window *bw, HDC dc, int x, int top, int bottom,
 		swine_strdup(item->on_scroll_down) : NULL;
 	h->tooltip = item->tooltip ? swine_strdup(item->tooltip) : NULL;
 	h->tooltip_mono = item->tooltip_mono;
+	h->has_hover = item->has_hover;
 	list_add(bw->hits, h);
 	return x + outer;
 }
@@ -454,6 +460,11 @@ static void bar_mouse_move(struct bar_window *bw, int x, int y) {
 	bool same = h && bw->hovering && EqualRect(&h->rect, &bw->hover_rect);
 	if (!same) {
 		tooltip_hide();
+		struct hit *old = bw->hovering ? hit_test(bw,
+			bw->hover_rect.left, bw->hover_rect.top) : NULL;
+		if ((old && old->has_hover) || (h && h->has_hover)) {
+			InvalidateRect(bw->hwnd, NULL, FALSE);   // :hover styles
+		}
 		if (bw->hovering && bw->hover_tray) {
 			win32_tray_hover(bw->hover_tray, TRAY_HOVER_LEAVE, screen);
 		}
@@ -487,6 +498,11 @@ static void bar_mouse_hover(struct bar_window *bw, int x, int y) {
 
 static void bar_mouse_leave(struct bar_window *bw) {
 	tooltip_hide();
+	struct hit *old = bw->hovering ? hit_test(bw, bw->hover_rect.left,
+		bw->hover_rect.top) : NULL;
+	if (old && old->has_hover) {
+		InvalidateRect(bw->hwnd, NULL, FALSE);
+	}
 	if (bw->hovering && bw->hover_tray) {
 		POINT screen;
 		GetCursorPos(&screen);
