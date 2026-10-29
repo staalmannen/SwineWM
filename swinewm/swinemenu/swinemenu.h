@@ -14,6 +14,9 @@ list_t *swinemenu_drun_entries(void);
 list_t *swinemenu_run_entries(void);
 // "dmenu": one entry per line of standard input (UTF-8).
 list_t *swinemenu_dmenu_entries(void);
+// "window": swinewm's windows (get_tree); an entry's command is a swinewm
+// command ("[con_id=N] focus"), its icon the program file.
+list_t *swinemenu_window_entries(void);
 
 // "open with": the programs registered for file's type (openwith.c). An
 // entry's command is "openwith:<n>", for swinemenu_openwith_invoke, or

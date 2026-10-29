@@ -161,8 +161,9 @@ if(WIN32)
   target_link_libraries(swinewm PRIVATE swinewm_core user32 gdi32 dwmapi shell32
     shcore advapi32 ole32 windowscodecs msimg32 uuid iphlpapi wlanapi pdh ws2_32 powrprof)
 
+  # The bar's CSS engine and per-pixel alpha drawing, for wofi's style.css.
   add_executable(swinemenu WIN32 swinemenu/main.c swinemenu/apps.c
-    swinemenu/openwith.c)
+    swinemenu/openwith.c swinewm/bar/css.c swinewm/win32/canvas.c)
   target_compile_definitions(swinemenu PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN
     WINVER=0x0A00 _WIN32_WINNT=0x0A00)
   target_link_libraries(swinemenu PRIVATE swine_common user32 gdi32 shell32 ole32

@@ -10,6 +10,11 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- swinemenu reads wofi's `config` and `style.css` (in `.swinewm\wofi\`),
+  with wofi's widget names, `:selected`, `border-radius` and translucent
+  colours; shows icons; has rofi's `--show window` (switch to a window)
+  and more of wofi's options (`--height`, `--location`, `-x`/`-y`,
+  `--password`, `--exec-search`, `--search`, `-c`, `-s`, `-D`).
 - Area screenshots and the clipboard, as on sway: `grim -g "$(slurp)"`,
   `slurp | grim -g -`, `grim - | wl-copy`, `wl-copy <text>` and sway's
   `grimshot` (copy, save, savecopy of the active window, screen, output,

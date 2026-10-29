@@ -38,12 +38,16 @@ struct swine_style {
 	int inset_top;
 	struct swine_color inset_color;
 	int min_width;
+	int border_radius;               // px, drawn by swinemenu
 	double opacity;
 };
 
 // The class an element has while the pointer is over it: ":hover" in a
 // selector requires it (no real class can contain a colon).
 #define CSS_HOVER ":hover"
+// GTK states swinemenu gives its entries and input, as wofi themes use.
+#define CSS_SELECTED ":selected"
+#define CSS_FOCUS ":focus"
 
 // Element being styled, with a link to its parent for descendant matching.
 struct css_element {

@@ -88,6 +88,26 @@ static void test_css(void) {
 	CHECK_INT(hover.background.r, 0x12);
 	CHECK_INT(hover.background.a, 255);
 
+	// wofi's :selected and border-radius, for swinemenu
+	struct css_stylesheet *wofi = css_parse(
+		"#entry { border-radius: 8px; padding: 4px; }\n"
+		"#entry:selected { background-color: #ff0000; }\n"
+		"#entry:selected #text { color: #00ff00; }\n");
+	const char *selected_class[] = {CSS_SELECTED, NULL};
+	struct css_element entry_el = {"flowboxchild", "entry", NULL, NULL};
+	struct css_element sel_el = {"flowboxchild", "entry", selected_class, NULL};
+	struct css_element text_el = {"label", "text", selected_class, &sel_el};
+	struct swine_style root_style, entry_style, sel_style, text_style;
+	css_default_style(&root_style);
+	css_compute(wofi, &entry_el, &root_style, &entry_style);
+	css_compute(wofi, &sel_el, &root_style, &sel_style);
+	css_compute(wofi, &text_el, &sel_style, &text_style);
+	CHECK_INT(entry_style.border_radius, 8);
+	CHECK_INT(entry_style.background.a, 0);
+	CHECK_INT(sel_style.background.r, 0xff);
+	CHECK_INT(text_style.color.g, 0xff);
+	css_free(wofi);
+
 	const char *classes[] = {"focused", NULL};
 	struct css_element focused_el = {"button", NULL, classes, &box_el};
 	css_compute(sheet, &focused_el, &box, &focused);

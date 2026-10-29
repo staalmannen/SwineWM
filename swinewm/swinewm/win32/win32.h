@@ -102,6 +102,11 @@ void canvas_icon_blend(struct canvas *c, const RECT *rect);
 // top-left corner clockwise.
 unsigned canvas_rounded_coverage(const RECT *r, const double radii[4],
 		int x, int y);
+// A rounded box: background, and a border of `border` pixels inside its
+// edge, blended over what is there.
+void canvas_box(struct canvas *c, const RECT *r, double radius,
+		struct swine_color background, int border,
+		struct swine_color border_color);
 // Draws premultiplied BGRA pixels, with rounded corners if radius > 0.
 void canvas_image(struct canvas *c, int x, int y, int w, int h,
 		const uint32_t *src, double radius);

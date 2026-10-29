@@ -192,7 +192,7 @@ What an existing sway config needs to load and behave.
   (`IApplicationActivationManager`) and swinemenu; still open for launchers
   such as Flow Launcher, which start them their own way.
 - swinemenu: icons, wofi's `config` and `style.css`, more modes (windows,
-  like `rofi -show window`).
+  like `rofi -show window`). Done.
 - Next to Explorer (`--set-autostart`, experimental): register the bar as an
   AppBar so that Explorer reserves its space for every window, and find out
   which keys Explorer still takes.

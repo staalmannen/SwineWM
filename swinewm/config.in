@@ -26,7 +26,9 @@ set $term alacritty.exe
 # Your preferred application launcher. swinemenu comes with swinewm: it
 # lists the Start menu's apps and Store apps, follows the bar's colours and
 # font, and asks swinewm to start the choice (so Store apps work as the
-# shell). "swinemenu --show run" lists programs on PATH instead. Any other
+# shell). "swinemenu --show run" lists programs on PATH instead, and
+# "swinemenu --show window" swinewm's windows. It reads wofi's config and
+# style.css from %USERPROFILE%\.swinewm\wofi\. Any other
 # launcher works too, for example Flow Launcher
 # (https://www.flowlauncher.com), which cannot start Store apps without
 # Explorer as the shell (%VAR% references are expanded in exec commands):

@@ -9,6 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
+#include "ipc.h"
+#include "ipc-client.h"
+#include "json.h"
 #include "menu.h"
 #include "stringop.h"
 #include "swinemenu.h"
@@ -113,7 +116,9 @@ static void add_shortcuts(list_t *entries, const wchar_t *dir,
 		if (!skip) {
 			char *path8 = swinemenu_utf16_to_utf8(path);
 			char *command = format_str("\"%s\"", path8);
-			list_add(entries, menu_entry_create(name, command));
+			struct menu_entry *entry = menu_entry_create(name, command);
+			entry->icon = swine_strdup(path8);
+			list_add(entries, entry);
 			free(command);
 			free(path8);
 		}
@@ -154,7 +159,9 @@ static void add_store_apps(list_t *entries) {
 				if (!has_entry(entries, name)) {
 					char *id = swinemenu_utf16_to_utf8(aumid);
 					char *command = format_str("shell:AppsFolder\\%s", id);
-					list_add(entries, menu_entry_create(name, command));
+					struct menu_entry *entry = menu_entry_create(name, command);
+					entry->icon = swine_strdup(command);
+					list_add(entries, entry);
 					free(command);
 					free(id);
 				}
@@ -268,5 +275,73 @@ list_t *swinemenu_dmenu_entries(void) {
 		}
 	}
 	free(buf);
+	return entries;
+}
+
+// The program file of a process, for its icon.
+static char *process_path(unsigned long pid) {
+	HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE,
+		(DWORD)pid);
+	if (!process) {
+		return NULL;
+	}
+	wchar_t buf[MAX_PATH];
+	DWORD len = MAX_PATH;
+	char *path = QueryFullProcessImageNameW(process, 0, buf, &len) ?
+		swinemenu_utf16_to_utf8(buf) : NULL;
+	CloseHandle(process);
+	return path;
+}
+
+static void add_windows(list_t *entries, const struct json_value *node,
+		const char *workspace) {
+	const char *type = json_get_string(node, "type", "");
+	if (strcmp(type, "workspace") == 0) {
+		workspace = json_get_string(node, "name", workspace);
+		if (strcmp(workspace, "__i3_scratch") == 0) {
+			workspace = "scratchpad";
+		}
+	}
+	struct json_value *pid = json_object_get(node, "pid");
+	if (pid && pid->type == JSON_NUMBER &&
+			(strcmp(type, "con") == 0 || strcmp(type, "floating_con") == 0)) {
+		const char *title = json_get_string(node, "name", "");
+		const char *app = json_get_string(node, "app_id", "");
+		char *app_name = swine_strdup(app ? app : "");
+		size_t len = strlen(app_name);
+		if (len > 4 && swine_strcasecmp(app_name + len - 4, ".exe") == 0) {
+			app_name[len - 4] = '\0';
+		}
+		// rofi's window mode: workspace, program, title
+		char *name = format_str("%s  %s  %s", workspace ? workspace : "",
+			app_name, title ? title : "");
+		char *command = format_str("[con_id=%lld] focus",
+			(long long)json_get_number(node, "id", 0));
+		struct menu_entry *entry = menu_entry_create(name, command);
+		entry->icon = process_path((unsigned long)pid->number);
+		list_add(entries, entry);
+		free(name);
+		free(command);
+		free(app_name);
+	}
+	const char *children[] = {"nodes", "floating_nodes"};
+	for (size_t k = 0; k < 2; ++k) {
+		struct json_value *list = json_object_get(node, children[k]);
+		for (int i = 0; list && list->type == JSON_ARRAY &&
+				i < list->items->length; ++i) {
+			add_windows(entries, list->items->items[i], workspace);
+		}
+	}
+}
+
+list_t *swinemenu_window_entries(void) {
+	list_t *entries = create_list();
+	char *reply = ipc_request(NULL, IPC_GET_TREE, "", NULL);
+	struct json_value *tree = reply ? json_parse(reply, NULL) : NULL;
+	if (tree) {
+		add_windows(entries, tree, NULL);
+	}
+	json_value_free(tree);
+	free(reply);
 	return entries;
 }
