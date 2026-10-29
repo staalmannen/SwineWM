@@ -186,7 +186,8 @@ What an existing sway config needs to load and behave.
   event needs package identity), `windows-notifications=` in the mako
   config. Still open: toast buttons and opening the app on a click.
 - grim: `slurp` (drag an area), clipboard output (the `wl-copy` habit),
-  `grim -` once `exec` supports pipes.
+  `grim -` once `exec` supports pipes. Done: slurp, `| wl-copy`,
+  `$(slurp)` and grimshot as built-ins.
 - Store apps as the shell: done for `exec shell:AppsFolder\<AUMID>`
   (`IApplicationActivationManager`) and swinemenu; still open for launchers
   such as Flow Launcher, which start them their own way.

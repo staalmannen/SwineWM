@@ -162,15 +162,21 @@ Unicode properties (`\p{…}`).
 
 ## Screenshots (grim)
 
-There is no grim on Windows, so it is built in: `grim` is a command, and
-`exec grim …` in a sway config runs it. The default config binds Print.
+There is no grim, slurp, wl-copy or grimshot on Windows, so they are
+built in: `exec` lines with them run inside swinewm, including the shell
+forms sway configs use (`$(slurp)`, `|`, `&&`) without a shell. The
+default config binds Print (whole desktop to a file) and Shift+Print (an
+area to the clipboard).
 
 | Feature | Status | Notes |
 | --- | --- | --- |
 | `grim [file]` | ✅ | Whole desktop; default file `<date>_grim.png` in `%GRIM_DEFAULT_DIR%` or the Pictures folder |
 | `-o <output>`, `-g "x,y wxh"`, `-t png\|jpeg` | ✅ | Desktop coordinates in physical pixels |
 | `-c`, `-q`, `-l`, `-s` | ⚪ | Accepted; the cursor is never captured |
-| `grim -` (stdout), `-T`, `slurp` | ❌ | No pipes yet; no interactive area selection |
+| `grim -g "$(slurp [options])"`, `slurp \| grim -g - …` | ✅ | slurp draws its selection over every output as slurp does: drag an area, click a predefined rectangle, Space moves the selection, Shift keeps it square, Escape (or the right button) cancels. Options `-d -b -c -s -B -w -F -f -p -o -r -a -x`. The capture, and the rest of an `&&` chain, happen once the selection is made; nothing happens if it is cancelled |
+| `grim - \| wl-copy`, `slurp \| wl-copy`, `wl-copy <text>`, `wl-copy --clear` | ✅ | The clipboard: images as a bitmap and as PNG, text as text. `-t`/`--type` is accepted |
+| `grimshot [--notify] copy\|save\|savecopy active\|screen\|output\|area\|window\|anything [file]`, `check`, `usage` | ✅ | sway-contrib's grimshot, with its notifications (the saved image as their icon). Files go to `%XDG_SCREENSHOTS_DIR%` or the Pictures folder, named by `%GRIMSHOT_FILENAME_FORMAT%` (strftime) or `2026-10-29T12-34-56` (no colons, which Windows file names cannot have). `--wait` is ignored, `--cursor` and `--freeze` have no effect |
+| `grim -` to other programs, `-T` | ❌ | Only `\| wl-copy`; other pipes run as programs (without a shell) |
 
 ## Launcher (wofi / wmenu)
 

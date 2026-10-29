@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "swinewm/platform.h"
+#include "swinewm/grim.h"
 #include "swinewm/sysinfo.h"
 #include "swinewm/tree/node.h"
 #include "swinewm/tree/output.h"
@@ -28,6 +29,10 @@ struct fake_platform_state {
 	int screenshot_calls;
 	struct swine_box last_screenshot;
 	char last_screenshot_path[256];
+	bool last_screenshot_clipboard;
+	char clipboard_text[256];
+	int slurp_calls;
+	struct slurp_options last_slurp;   // its choices list is not owned
 	const char *config_dir;
 	int ui_refreshes;
 	long long now_ms;

@@ -128,6 +128,16 @@ static LRESULT CALLBACK keyboard_proc(int code, WPARAM wparam, LPARAM lparam) {
 	bool repeat = down && key_down[vk];
 	key_down[vk] = down;
 
+	// While slurp's selection is shown it gets Escape, Space and Shift,
+	// whichever window has the keyboard.
+	if (win32_slurp_running && (vk == VK_ESCAPE || vk == VK_SPACE ||
+			vk == VK_LSHIFT || vk == VK_RSHIFT || vk == VK_SHIFT)) {
+		PostMessageW(win32_shell_hwnd, WM_SWINE_SLURP, vk, down);
+		if (vk == VK_ESCAPE || vk == VK_SPACE) {
+			return 1;
+		}
+	}
+
 	uint32_t mod = modifier_for_vk(vk);
 	if (mod) {
 		if (!down && mod == SWINE_MOD_LOGO && suppress_logo_menu) {

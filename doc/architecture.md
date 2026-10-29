@@ -387,6 +387,23 @@ to it there. In swinewm the D-Bus calls are IPC messages:
   the shell for `.ico`/`.exe` and stock icons) sits left, right, above or
   below the text. Expiry uses a one-shot timer set for the next deadline.
 
+## Screenshots (grim, slurp, wl-copy, grimshot)
+
+sway configs run these through `sh`; swinewm has no shell, so `exec`
+lines with them are taken apart in `commands/notify.c` (`exec_builtin`:
+`&&` chains, `|`, `$(...)`) and run by `commands/grim.c`:
+
+- `grim` captures with `platform_screenshot` (`win32/screenshot.c`: GDI
+  `BitBlt`, WIC to encode; with `| wl-copy` a 24-bit `CF_DIB` and a "PNG"
+  clipboard format).
+- `$(slurp)`, `slurp | ...` and grimshot's area, window and anything
+  first call `platform_slurp` (`win32/slurp.c`: one layered topmost window
+  per output, drawn as slurp's `render.c`, pointer handling from slurp's
+  `main.c`; Escape, Space and Shift come from the keyboard hook, so the
+  overlay needs no focus). The capture and the rest of the `&&` chain are
+  kept until `grim_slurp_done`, which the overlay calls 150 ms after it is
+  gone, so that it is not in the picture.
+
 ## Urgency and fullscreen requests
 
 - **Urgency.** Windows has no urgency hint, but an application that wants

@@ -215,13 +215,25 @@ bool platform_output_configure(struct swine_output *output,
 }
 
 bool platform_screenshot(const struct swine_box *box, const char *path,
-		bool jpeg, char **error) {
+		bool jpeg, bool clipboard, char **error) {
 	(void)jpeg;
 	(void)error;
 	fake.screenshot_calls++;
 	fake.last_screenshot = *box;
+	fake.last_screenshot_clipboard = clipboard;
 	snprintf(fake.last_screenshot_path, sizeof(fake.last_screenshot_path),
-		"%s", path);
+		"%s", path ? path : "");
+	return true;
+}
+
+bool platform_clipboard_set_text(const char *text) {
+	snprintf(fake.clipboard_text, sizeof(fake.clipboard_text), "%s", text);
+	return true;
+}
+
+bool platform_slurp(const struct slurp_options *options) {
+	fake.slurp_calls++;
+	fake.last_slurp = *options;
 	return true;
 }
 

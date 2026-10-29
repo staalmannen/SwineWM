@@ -447,6 +447,150 @@ static void test_grim(void) {
 	fake_teardown();
 }
 
+// slurp, wl-copy and grimshot, and the shell forms sway configs use.
+static void test_grim_slurp(void) {
+	fake_setup();
+	notify_parse_config("", "empty");
+	struct swine_box area = {100, 50, 320, 240};
+
+	// grim -g "$(slurp)" file: the selection first, then the capture.
+	CHECK(run("exec grim -g \"$(slurp -d -c '#ff0000' -w 3)\" C:/a.png "
+		"&& notify-send Saved"));
+	CHECK_INT(fake.slurp_calls, 1);
+	CHECK_INT(fake.screenshot_calls, 0);
+	CHECK(fake.last_slurp.dimensions);
+	CHECK_INT(fake.last_slurp.border.r, 0xff);
+	CHECK_INT(fake.last_slurp.border.g, 0);
+	CHECK_INT(fake.last_slurp.border_weight, 3);
+	CHECK_INT(fake.last_slurp.background.a, 0x40);
+	CHECK(grim_slurp_active());
+	// one selection at a time
+	CHECK(!run("exec grim -g \"$(slurp)\""));
+	CHECK_INT(notify_active()->length, 0);
+	grim_slurp_done(true, &area, NULL);
+	CHECK(!grim_slurp_active());
+	CHECK_INT(fake.screenshot_calls, 1);
+	CHECK_INT(fake.last_screenshot.x, 100);
+	CHECK_INT(fake.last_screenshot.width, 320);
+	CHECK_STR(fake.last_screenshot_path, "C:/a.png");
+	CHECK(!fake.last_screenshot_clipboard);
+	CHECK_INT(notify_active()->length, 1);   // the rest of the chain ran
+
+	// Cancelled (Escape): nothing, and the chain stops.
+	CHECK(run("exec grim -g $(slurp) C:/b.png && notify-send never"));
+	grim_slurp_done(false, NULL, NULL);
+	CHECK_INT(fake.screenshot_calls, 1);
+	CHECK_INT(notify_active()->length, 1);
+
+	// To the clipboard: grim - | wl-copy, with and without slurp.
+	CHECK(run("exec grim - | wl-copy"));
+	CHECK_INT(fake.screenshot_calls, 2);
+	CHECK(fake.last_screenshot_clipboard);
+	CHECK_STR(fake.last_screenshot_path, "");
+	CHECK_INT(fake.last_screenshot.width, 1000);
+	CHECK(run("exec grim -g \"$(slurp)\" - | wl-copy -t image/png"));
+	grim_slurp_done(true, &area, NULL);
+	CHECK_INT(fake.screenshot_calls, 3);
+	CHECK(fake.last_screenshot_clipboard);
+	CHECK_INT(fake.last_screenshot.height, 240);
+	// slurp | grim -g -
+	CHECK(run("exec slurp -o | grim -g - C:/c.png"));
+	CHECK_INT(fake.last_slurp.choices->length, 1);   // the output
+	grim_slurp_done(true, &area, "DISPLAY1");
+	CHECK_STR(fake.last_screenshot_path, "C:/c.png");
+	// slurp | wl-copy: the geometry as text
+	CHECK(run("exec slurp | wl-copy"));
+	grim_slurp_done(true, &area, NULL);
+	CHECK_STR(fake.clipboard_text, "100,50 320x240\n");
+	CHECK(run("exec wl-copy hello world"));
+	CHECK_STR(fake.clipboard_text, "hello world");
+	CHECK(run("exec wl-copy --clear"));
+	CHECK_STR(fake.clipboard_text, "");
+
+	CHECK(!run("exec grim -g \"$(date)\" x.png"));
+	CHECK(!run("exec slurp -p -r | grim -g - x.png"));
+	CHECK(!run("exec slurp -b nocolor | grim -g - x.png"));
+	CHECK(!run("exec grim x.png | wl-copy"));
+	CHECK(!run("exec grim -g - x.png"));
+	CHECK(!grim_slurp_active());
+	// Other pipes are left to run as programs.
+	fake.spawn_calls = 0;
+	CHECK(run("exec grim - | swappy -f -"));
+	CHECK_INT(fake.spawn_calls, 1);
+
+	// The default config's Shift+Print, as the binding runs it.
+	int before = notify_active()->length;
+	CHECK(run("exec grim -g \"$(slurp -d)\" - | wl-copy && notify-send "
+		"\"Screenshot copied\" \"The area is on the clipboard\""));
+	CHECK(fake.last_slurp.dimensions);
+	grim_slurp_done(true, &area, NULL);
+	CHECK(fake.last_screenshot_clipboard);
+	CHECK_INT(notify_active()->length, before + 1);
+	struct swine_notification *n = notify_active()->items[0];
+	CHECK_STR(n->body, "The area is on the clipboard");
+
+	char *text = slurp_format("%x %y %w %h %X %Y %W %H %o %l %%", &area, "w");
+	CHECK_STR(text, "100 50 320 240 100 50 320 240 DISPLAY1 w %");
+	free(text);
+	fake_teardown();
+}
+
+static void test_grimshot(void) {
+	fake_setup();
+	notify_parse_config("", "empty");
+	struct swine_view *view = fake_map_view("editor");
+	struct swine_box area = {10, 20, 30, 40};
+
+	CHECK(run("exec grimshot --notify save screen C:/s.png"));
+	CHECK_INT(fake.screenshot_calls, 1);
+	CHECK_STR(fake.last_screenshot_path, "C:/s.png");
+	CHECK(!fake.last_screenshot_clipboard);
+	struct swine_notification *n = notify_active()->items[0];
+	CHECK_STR(n->summary, "Screenshot of Screen");
+	CHECK_STR(n->body, "s.png");
+	CHECK_STR(n->app_name, "grimshot");
+	CHECK_STR(n->app_icon, "C:/s.png");
+
+	CHECK(run("exec grimshot -n copy active"));
+	CHECK_INT(fake.screenshot_calls, 2);
+	CHECK(fake.last_screenshot_clipboard);
+	CHECK_INT(fake.last_screenshot.width, view->container->box.width);
+	n = notify_active()->items[0];
+	CHECK_STR(n->body, "test.exe window copied to clipboard");
+
+	CHECK(run("exec grimshot savecopy output C:/o.png"));
+	CHECK(fake.last_screenshot_clipboard);
+	CHECK_STR(fake.last_screenshot_path, "C:/o.png");
+	CHECK_INT(fake.last_screenshot.width, 1000);
+
+	// area, window, anything go through slurp
+	CHECK(run("exec grimshot --notify copy area"));
+	CHECK(fake.last_slurp.dimensions);
+	grim_slurp_done(true, &area, NULL);
+	n = notify_active()->items[0];
+	CHECK_STR(n->body, "Area copied to clipboard");
+	CHECK(run("exec grimshot save window C:/w.png"));
+	CHECK(fake.last_slurp.restrict_choice);
+	CHECK_INT(fake.last_slurp.choices->length, 1);   // the one window
+	grim_slurp_done(true, &area, NULL);
+	CHECK_STR(fake.last_screenshot_path, "C:/w.png");
+	CHECK(run("exec grimshot save anything C:/x.png"));
+	CHECK_INT(fake.last_slurp.choices->length, 2);   // window and output
+	grim_slurp_done(false, NULL, NULL);
+
+	// The default file goes to the Pictures folder, without colons.
+	CHECK(run("exec grimshot save screen"));
+	const char *path = fake.last_screenshot_path;
+	CHECK(strncmp(path, "C:\\Users\\pig\\Pictures\\", 22) == 0);
+	CHECK(strchr(path + 2, ':') == NULL);
+
+	CHECK(run("exec grimshot check"));
+	CHECK(!run("exec grimshot save nothing"));
+	CHECK(!run("exec grimshot frobnicate"));
+	CHECK(!run("exec grimshot save screen -"));
+	fake_teardown();
+}
+
 void test_commands_all(void) {
 	test_every_command_is_found();
 	test_chains_and_errors();
@@ -454,5 +598,7 @@ void test_commands_all(void) {
 	test_keyboard_layouts();
 	test_ipc_node_fields();
 	test_grim();
+	test_grim_slurp();
+	test_grimshot();
 	test_restart();
 }

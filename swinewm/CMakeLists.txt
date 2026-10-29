@@ -144,6 +144,7 @@ if(WIN32)
     swinewm/win32/screenshot.c
     swinewm/win32/script.c
     swinewm/win32/shell.c
+    swinewm/win32/slurp.c
     swinewm/win32/sysinfo.c
     swinewm/win32/swaynag.c
     swinewm/win32/theme.c

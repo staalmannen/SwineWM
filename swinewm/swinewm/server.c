@@ -4,6 +4,7 @@
 #include "swinewm/notify.h"
 #include "swinewm/input/keyboard.h"
 #include "swinewm/input/seat.h"
+#include "swinewm/grim.h"
 #include "swinewm/server.h"
 #include "swinewm/tree/root.h"
 #include "swinewm/tree/view.h"
@@ -26,6 +27,7 @@ void server_fini(void) {
 	root_destroy(root);
 	bar_finish();
 	notify_finish();
+	grim_finish();
 	keyboard_layouts_finish();
 	seat_destroy(seat);
 	list_free(server.views);

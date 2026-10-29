@@ -101,6 +101,9 @@ static LRESULT handle_shell_message(HWND hwnd, UINT msg, WPARAM wparam,
 	case WM_SWINE_TOAST:
 		win32_toast_message(lparam);
 		return 0;
+	case WM_SWINE_SLURP:
+		win32_slurp_key(wparam, lparam);
+		return 0;
 	case WM_DISPLAYCHANGE:
 	case WM_DPICHANGED:
 		schedule_display_refresh();
@@ -350,6 +353,7 @@ void platform_finish(void) {
 	win32_titlebars_finish();
 	win32_bar_finish();
 	win32_scripts_finish();
+	win32_slurp_finish();
 	win32_toasts_finish();
 	win32_notify_finish();
 	win32_swaynag_finish();

@@ -10,6 +10,13 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- Area screenshots and the clipboard, as on sway: `grim -g "$(slurp)"`,
+  `slurp | grim -g -`, `grim - | wl-copy`, `wl-copy <text>` and sway's
+  `grimshot` (copy, save, savecopy of the active window, screen, output,
+  an area, a window or anything, with `--notify`) run in exec lines
+  without a shell. slurp's selection is drawn over every output with its
+  options and keys (Escape cancels); the rest of an `&&` chain waits for
+  it. Shift+Print in the default config copies an area to the clipboard.
 - Notifications of Windows applications: their toasts appear as mako
   notifications, styled and filtered by the mako config (`app-name`,
   `desktop-entry` is the app's AppUserModelID). `windows-notifications=`

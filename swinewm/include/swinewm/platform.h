@@ -115,10 +115,17 @@ list_t *platform_list_dir(const char *dir);
 char *platform_expand_path(const char *path);
 // The user's Pictures folder, or NULL. Caller frees.
 char *platform_pictures_dir(void);
-// Saves the screen area box (desktop coordinates) as a PNG or JPEG file.
+// Saves the screen area box (desktop coordinates) as a PNG or JPEG file
+// (path NULL: none), and with clipboard also puts it on the clipboard.
 // On failure *error may receive a message (caller frees).
 bool platform_screenshot(const struct swine_box *box, const char *path,
-		bool jpeg, char **error);
+		bool jpeg, bool clipboard, char **error);
+// Puts text on the clipboard ("" empties it).
+bool platform_clipboard_set_text(const char *text);
+// Shows slurp's selection over every output; grim_slurp_done (grim.h)
+// is called when the user made it or cancelled.
+struct slurp_options;
+bool platform_slurp(const struct slurp_options *options);
 // Display settings for one output, merged from its "output" configs.
 // Unset fields keep the current setting.
 struct output_display_config {

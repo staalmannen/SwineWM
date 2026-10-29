@@ -25,6 +25,7 @@ struct swine_output;
 #define WM_SWINE_DISPLAY_REFRESH (WM_APP + 7) // refresh outputs after a DPI change
 #define WM_SWINE_SCRIPT (WM_APP + 8)   // script.c: a line or the end of a bar script
 #define WM_SWINE_TOAST (WM_APP + 9)    // toast.c: a Windows toast came or went
+#define WM_SWINE_SLURP (WM_APP + 10)   // a key for slurp: wParam vk, lParam down
 
 extern HWND win32_shell_hwnd;
 
@@ -40,6 +41,11 @@ void win32_layouts_finish(void);
 // network.c and audio.c: readings for the bar.
 void win32_network_finish(void);
 void win32_audio_finish(void);
+
+// slurp.c: selecting an area (platform_slurp)
+extern volatile bool win32_slurp_running;
+void win32_slurp_key(WPARAM vk, LPARAM down);
+void win32_slurp_finish(void);
 
 // toast.c: Windows toasts mirrored as notifications
 void win32_toasts_update(void);   // starts or stops reading them
