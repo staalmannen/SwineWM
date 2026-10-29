@@ -98,6 +98,12 @@ static LRESULT handle_shell_message(HWND hwnd, UINT msg, WPARAM wparam,
 	case WM_SWINE_SCRIPT:
 		win32_script_message(lparam);
 		return 0;
+	case WM_SWINE_TOAST:
+		win32_toast_message(lparam);
+		return 0;
+	case WM_SWINE_SLURP:
+		win32_slurp_key(wparam, lparam);
+		return 0;
 	case WM_DISPLAYCHANGE:
 	case WM_DPICHANGED:
 		schedule_display_refresh();
@@ -241,6 +247,7 @@ void platform_ui_refresh(void) {
 	win32_tray_update();
 	win32_wallpaper_refresh();
 	win32_bar_refresh();
+	win32_toasts_update();
 	win32_notify_refresh();
 	long long next = notify_next_expiry();
 	if (next) {
@@ -346,6 +353,8 @@ void platform_finish(void) {
 	win32_titlebars_finish();
 	win32_bar_finish();
 	win32_scripts_finish();
+	win32_slurp_finish();
+	win32_toasts_finish();
 	win32_notify_finish();
 	win32_swaynag_finish();
 	win32_wallpaper_finish();
@@ -395,6 +404,7 @@ uint32_t platform_ipc_input_capabilities(void) {
 
 void platform_config_changed(void) {
 	// Bindings are looked up live from the config, so nothing to re-register.
+	win32_toasts_config_changed();
 	platform_ipc_event((uint32_t)IPC_EVENT_BARCONFIG_UPDATE,
 		"{\"id\":\"bar-0\"}");
 }

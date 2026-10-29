@@ -11,6 +11,7 @@
 #include "swinewm/bar/custom.h"
 #include "swinewm/commands.h"
 #include "swinewm/config.h"
+#include "swinewm/grim.h"
 #include "swinewm/notify.h"
 #include "swinewm/platform.h"
 
@@ -493,8 +494,6 @@ static struct cmd_results *run_builtin(int argc, char **argv,
 		res = cmd_makoctl(argc - 1, argv + 1);
 	} else if (strcmp(name, "notify-send") == 0) {
 		res = cmd_notify_send(argc - 1, argv + 1);
-	} else if (strcmp(name, "grim") == 0) {
-		res = cmd_grim(argc - 1, argv + 1);
 	} else if ((strcmp(name, "pkill") == 0 || strcmp(name, "killall") == 0) &&
 			waybar_signal(argc, argv, false)) {
 		waybar_signal(argc, argv, true);
@@ -513,9 +512,42 @@ static struct cmd_results *run_builtin(int argc, char **argv,
 	return res;
 }
 
+// sh's "$(slurp -d)" unquoted is split at its spaces: join it again.
+static void join_substitutions(char **argv, int *argc) {
+	for (int i = 0; i < *argc; ++i) {
+		if (!has_prefix(argv[i], "$(")) {
+			continue;
+		}
+		while (argv[i][strlen(argv[i]) - 1] != ')' && i + 1 < *argc) {
+			char *joined = format_str("%s %s", argv[i], argv[i + 1]);
+			free(argv[i]);
+			free(argv[i + 1]);
+			argv[i] = joined;
+			memmove(argv + i + 1, argv + i + 2,
+				sizeof(char *) * (size_t)(*argc - i - 2));
+			(*argc)--;
+		}
+	}
+}
+
+// The arguments as one line again, quoted where they have spaces.
+static char *quote_join(char **argv, int argc) {
+	char *line = swine_strdup("");
+	for (int i = 0; i < argc; ++i) {
+		const char *a = argv[i];
+		bool quote = !*a || strpbrk(a, " \t") != NULL;
+		char *next = format_str("%s%s%s%s%s", line, i ? " " : "",
+			quote ? "\"" : "", a, quote ? "\"" : "");
+		free(line);
+		line = next;
+	}
+	return line;
+}
+
 struct cmd_results *exec_builtin(const char *cmdline, bool persistent_only) {
 	int argc;
 	char **argv = split_args(cmdline, &argc);
+	join_substitutions(argv, &argc);
 	if (argc == 0) {
 		free_argv(argc, argv);
 		return NULL;
@@ -541,7 +573,8 @@ struct cmd_results *exec_builtin(const char *cmdline, bool persistent_only) {
 			char *name = program_name(argv[start]);
 			bool builtin = (strcmp(name, "makoctl") == 0 &&
 					!(i - start > 1 && strcmp(argv[start + 1], "menu") == 0)) ||
-				strcmp(name, "notify-send") == 0 || strcmp(name, "grim") == 0 ||
+				strcmp(name, "notify-send") == 0 ||
+				grim_exec_handles(i - start, argv + start) ||
 				is_msg_command(name, i - start, argv + start) ||
 				((strcmp(name, "pkill") == 0 || strcmp(name, "killall") == 0) &&
 				waybar_signal(i - start, argv + start, false));
@@ -565,8 +598,19 @@ struct cmd_results *exec_builtin(const char *cmdline, bool persistent_only) {
 		if (res) {
 			free_cmd_results(res);
 		}
-		res = run_builtin(i - start, argv + start, persistent_only);
-		if (!res || res->status != CMD_SUCCESS) {
+		bool deferred = false;
+		res = NULL;
+		if (!persistent_only) {
+			// grim, slurp, wl-copy, grimshot: a selection may come first,
+			// and the rest of the chain runs after it.
+			char *rest = i < argc ? quote_join(argv + i + 1, argc - i - 1) : NULL;
+			res = grim_exec(i - start, argv + start, rest, &deferred);
+			free(rest);
+		}
+		if (!res) {
+			res = run_builtin(i - start, argv + start, persistent_only);
+		}
+		if (!res || res->status != CMD_SUCCESS || deferred) {
 			break;
 		}
 		start = i + 1;

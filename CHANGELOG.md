@@ -10,6 +10,20 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- Area screenshots and the clipboard, as on sway: `grim -g "$(slurp)"`,
+  `slurp | grim -g -`, `grim - | wl-copy`, `wl-copy <text>` and sway's
+  `grimshot` (copy, save, savecopy of the active window, screen, output,
+  an area, a window or anything, with `--notify`) run in exec lines
+  without a shell. slurp's selection is drawn over every output with its
+  options and keys (Escape cancels); the rest of an `&&` chain waits for
+  it. Shift+Print in the default config copies an area to the clipboard.
+- Notifications of Windows applications: their toasts appear as mako
+  notifications, styled and filtered by the mako config (`app-name`,
+  `desktop-entry` is the app's AppUserModelID). `windows-notifications=`
+  in the mako config: `auto` (the default) when swinewm is the shell,
+  `yes`, `no`. Windows asks once for access (Settings → Privacy &
+  security → Notifications). Dismissing one removes it from Windows'
+  notification list.
 - `notify-send.exe` and `makoctl.exe`, installed next to `swinemsg.exe`
   (on PATH): libnotify's notify-send options (`-i`, `-h`, `-p`, `-w`,
   `-A`; with actions it waits and prints the chosen one) and every

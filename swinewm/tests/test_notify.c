@@ -509,6 +509,25 @@ static void test_makoctl_output(void) {
 	fake_teardown();
 }
 
+static void test_windows_notifications(void) {
+	fake_setup();
+	CHECK(notify_parse_config("", "empty"));
+	CHECK_INT(notify_windows_mode(), NOTIFY_WINDOWS_AUTO);
+	CHECK(notify_parse_config("windows-notifications=yes\n", "test"));
+	CHECK_INT(notify_windows_mode(), NOTIFY_WINDOWS_ON);
+	CHECK(notify_parse_config("windows-notifications=0\n", "test"));
+	CHECK_INT(notify_windows_mode(), NOTIFY_WINDOWS_OFF);
+	// only a global option
+	CHECK(!notify_parse_config("[app-name=x]\nwindows-notifications=1\n",
+		"test"));
+	CHECK(run("notify-send hi"));
+	uint32_t id = newest()->id;
+	CHECK(run("makoctl dismiss"));
+	CHECK_INT(fake.last_closed_notification, id);
+	CHECK_INT(fake.last_close_reason, NOTIFY_CLOSE_DISMISSED);
+	fake_teardown();
+}
+
 static void test_notify_icons(void) {
 	struct swine_notification n = {0};
 	n.style.icon_path[0] = '\0';
@@ -552,4 +571,5 @@ void test_notify_all(void) {
 	test_mako_actions();
 	test_makoctl_output();
 	test_notify_icons();
+	test_windows_notifications();
 }

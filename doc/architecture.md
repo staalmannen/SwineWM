@@ -370,6 +370,14 @@ to it there. In swinewm the D-Bus calls are IPC messages:
   modes such as `do-not-disturb`, and bindings. An action invoked with
   `makoctl invoke` closes the notification unless a `notify-send.exe`
   waits for it (that one closes it, as an application would).
+- **Windows toasts** (`win32/toast.c`): with `windows-notifications=`
+  on, a thread reads `UserNotificationListener` (WinRT, called through
+  vtables, the runtime loaded from combase.dll) when Windows writes its
+  notification store under `%LOCALAPPDATA%\Microsoft\Windows\Notifications`
+  and every two seconds, and posts new and removed toasts to the main
+  thread. New ones become notifications (icon `shell:AppsFolder\<AUMID>`);
+  removed ones close theirs; `platform_notification_closed` removes a
+  dismissed one from Windows' list.
 - **Rendering** (`win32/notify.c`): one topmost, non-activating layered
   window per visible notification, stacked from the configured `anchor`
   inside the usable area of the focused (or configured) output, laid out
@@ -378,6 +386,23 @@ to it there. In swinewm the D-Bus calls are IPC messages:
   the bar), the progress bar fills the inside, the icon (WIC for images,
   the shell for `.ico`/`.exe` and stock icons) sits left, right, above or
   below the text. Expiry uses a one-shot timer set for the next deadline.
+
+## Screenshots (grim, slurp, wl-copy, grimshot)
+
+sway configs run these through `sh`; swinewm has no shell, so `exec`
+lines with them are taken apart in `commands/notify.c` (`exec_builtin`:
+`&&` chains, `|`, `$(...)`) and run by `commands/grim.c`:
+
+- `grim` captures with `platform_screenshot` (`win32/screenshot.c`: GDI
+  `BitBlt`, WIC to encode; with `| wl-copy` a 24-bit `CF_DIB` and a "PNG"
+  clipboard format).
+- `$(slurp)`, `slurp | ...` and grimshot's area, window and anything
+  first call `platform_slurp` (`win32/slurp.c`: one layered topmost window
+  per output, drawn as slurp's `render.c`, pointer handling from slurp's
+  `main.c`; Escape, Space and Shift come from the keyboard hook, so the
+  overlay needs no focus). The capture and the rest of the `&&` chain are
+  kept until `grim_slurp_done`, which the overlay calls 150 ms after it is
+  gone, so that it is not in the picture.
 
 ## Urgency and fullscreen requests
 

@@ -158,19 +158,25 @@ Unicode properties (`\p{…}`).
 | Icons | ✅ | `-i`/`image-path` with a file (`.png`, `.jpg`, `.bmp`, `.gif`, `.ico`, or the icon of an `.exe`/`.dll`), a `file://` URI, a name found in `icon-path`, or `dialog-information`, `dialog-warning`, `dialog-error`, `dialog-question` (Windows' own icons). No freedesktop icon themes. Tray balloons show their info/warning/error icon or their program's icon |
 | `notify-send` | ✅ | `notify-send.exe` (in the install folder, on PATH) with libnotify's options: `-u -t -a -i -c -h -p -r -w -A -e`. Hints: `int:value:` (progress bar), `urgency`, `category`, `desktop-entry`, `image-path`, `x-canonical-private-synchronous`/`x-dunst-stack-tag` (replace by tag). With `-A` or `-w` it waits and prints the chosen action's key, as on Linux. Also a swinewm command (bindings, `exec`, `swinemsg`), where nobody waits for actions |
 | `makoctl` | ✅ | `makoctl.exe` with every command: `dismiss [-a\|-g] [-n id] [-h]`, `restore`, `invoke [-n id] [action]`, `menu [-n id] <prog> [args]`, `list [-j]`, `history [-j]` (makoctl's text and JSON output), `reload`, `mode [-a\|-r\|-t\|-s]` (prints the modes). `menu` runs the program with the action titles on its input; `wofi`, `rofi`, `dmenu`, `fuzzel` and the like fall back to `swinemenu --dmenu` (keeping `-p`). Also a swinewm command, without output |
-| Notifications from Windows applications (toasts) | ❌ | See the project summary |
+| Notifications from Windows applications (toasts) | 🟡 | `windows-notifications=auto\|yes\|no` in the mako config (a swinewm option; `auto`, the default, mirrors them when swinewm is the shell, since Explorer shows them otherwise). Read with Windows' `UserNotificationListener` once the user allows it (Settings → Privacy & security → Notifications); app name (criteria `app-name`), title and text, the app's AppUserModelID as `desktop-entry` and its icon. Dismissing one here removes it from Windows' list; one the app or Windows removes closes here. Not mirrored: buttons, images, progress, a click opening the app |
 
 ## Screenshots (grim)
 
-There is no grim on Windows, so it is built in: `grim` is a command, and
-`exec grim …` in a sway config runs it. The default config binds Print.
+There is no grim, slurp, wl-copy or grimshot on Windows, so they are
+built in: `exec` lines with them run inside swinewm, including the shell
+forms sway configs use (`$(slurp)`, `|`, `&&`) without a shell. The
+default config binds Print (whole desktop to a file) and Shift+Print (an
+area to the clipboard).
 
 | Feature | Status | Notes |
 | --- | --- | --- |
 | `grim [file]` | ✅ | Whole desktop; default file `<date>_grim.png` in `%GRIM_DEFAULT_DIR%` or the Pictures folder |
 | `-o <output>`, `-g "x,y wxh"`, `-t png\|jpeg` | ✅ | Desktop coordinates in physical pixels |
 | `-c`, `-q`, `-l`, `-s` | ⚪ | Accepted; the cursor is never captured |
-| `grim -` (stdout), `-T`, `slurp` | ❌ | No pipes yet; no interactive area selection |
+| `grim -g "$(slurp [options])"`, `slurp \| grim -g - …` | ✅ | slurp draws its selection over every output as slurp does: drag an area, click a predefined rectangle, Space moves the selection, Shift keeps it square, Escape (or the right button) cancels. Options `-d -b -c -s -B -w -F -f -p -o -r -a -x`. The capture, and the rest of an `&&` chain, happen once the selection is made; nothing happens if it is cancelled |
+| `grim - \| wl-copy`, `slurp \| wl-copy`, `wl-copy <text>`, `wl-copy --clear` | ✅ | The clipboard: images as a bitmap and as PNG, text as text. `-t`/`--type` is accepted |
+| `grimshot [--notify] copy\|save\|savecopy active\|screen\|output\|area\|window\|anything [file]`, `check`, `usage` | ✅ | sway-contrib's grimshot, with its notifications (the saved image as their icon). Files go to `%XDG_SCREENSHOTS_DIR%` or the Pictures folder, named by `%GRIMSHOT_FILENAME_FORMAT%` (strftime) or `2026-10-29T12-34-56` (no colons, which Windows file names cannot have). `--wait` is ignored, `--cursor` and `--freeze` have no effect |
+| `grim -` to other programs, `-T` | ❌ | Only `\| wl-copy`; other pipes run as programs (without a shell) |
 
 ## Launcher (wofi / wmenu)
 
