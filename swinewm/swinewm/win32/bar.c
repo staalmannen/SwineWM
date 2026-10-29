@@ -633,6 +633,14 @@ static void bar_mouse_leave(struct bar_window *bw) {
 static LRESULT CALLBACK bar_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 		LPARAM lparam) {
 	struct bar_window *bw = bar_from_hwnd(hwnd);
+	if (msg == WM_WINDOWPOSCHANGED || (msg == win32_appbar_message() &&
+			msg != 0)) {
+		// AppBar bookkeeping (Explorer asks to be told of moves)
+		win32_appbar_window_message(hwnd, msg, wparam);
+		if (msg != WM_WINDOWPOSCHANGED) {
+			return 0;
+		}
+	}
 	switch (msg) {
 	case WM_DPICHANGED:
 		// Bar windows are per-monitor-aware top-level windows. Defer the
@@ -794,6 +802,7 @@ void win32_bar_refresh(void) {
 	}
 	time_t now = time(NULL);
 	bool tray_host_set = false;
+	win32_appbar_begin();
 	for (int n = 0; n < count * root->outputs->length; ++n) {
 		int index = n / root->outputs->length;
 		struct swine_output *output = root->outputs->items[n % root->outputs->length];
@@ -821,6 +830,10 @@ void win32_bar_refresh(void) {
 			bw->rect = rect;
 			bw->shown = true;
 		}
+		struct swine_box zone;
+		if (bar_get_zone_n(index, output, &zone)) {
+			win32_appbar_set(bw->hwnd, (int)bar_position_n(index), &zone);
+		}
 		// Programs place tray menus and some dialogs next to the
 		// "taskbar" (our Shell_TrayWnd): make that the primary bar, as
 		// ManagedShell does with Cairo's menu bar.
@@ -831,6 +844,7 @@ void win32_bar_refresh(void) {
 		}
 		render(bw);
 	}
+	win32_appbar_end();
 }
 
 void win32_bar_finish(void) {

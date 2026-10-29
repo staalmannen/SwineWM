@@ -145,10 +145,15 @@ static struct css_selector *parse_selector(const char *text) {
 			} else if (kind == '.') {
 				list_add(c->classes, name);
 				sel->specificity += 10;
-			} else if (strcmp(name, "hover") == 0) {
-				// The platform adds CSS_HOVER to the item under the pointer.
+			} else if (strcmp(name, "hover") == 0 ||
+					strcmp(name, "selected") == 0 ||
+					strcmp(name, "focus") == 0) {
+				// The platform adds ":hover" (CSS_HOVER) to the item under
+				// the pointer; swinemenu ":selected" and ":focus" to its
+				// chosen entry and its input, as GTK's states.
+				char *state = format_str(":%s", name);
 				free(name);
-				list_add(c->classes, swine_strdup(CSS_HOVER));
+				list_add(c->classes, state);
 				sel->specificity += 10;
 			} else if (strcmp(name, "not") == 0 && *p == '(') {
 				// :not(.a.b) of classes; anything else is unsupported
@@ -703,6 +708,9 @@ static void apply_declaration(const struct css_stylesheet *sheet,
 		s->border_left.width = b.left;
 	} else if (strcmp(p, "box-shadow") == 0) {
 		parse_box_shadow(sheet, v, s, em);
+	} else if (strcmp(p, "border-radius") == 0) {
+		// one radius for every corner (the first of several)
+		s->border_radius = (int)(parse_length(v, em) + 0.5);
 	} else if (strcmp(p, "min-width") == 0) {
 		s->min_width = (int)(parse_length(v, em) + 0.5);
 	} else if (strcmp(p, "opacity") == 0) {

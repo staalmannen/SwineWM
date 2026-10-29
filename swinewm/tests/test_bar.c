@@ -40,6 +40,16 @@ static void test_json_parse(void) {
 	v = json_parse("[1, 2] x", &error);
 	CHECK(v == NULL);
 	free(error);
+	// A backslash at the very end, or a cut \u escape, is an error, not a
+	// read past the end.
+	const char *cut[] = {"\"abc\\", "[\"\\", "\"\\u12", "\"\\u"};
+	for (size_t i = 0; i < sizeof(cut) / sizeof(cut[0]); ++i) {
+		error = NULL;
+		v = json_parse(cut[i], &error);
+		CHECK(v == NULL);
+		CHECK(error != NULL);
+		free(error);
+	}
 }
 
 static void test_css(void) {
@@ -77,6 +87,26 @@ static void test_css(void) {
 	css_compute(sheet, &hover_el, &box, &hover);
 	CHECK_INT(hover.background.r, 0x12);
 	CHECK_INT(hover.background.a, 255);
+
+	// wofi's :selected and border-radius, for swinemenu
+	struct css_stylesheet *wofi = css_parse(
+		"#entry { border-radius: 8px; padding: 4px; }\n"
+		"#entry:selected { background-color: #ff0000; }\n"
+		"#entry:selected #text { color: #00ff00; }\n");
+	const char *selected_class[] = {CSS_SELECTED, NULL};
+	struct css_element entry_el = {"flowboxchild", "entry", NULL, NULL};
+	struct css_element sel_el = {"flowboxchild", "entry", selected_class, NULL};
+	struct css_element text_el = {"label", "text", selected_class, &sel_el};
+	struct swine_style root_style, entry_style, sel_style, text_style;
+	css_default_style(&root_style);
+	css_compute(wofi, &entry_el, &root_style, &entry_style);
+	css_compute(wofi, &sel_el, &root_style, &sel_style);
+	css_compute(wofi, &text_el, &sel_style, &text_style);
+	CHECK_INT(entry_style.border_radius, 8);
+	CHECK_INT(entry_style.background.a, 0);
+	CHECK_INT(sel_style.background.r, 0xff);
+	CHECK_INT(text_style.color.g, 0xff);
+	css_free(wofi);
 
 	const char *classes[] = {"focused", NULL};
 	struct css_element focused_el = {"button", NULL, classes, &box_el};
@@ -898,6 +928,15 @@ static void test_multiple_bars(void) {
 	CHECK(bar_get_rect_n(3, one, &r));
 	CHECK_INT(r.y, 800 - 15);
 	CHECK_INT(r.x, 50);
+	// The strips the bars reserve, as AppBars next to Explorer.
+	struct swine_box z;
+	CHECK(bar_get_zone_n(0, one, &z));
+	CHECK(z.x == 0 && z.y == 0 && z.width == 1000 && z.height == 20);
+	CHECK(bar_get_zone_n(1, one, &z));
+	CHECK(z.x == 0 && z.y == 20 && z.width == 1000 && z.height == 14);
+	CHECK(bar_get_zone_n(2, one, &z));
+	CHECK(z.x == 0 && z.y == 34 && z.width == 50 && z.height == 800 - 34);
+	CHECK(!bar_get_zone_n(3, one, &z));   // not exclusive
 	// Each bar has its own modules; window#waybar has its position class.
 	struct bar_model *model = bar_build_n(2, one, 0);
 	CHECK(model->vertical);

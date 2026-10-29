@@ -11,7 +11,10 @@
 #include "stringop.h"
 
 #define MAX_STEPS 200000
-#define MAX_DEPTH 4000
+// Each level is up to three C stack frames: 1000 keeps even a debug build
+// within half of Windows' 1 MB main-thread stack. A leading ".*" still
+// covers 1000 characters of the (at most MAX_TEXT) text.
+#define MAX_DEPTH 1000
 #define MAX_TEXT 1024
 
 enum node_type {

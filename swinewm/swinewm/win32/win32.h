@@ -102,6 +102,11 @@ void canvas_icon_blend(struct canvas *c, const RECT *rect);
 // top-left corner clockwise.
 unsigned canvas_rounded_coverage(const RECT *r, const double radii[4],
 		int x, int y);
+// A rounded box: background, and a border of `border` pixels inside its
+// edge, blended over what is there.
+void canvas_box(struct canvas *c, const RECT *r, double radius,
+		struct swine_color background, int border,
+		struct swine_color border_color);
 // Draws premultiplied BGRA pixels, with rounded corners if radius > 0.
 void canvas_image(struct canvas *c, int x, int y, int w, int h,
 		const uint32_t *src, double radius);
@@ -118,6 +123,19 @@ bool win32_image_size(const char *path, UINT *width, UINT *height);
 // True if hwnd is a tab bar; *con is the child under the point.
 bool win32_titlebar_hit(HWND hwnd, POINT pt, struct swine_container **con);
 void win32_titlebars_finish(void);
+
+// appbar.c: the bars as AppBars next to Explorer
+struct swine_box;
+UINT win32_appbar_message(void);
+// Around a bar refresh: set (each shown bar's strip, its enum
+// bar_position), then end, which removes the bars that were not set.
+void win32_appbar_begin(void);
+void win32_appbar_set(HWND hwnd, int position, const struct swine_box *zone);
+void win32_appbar_end(void);
+void win32_appbar_window_message(HWND hwnd, UINT msg, WPARAM wparam);
+// A monitor's work area with the bars' own strips given back.
+void win32_appbar_work_area(RECT *work);
+void win32_appbar_finish(void);
 
 // bar.c
 void win32_bar_refresh(void);

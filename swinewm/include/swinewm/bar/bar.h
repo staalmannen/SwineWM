@@ -101,6 +101,10 @@ void bar_update_reservations(void);
 bool bar_get_rect(struct swine_output *output, struct swine_box *out);
 bool bar_get_rect_n(int index, struct swine_output *output,
 		struct swine_box *out);
+// The strip bar `index` reserves on the output (its exclusive zone, with
+// its margins), as an AppBar would; false if it reserves none there.
+bool bar_get_zone_n(int index, struct swine_output *output,
+		struct swine_box *zone);
 
 struct bar_model *bar_build(struct swine_output *output, time_t now);
 struct bar_model *bar_build_n(int index, struct swine_output *output,

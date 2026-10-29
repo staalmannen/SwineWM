@@ -152,8 +152,8 @@ Windows 10 and 11 windows have invisible resize borders outside the visible
 frame. The layout is in terms of the visible frame (from
 `DWMWA_EXTENDED_FRAME_BOUNDS`), and the rectangle passed to `SetWindowPos`
 is grown by the measured borders. Maximized windows are restored first.
-Outputs use the monitor's work area for tiling (so the taskbar, and later
-swinebar, stay visible) and the full monitor for fullscreen.
+Outputs use the monitor's work area for tiling (so the taskbar and the bars
+stay visible; swinewm's own bars are reserved separately) and the full monitor for fullscreen.
 
 ### Never block on other applications
 
@@ -449,16 +449,27 @@ Next to Explorer, `explorer_taskbar autohide` switches Explorer's taskbar to
 auto-hide and keeps it hidden, restoring the original setting on exit,
 after a crash and with `--recover`.
 
+Next to Explorer, each exclusive bar is registered as an AppBar
+(`win32/appbar.c`): `ABM_NEW`, `ABM_QUERYPOS` and `ABM_SETPOS` with the
+bar's strip, again on `ABN_POSCHANGED`, and `ABM_WINDOWPOSCHANGED` when a
+bar moves. `SHAppBarMessage` waits for Explorer, so a worker thread makes
+the calls and the main thread only queues them; a registration is sent
+only when a bar's strip changes. Explorer then takes the strips out of the
+work area; `win32_appbar_work_area` gives swinewm's own strips back before
+an output's usable area is computed, because swinewm reserves its bars in
+its own layout (`place_bars`) and taking them out twice would shrink the
+layout and move the bars in a loop. On exit the bars are removed (the
+thread gets two seconds); after a crash Explorer drops the registrations
+of the destroyed windows itself.
+
 The approach follows Cairo Desktop's ManagedShell library; see
 [`research/windows-shell.md`](research/windows-shell.md) for the details
-and what remains (notably registering bars as AppBars while running next to
-Explorer).
+and what remains.
 
 ## Known gaps
 
 The feature-by-feature status lives in
 [`compatibility.md`](compatibility.md). The larger remaining areas include
 decorations, IPC subscriptions/events, script-driven
-Waybar modules, Windows toast notifications and registering bars as AppBars
-when running beside Explorer. These are separate projects with different
+Waybar modules. These are separate projects with different
 Windows dependencies; do not infer support from the upstream format alone.

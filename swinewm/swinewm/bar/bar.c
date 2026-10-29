@@ -459,7 +459,8 @@ static bool output_allowed(const struct bar_instance *b,
 // takes its space (with its margins) out of that area. Returns the rect of
 // bar `want` (false if it has none there), and the space all of them take.
 static bool place_bars(struct swine_output *output, int want,
-		struct swine_box *rect, struct side_gaps *taken) {
+		struct swine_box *rect, struct swine_box *want_zone,
+		struct side_gaps *taken) {
 	double scale = output->scale > 0 ? output->scale : 1.0;
 	struct swine_box area = output->usable;
 	struct side_gaps used = {0, 0, 0, 0};
@@ -494,6 +495,20 @@ static bool place_bars(struct swine_output *output, int want,
 		if (i == want) {
 			*rect = r;
 			found = true;
+			if (want_zone) {
+				// the strip it reserves, margins included (empty if none)
+				struct swine_box z = {0, 0, 0, 0};
+				if (b->exclusive) {
+					z = area;
+					switch (pos) {
+					case BAR_TOP: z.height = zone; break;
+					case BAR_BOTTOM: z.y += area.height - zone; z.height = zone; break;
+					case BAR_LEFT: z.width = zone; break;
+					case BAR_RIGHT: z.x += area.width - zone; z.width = zone; break;
+					}
+				}
+				*want_zone = z;
+			}
 		}
 		if (!b->exclusive) {
 			continue;
@@ -535,7 +550,7 @@ void bar_update_reservations(void) {
 		output->reserved = (struct side_gaps){0};
 		if (enabled) {
 			struct swine_box unused;
-			place_bars(output, -1, &unused, &output->reserved);
+			place_bars(output, -1, &unused, NULL, &output->reserved);
 		}
 	}
 }
@@ -550,7 +565,17 @@ bool bar_get_rect_n(int index, struct swine_output *output,
 		return false;
 	}
 	ensure_loaded();
-	return place_bars(output, index, out, NULL);
+	return place_bars(output, index, out, NULL, NULL);
+}
+
+bool bar_get_zone_n(int index, struct swine_output *output,
+		struct swine_box *zone) {
+	struct swine_box rect;
+	if (!bar_get_rect_n(index, output, &rect)) {
+		return false;
+	}
+	place_bars(output, index, &rect, zone, NULL);
+	return zone->width > 0 && zone->height > 0;
 }
 
 bool bar_get_rect(struct swine_output *output, struct swine_box *out) {

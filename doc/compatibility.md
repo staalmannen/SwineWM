@@ -125,7 +125,7 @@ Unicode properties (`\p{…}`).
 | Feature | Status | Notes |
 | --- | --- | --- |
 | `waybar/config.jsonc` / `waybar/config`, JSONC | ✅ | One bar, or an array of bars. Bars on the same edge stack in config order, and a later bar takes its edge of the space earlier bars left (as Waybar's layer-shell surfaces do) |
-| `height`, `width`, `spacing`, `position` (top/bottom/left/right), `output`, `margin`, `margin-top/right/bottom/left`, `exclusive`, `name` | ✅ | `height` is the thickness of a top or bottom bar and `width` of a left or right one (without it a vertical bar is twice the line height); bars always span the monitor. Left and right bars lay their modules out top to bottom. `window#waybar` has the position and `name` as classes. No `layer`, `mode`, `start_hidden`, `ipc` |
+| `height`, `width`, `spacing`, `position` (top/bottom/left/right), `output`, `margin`, `margin-top/right/bottom/left`, `exclusive`, `name` | ✅ | `height` is the thickness of a top or bottom bar and `width` of a left or right one (without it a vertical bar is twice the line height); bars always span the monitor. Next to Explorer, each `exclusive` bar is registered as an AppBar, so windows swinewm does not manage (maximized ones, dialogs) keep clear of it as they do of the taskbar. Left and right bars lay their modules out top to bottom. `window#waybar` has the position and `name` as classes. No `layer`, `mode`, `start_hidden`, `ipc` |
 | `modules-left/center/right` | ✅ | |
 | `sway/workspaces` | 🟡 | `format` with `{name} {value} {index} {icon} {output}`, `format-icons`, `all-outputs`, `disable-scroll`, `disable-click`; no persistent workspaces |
 | `sway/mode`, `sway/window`, `sway/scratchpad` | ✅ | window: `{title} {app_id}`, `max-length` |
@@ -188,11 +188,14 @@ is; any other launcher can be set in the config instead.
 | `--show drun` (default) | ✅ | Start menu shortcuts (all users and current user; uninstallers and document shortcuts left out) and Store apps |
 | `--show run` | ✅ | Programs on PATH (`.exe`, `.bat`, `.cmd`, `.com`) |
 | `--show dmenu`, `-d`/`--dmenu` | ✅ | Choices from standard input, the chosen (or typed) line on standard output, exit status 1 if cancelled |
-| `-p`/`--prompt`, `-L`/`--lines`, `-W`/`--width` | ✅ | |
+| `--show window` (rofi's mode) | ✅ | swinewm's windows (workspace, program, title, the program's icon); the choice is focused (`[con_id=N] focus`) |
+| wofi's options | ✅ | `-p`/`--prompt` (the input's placeholder), `-L`/`--lines`, `-W`/`--width` and `-H`/`--height` (pixels or `n%`), `-l`/`--location` (`center`, `top_left` … `left`, or 0-8), `-x`/`-y` offsets, `-I`/`--allow-images` (icons; on by default in drun and window), `image_size`, `-P`/`--password [c]`, `-e`/`--exec-search`, `-Q`/`--search`, `hide_search`, `-c`/`--conf`, `-s`/`--style`, `-D key=value`. The other options of wofi(1) are accepted and change nothing (GTK, Wayland, keys, columns, matching, sort order) |
+| wofi's `config` | ✅ | `wofi\config` in swinewm's config directories (`%USERPROFILE%\.swinewm\wofi\config`, …, then `%WOFI_CONFIG_DIR%\wofi`, `%XDG_CONFIG_HOME%\wofi`), or `-c`: `key=value` lines with the long option names. Command-line options win |
 | Matching | ✅ | Every typed word must appear, ignoring case; often chosen entries first (history in `%LOCALAPPDATA%\swinewm\swinemenu-*.txt`) |
 | Keys | ✅ | Type to filter, Up/Down, Tab, Ctrl+n/p/j/k, Page Up/Down, Enter, Esc, Ctrl+u, Ctrl+w/Ctrl+Backspace; a click starts an entry; clicking elsewhere closes it; starting it again closes it |
 | Starting the choice | ✅ | Sent to swinewm as `exec` over IPC, so Store apps start as the shell too; without swinewm it opens the choice itself |
-| Theme | 🟡 | Colours and font from the bar (`get_bar_config`); wofi's own `config`/`style.css` and icons are not read yet |
+| wofi's `style.css` | ✅ | `wofi\style.css` beside the config, or `-s`/`style=`. wofi's widget names: `window`, `#outer-box`, `#input` (with `:focus`), `#scroll`, `#inner-box`, `#entry` and `#entry:selected`, `#img`, `#text` and `#text:selected`; background and text colours, borders, `border-radius`, padding, margin, font family/size/weight. Translucent colours and rounded corners show what is behind (a layered window). Without a style sheet: the bar's colours and font (`get_bar_config`) |
+| Icons | ✅ | Of Start menu shortcuts, Store apps and windows' programs, through the shell |
 | `--open-with <file>` (swinewm extension) | ✅ | Replaces Windows' "Open with" dialog: the programs registered for the file's type (`SHAssocEnumHandlers`, else the type's ProgIDs, `OpenWithProgids` and `OpenWithList` in the registry), the default marked; Enter opens the file with the choice, a typed program name opens it with that |
 | `--install-open-with`, `--uninstall-open-with` | ✅ | Adds (or removes) "Open with swinemenu" in every file's context menu and makes swinemenu the program Windows asks for files that have none (`HKCU\Software\Classes`, the `Unknown` type's `openas` verb) |
 

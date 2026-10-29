@@ -18,6 +18,7 @@ void menu_entry_free(struct menu_entry *entry) {
 	if (entry) {
 		free(entry->name);
 		free(entry->command);
+		free(entry->icon);
 		free(entry);
 	}
 }
@@ -176,4 +177,277 @@ void menu_history_record(const char *path, const char *name) {
 	}
 	list_free_items_and_destroy(names);
 	list_free(counts);
+}
+
+// --- wofi's options --------------------------------------------------------
+
+void menu_options_init(struct menu_options *o) {
+	memset(o, 0, sizeof(*o));
+	o->mode = MENU_MODE_DRUN;
+	o->allow_images = -1;
+	o->image_size = 32;
+	strcpy(o->password_char, "*");
+}
+
+void menu_options_finish(struct menu_options *o) {
+	free(o->prompt);
+	free(o->width);
+	free(o->height);
+	free(o->search);
+	free(o->conf);
+	free(o->style);
+	free(o->open_with);
+	memset(o, 0, sizeof(*o));
+}
+
+static bool parse_flag(const char *value, bool *out) {
+	if (!value || strcmp(value, "true") == 0 || strcmp(value, "1") == 0 ||
+			strcmp(value, "yes") == 0) {
+		*out = true;
+	} else if (strcmp(value, "false") == 0 || strcmp(value, "0") == 0 ||
+			strcmp(value, "no") == 0) {
+		*out = false;
+	} else {
+		return false;
+	}
+	return true;
+}
+
+static bool parse_int(const char *value, int *out) {
+	if (!value) {
+		return false;
+	}
+	char *end;
+	long v = strtol(value, &end, 10);
+	if (end == value || *end) {
+		return false;
+	}
+	*out = (int)v;
+	return true;
+}
+
+static void set_string(char **slot, const char *value) {
+	free(*slot);
+	*slot = value ? swine_strdup(value) : NULL;
+}
+
+// wofi(7)'s locations, by name or number.
+static int parse_location(const char *value) {
+	static const char *names[] = {
+		"center", "top_left", "top", "top_right", "right",
+		"bottom_right", "bottom", "bottom_left", "left",
+	};
+	for (int i = 0; i < 9; ++i) {
+		if (strcmp(value, names[i]) == 0) {
+			return i;
+		}
+	}
+	// "top-left" and the like, and the numbers 0-8
+	if (strchr(value, '-')) {
+		char *copy = swine_strdup(value);
+		for (char *c = copy; *c; ++c) {
+			if (*c == '-') {
+				*c = '_';
+			}
+		}
+		int l = parse_location(copy);
+		free(copy);
+		return l;
+	}
+	int n;
+	return parse_int(value, &n) && n >= 0 && n <= 8 ? n : -1;
+}
+
+// Options that are accepted and change nothing (GTK, Wayland, keys, ...).
+static const char *ignored_options[] = {
+	"normal_window", "allow_markup", "cache_file", "term", "hide_scroll",
+	"matching", "insensitive", "parse_search", "no_actions", "columns",
+	"sort_order", "gtk_dark", "monitor", "orientation", "halign", "valign",
+	"content_halign", "filter_rate", "line_wrap", "global_coords",
+	"dynamic_lines", "layer", "copy_exec", "single_click", "pre_display_cmd",
+	"pre_display_exec", "use_search_box", "color", "colors", "fork",
+	"define", "key_up", "key_down", "key_left", "key_right", "key_forward",
+	"key_backward", "key_submit", "key_exit", "key_pgup", "key_pgdn",
+	"key_expand", "key_hide_search", "key_copy", "key_custom_0",
+	"close_on_focus_loss",
+};
+
+bool menu_option_set(struct menu_options *o, const char *raw_key,
+		const char *value, char **error) {
+	char key[64];
+	snprintf(key, sizeof(key), "%s", raw_key);
+	for (char *c = key; *c; ++c) {
+		if (*c == '-') {
+			*c = '_';
+		}
+	}
+	bool ok = true;
+	if (strcmp(key, "show") == 0 || strcmp(key, "mode") == 0) {
+		if (!value) {
+			ok = false;
+		} else if (strcmp(value, "drun") == 0) {
+			o->mode = MENU_MODE_DRUN;
+		} else if (strcmp(value, "run") == 0) {
+			o->mode = MENU_MODE_RUN;
+		} else if (strcmp(value, "dmenu") == 0) {
+			o->mode = MENU_MODE_DMENU;
+		} else if (strcmp(value, "window") == 0) {
+			o->mode = MENU_MODE_WINDOW;
+		} else {
+			ok = false;
+		}
+	} else if (strcmp(key, "dmenu") == 0) {
+		bool on = true;
+		ok = parse_flag(value, &on);
+		if (ok && on) {
+			o->mode = MENU_MODE_DMENU;
+		}
+	} else if (strcmp(key, "prompt") == 0) {
+		set_string(&o->prompt, value ? value : "");
+	} else if (strcmp(key, "width") == 0) {
+		set_string(&o->width, value);
+		ok = value && menu_size(value, 1000, -1) >= 0;
+	} else if (strcmp(key, "height") == 0) {
+		set_string(&o->height, value);
+		ok = value && menu_size(value, 1000, -1) >= 0;
+	} else if (strcmp(key, "lines") == 0) {
+		ok = parse_int(value, &o->lines) && o->lines > 0;
+	} else if (strcmp(key, "location") == 0) {
+		int l = value ? parse_location(value) : -1;
+		ok = l >= 0;
+		if (ok) {
+			o->location = l;
+		}
+	} else if (strcmp(key, "xoffset") == 0) {
+		ok = parse_int(value, &o->xoffset);
+	} else if (strcmp(key, "yoffset") == 0) {
+		ok = parse_int(value, &o->yoffset);
+	} else if (strcmp(key, "allow_images") == 0) {
+		bool on = true;
+		ok = parse_flag(value, &on);
+		o->allow_images = on;
+	} else if (strcmp(key, "image_size") == 0) {
+		ok = parse_int(value, &o->image_size) && o->image_size > 0;
+	} else if (strcmp(key, "hide_search") == 0) {
+		ok = parse_flag(value, &o->hide_search);
+	} else if (strcmp(key, "password") == 0) {
+		// -P [character]; in the config password=<character>
+		o->password = true;
+		if (value && *value && strcmp(value, "true") != 0) {
+			snprintf(o->password_char, sizeof(o->password_char), "%s", value);
+		}
+	} else if (strcmp(key, "exec_search") == 0) {
+		ok = parse_flag(value, &o->exec_search);
+	} else if (strcmp(key, "search") == 0) {
+		set_string(&o->search, value);
+		ok = value != NULL;
+	} else if (strcmp(key, "conf") == 0) {
+		set_string(&o->conf, value);
+		ok = value != NULL;
+	} else if (strcmp(key, "style") == 0 || strcmp(key, "stylesheet") == 0) {
+		set_string(&o->style, value);
+		ok = value != NULL;
+	} else if (strcmp(key, "open_with") == 0) {
+		set_string(&o->open_with, value);
+		o->mode = MENU_MODE_OPENWITH;
+		ok = value != NULL;
+	} else {
+		bool known = false;
+		for (size_t i = 0; i < sizeof(ignored_options) / sizeof(ignored_options[0]);
+				++i) {
+			known = known || strcmp(key, ignored_options[i]) == 0;
+		}
+		if (!known) {
+			*error = format_str("Unknown option '%s'", raw_key);
+			return false;
+		}
+	}
+	if (!ok) {
+		*error = format_str("Invalid value '%s' for %s", value ? value : "",
+			raw_key);
+	}
+	return ok;
+}
+
+bool menu_options_parse_config(struct menu_options *o, const char *text,
+		char **error) {
+	bool ok = true;
+	list_t *lines = split_string(text, "\n");
+	for (int i = 0; i < lines->length; ++i) {
+		char *line = lines->items[i];
+		strip_whitespace(line);
+		if (!*line || line[0] == '#') {
+			continue;
+		}
+		char *eq = strchr(line, '=');
+		char *value = NULL;
+		if (eq) {
+			*eq = '\0';
+			value = eq + 1;
+			strip_whitespace(value);
+		}
+		strip_whitespace(line);
+		char *problem = NULL;
+		if (!menu_option_set(o, line, value, &problem)) {
+			if (ok) {
+				*error = problem;
+				problem = NULL;
+			}
+			free(problem);
+			ok = false;
+		}
+	}
+	list_free_items_and_destroy(lines);
+	return ok;
+}
+
+const char *menu_option_name(const char *flag, bool *takes_value) {
+	static const struct {
+		char short_flag;
+		const char *name;
+		bool value;
+	} flags[] = {
+		{'c', "conf", true}, {'s', "style", true}, {'C', "color", true},
+		{'d', "dmenu", false}, {'S', "show", true}, {'W', "width", true},
+		{'H', "height", true}, {'p', "prompt", true}, {'x', "xoffset", true},
+		{'y', "yoffset", true}, {'n', "normal-window", false},
+		{'I', "allow-images", false}, {'m', "allow-markup", false},
+		{'k', "cache-file", true}, {'t', "term", true},
+		{'P', "password", false}, {'e', "exec-search", false},
+		{'b', "hide-scroll", false}, {'M', "matching", true},
+		{'i', "insensitive", false}, {'q', "parse-search", false},
+		{'l', "location", true}, {'a', "no-actions", false},
+		{'D', "define", true}, {'L', "lines", true}, {'w', "columns", true},
+		{'O', "sort-order", true}, {'G', "gtk-dark", false},
+		{'Q', "search", true}, {'o', "monitor", true},
+		{'r', "pre-display-cmd", true}, {'f', "fork", false},
+		{0, "open-with", true}, {0, "image-size", true},
+		{0, "hide-search", false},
+	};
+	for (size_t i = 0; i < sizeof(flags) / sizeof(flags[0]); ++i) {
+		bool match = (flag[0] == '-' && flag[1] == flags[i].short_flag &&
+				flags[i].short_flag && !flag[2]) ||
+			(flag[0] == '-' && flag[1] == '-' &&
+				strcmp(flag + 2, flags[i].name) == 0);
+		if (match) {
+			*takes_value = flags[i].value;
+			return flags[i].name;
+		}
+	}
+	return NULL;
+}
+
+int menu_size(const char *size, int screen, int fallback) {
+	if (!size) {
+		return fallback;
+	}
+	char *end;
+	double v = strtod(size, &end);
+	if (end == size || v < 0) {
+		return fallback;
+	}
+	if (*end == '%' && !end[1]) {
+		return (int)(screen * v / 100.0 + 0.5);
+	}
+	return *end ? fallback : (int)v;
 }

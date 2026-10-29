@@ -264,8 +264,74 @@ static void test_menu(void) {
 	list_free(entries);
 }
 
+static void test_menu_options(void) {
+	struct menu_options o;
+	menu_options_init(&o);
+	CHECK_INT(o.mode, MENU_MODE_DRUN);
+	CHECK_INT(o.image_size, 32);
+	char *error = NULL;
+	CHECK(menu_options_parse_config(&o,
+		"# wofi config\n"
+		"show=run\n"
+		"width=50%\n"
+		"height = 300\n"
+		"allow_images=true\n"
+		"image_size=24\n"
+		"location=top_left\n"
+		"xoffset=10\n"
+		"prompt=Search...\n"
+		"insensitive=true\n"
+		"key_exit=Escape\n"
+		"style=C:/wofi.css\n", &error));
+	CHECK(error == NULL);
+	CHECK_INT(o.mode, MENU_MODE_RUN);
+	CHECK_STR(o.width, "50%");
+	CHECK_STR(o.height, "300");
+	CHECK_INT(o.allow_images, 1);
+	CHECK_INT(o.image_size, 24);
+	CHECK_INT(o.location, 1);
+	CHECK_INT(o.xoffset, 10);
+	CHECK_STR(o.prompt, "Search...");
+	CHECK_STR(o.style, "C:/wofi.css");
+	CHECK(menu_option_set(&o, "location", "7", &error));
+	CHECK_INT(o.location, 7);
+	CHECK(menu_option_set(&o, "location", "bottom-right", &error));
+	CHECK_INT(o.location, 5);
+	CHECK(menu_option_set(&o, "show", "window", &error));
+	CHECK_INT(o.mode, MENU_MODE_WINDOW);
+	CHECK(menu_option_set(&o, "dmenu", NULL, &error));
+	CHECK_INT(o.mode, MENU_MODE_DMENU);
+	CHECK(menu_option_set(&o, "password", NULL, &error));
+	CHECK(o.password);
+	CHECK_STR(o.password_char, "*");
+
+	CHECK(!menu_option_set(&o, "frobnicate", "1", &error));
+	CHECK_STR(error, "Unknown option 'frobnicate'");
+	free(error);
+	error = NULL;
+	CHECK(!menu_option_set(&o, "lines", "many", &error));
+	free(error);
+	error = NULL;
+	CHECK(!menu_options_parse_config(&o, "location=middle\n", &error));
+	free(error);
+
+	bool value = false;
+	CHECK_STR(menu_option_name("-I", &value), "allow-images");
+	CHECK(!value);
+	CHECK_STR(menu_option_name("--lines", &value), "lines");
+	CHECK(value);
+	CHECK_STR(menu_option_name("-W", &value), "width");
+	CHECK(menu_option_name("-Z", &value) == NULL);
+	CHECK_INT(menu_size("50%", 1920, 0), 960);
+	CHECK_INT(menu_size("600", 1920, 0), 600);
+	CHECK_INT(menu_size("wide", 1920, 7), 7);
+	CHECK_INT(menu_size(NULL, 1920, 7), 7);
+	menu_options_finish(&o);
+}
+
 void test_common_all(void) {
 	test_menu();
+	test_menu_options();
 	test_list();
 	test_split_args();
 	test_argsep();

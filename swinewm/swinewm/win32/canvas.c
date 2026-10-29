@@ -192,6 +192,53 @@ unsigned canvas_rounded_coverage(const RECT *r, const double radii[4],
 	return cover <= 0 ? 0 : cover >= 1 ? 255 : (unsigned)(cover * 255);
 }
 
+void canvas_box(struct canvas *c, const RECT *r, double radius,
+		struct swine_color background, int border,
+		struct swine_color border_color) {
+	RECT area;
+	if (!canvas_clip(c, r, &area)) {
+		return;
+	}
+	if (radius > (r->right - r->left) / 2.0) {
+		radius = (r->right - r->left) / 2.0;
+	}
+	if (radius > (r->bottom - r->top) / 2.0) {
+		radius = (r->bottom - r->top) / 2.0;
+	}
+	double outer_r[4] = {radius, radius, radius, radius};
+	double in = radius - border > 0 ? radius - border : 0;
+	double inner_r[4] = {in, in, in, in};
+	RECT inner = {r->left + border, r->top + border, r->right - border,
+		r->bottom - border};
+	unsigned ba = background.a, ea = border_color.a;
+	for (int y = area.top; y < area.bottom; ++y) {
+		uint32_t *row = c->px + (size_t)y * c->w;
+		for (int x = area.left; x < area.right; ++x) {
+			unsigned co = radius > 0 ? canvas_rounded_coverage(r, outer_r, x, y) : 255;
+			if (!co) {
+				continue;
+			}
+			unsigned ci = border <= 0 ? co :
+				canvas_rounded_coverage(&inner, inner_r, x, y);
+			if (ci > co) {
+				ci = co;
+			}
+			// the background inside, the border around it
+			unsigned a = (ba * ci + ea * (co - ci)) / 255;
+			if (!a) {
+				continue;
+			}
+			unsigned pr = (background.r * ba / 255 * ci +
+				border_color.r * ea / 255 * (co - ci)) / 255;
+			unsigned pg = (background.g * ba / 255 * ci +
+				border_color.g * ea / 255 * (co - ci)) / 255;
+			unsigned pb = (background.b * ba / 255 * ci +
+				border_color.b * ea / 255 * (co - ci)) / 255;
+			row[x] = canvas_over(row[x], pr, pg, pb, a);
+		}
+	}
+}
+
 void canvas_image(struct canvas *c, int x, int y, int w, int h,
 		const uint32_t *src, double radius) {
 	RECT area = {x, y, x + w, y + h};

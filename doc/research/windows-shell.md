@@ -34,7 +34,7 @@ which windows to manage), see also the notes on GlazeWM in
 
 | Topic | How Cairo/ManagedShell does it | SwineWM |
 | --- | --- | --- |
-| Reserving space | Register each bar as an AppBar: `SHAppBarMessage(ABM_NEW / ABM_QUERYPOS / ABM_SETPOS)`, react to `ABN_POSCHANGED`, call `ABM_ACTIVATE` on `WM_ACTIVATE` and `ABM_WINDOWPOSCHANGED` (`AppBarManager.cs`, `AppBarWindow.cs`) | 🔜 SwineWM reserves bar space inside its own layout and answers selected taskbar queries as the shell; it does not register bars as AppBars, so unmanaged maximized windows can overlap them |
+| Reserving space | Register each bar as an AppBar: `SHAppBarMessage(ABM_NEW / ABM_QUERYPOS / ABM_SETPOS)`, react to `ABN_POSCHANGED`, call `ABM_ACTIVATE` on `WM_ACTIVATE` and `ABM_WINDOWPOSCHANGED` (`AppBarManager.cs`, `AppBarWindow.cs`) | ✅ each exclusive bar is registered (`win32/appbar.c`) with `ABM_NEW`/`ABM_QUERYPOS`/`ABM_SETPOS` from a worker thread, re-set on `ABN_POSCHANGED`, `ABM_WINDOWPOSCHANGED` when a bar moves; swinewm gives its own strips back when it reads the work area, since it reserves them in its layout. No `ABM_ACTIVATE` (bars are never activated) |
 | Hiding Explorer's taskbar | Save the taskbar state, `ABM_SETSTATE(ABS_AUTOHIDE)`, hide `Shell_TrayWnd` and every `Shell_SecondaryTrayWnd` with `SetWindowPos(SWP_HIDEWINDOW)`, re-hide every 100 ms because Explorer shows it again; restore on exit (`ExplorerHelper.cs`) | ✅ `explorer_taskbar autohide` (re-hidden every second; original state saved for `--recover`) |
 | Desktop windows | Explorer's desktop is `Progman`/`WorkerW` at the bottom of the Z order | ✅ the wallpaper window stays just above them |
 
@@ -79,9 +79,9 @@ in [`../architecture.md`](../architecture.md):
    from `WM_USER` up) are forwarded to Explorer's taskbar. ✅ As the shell,
    SwineWM answers `ABM_GETTASKBARPOS`, `ABM_GETSTATE`,
    `ABM_GETAUTOHIDEBAR`, `ABM_GETAUTOHIDEBAREX`, `ABM_ACTIVATE` and
-   `ABM_WINDOWPOSCHANGED`. It does not register AppBars or implement
-   `ABM_NEW`/`ABM_QUERYPOS`/`ABM_SETPOS`; unmanaged maximized windows can
-   therefore overlap the bar while running next to Explorer. 🔜
+   `ABM_WINDOWPOSCHANGED`. As the shell it does not implement
+   `ABM_NEW`/`ABM_QUERYPOS`/`ABM_SETPOS` for other applications' AppBars;
+   next to Explorer it registers its own bars with Explorer (see above).
 7. As the shell, the volume/network/power icons come from the SysTray shell
    service object (`CLSID 35CEC8A3-2BE6-11D2-8773-92E220524153`,
    `IOleCommandTarget::Exec(CGID_ShellServiceObject, OLECMDID_NEW)`). ✅

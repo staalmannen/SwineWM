@@ -76,9 +76,13 @@ void win32_recover_save(void) {
 	if (!path) {
 		return;
 	}
-	FILE *f = swine_fopen(path, "w");
-	free(path);
+	// Written next to it and then renamed over it: a crash while writing
+	// must not leave a cut file, which would lose the hidden windows.
+	char *tmp = format_str("%s.tmp", path);
+	FILE *f = swine_fopen(tmp, "w");
 	if (!f) {
+		free(tmp);
+		free(path);
 		return;
 	}
 	for (int i = 0; i < server.views->length; ++i) {
@@ -89,7 +93,20 @@ void win32_recover_save(void) {
 		}
 	}
 	win32_decor_save(f);
-	fclose(f);
+	bool ok = fflush(f) == 0 && !ferror(f);
+	ok = fclose(f) == 0 && ok;
+	wchar_t *wtmp = utf8_to_utf16(tmp);
+	wchar_t *wpath = utf8_to_utf16(path);
+	if (!ok || !MoveFileExW(wtmp, wpath,
+			MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+		swine_log(SWINE_ERROR, "Unable to save %s (error %lu)", path,
+			GetLastError());
+		DeleteFileW(wtmp);
+	}
+	free(wtmp);
+	free(wpath);
+	free(tmp);
+	free(path);
 }
 
 void win32_recover_clear(void) {

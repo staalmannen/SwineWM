@@ -635,12 +635,18 @@ static void handle_event(DWORD event, HWND hwnd) {
 }
 
 void win32_windows_drain_events(void) {
+	// Take the queue: events that arrive while these are handled (a
+	// handler that pumps messages could even drain again) start a new one
+	// and a new drain.
+	struct queued_event *batch = queue;
+	int count = queue_len;
+	queue = NULL;
+	queue_len = queue_cap = 0;
 	drain_posted = false;
-	// Handlers may queue further events; process until empty.
-	for (int i = 0; i < queue_len; ++i) {
-		handle_event(queue[i].event, queue[i].hwnd);
+	for (int i = 0; i < count; ++i) {
+		handle_event(batch[i].event, batch[i].hwnd);
 	}
-	queue_len = 0;
+	free(batch);
 }
 
 static void CALLBACK win_event_proc(HWINEVENTHOOK hook, DWORD event, HWND hwnd,
@@ -649,6 +655,14 @@ static void CALLBACK win_event_proc(HWINEVENTHOOK hook, DWORD event, HWND hwnd,
 	(void)thread;
 	(void)time;
 	if (!hwnd || object_id != OBJID_WINDOW || child_id != CHILDID_SELF) {
+		return;
+	}
+	// Controls inside windows rename and move all the time; only top-level
+	// windows matter. (Not for other events: a window being destroyed is
+	// no longer anyone's child, and must not be filtered out.)
+	if ((event == EVENT_OBJECT_NAMECHANGE ||
+			event == EVENT_OBJECT_LOCATIONCHANGE) &&
+			GetAncestor(hwnd, GA_ROOT) != hwnd) {
 		return;
 	}
 	if (event == EVENT_OBJECT_LOCATIONCHANGE && !view_from_handle(hwnd) &&
