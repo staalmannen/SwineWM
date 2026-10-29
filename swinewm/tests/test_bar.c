@@ -928,6 +928,15 @@ static void test_multiple_bars(void) {
 	CHECK(bar_get_rect_n(3, one, &r));
 	CHECK_INT(r.y, 800 - 15);
 	CHECK_INT(r.x, 50);
+	// The strips the bars reserve, as AppBars next to Explorer.
+	struct swine_box z;
+	CHECK(bar_get_zone_n(0, one, &z));
+	CHECK(z.x == 0 && z.y == 0 && z.width == 1000 && z.height == 20);
+	CHECK(bar_get_zone_n(1, one, &z));
+	CHECK(z.x == 0 && z.y == 20 && z.width == 1000 && z.height == 14);
+	CHECK(bar_get_zone_n(2, one, &z));
+	CHECK(z.x == 0 && z.y == 34 && z.width == 50 && z.height == 800 - 34);
+	CHECK(!bar_get_zone_n(3, one, &z));   // not exclusive
 	// Each bar has its own modules; window#waybar has its position class.
 	struct bar_model *model = bar_build_n(2, one, 0);
 	CHECK(model->vertical);

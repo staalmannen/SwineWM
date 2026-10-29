@@ -124,6 +124,19 @@ bool win32_image_size(const char *path, UINT *width, UINT *height);
 bool win32_titlebar_hit(HWND hwnd, POINT pt, struct swine_container **con);
 void win32_titlebars_finish(void);
 
+// appbar.c: the bars as AppBars next to Explorer
+struct swine_box;
+UINT win32_appbar_message(void);
+// Around a bar refresh: set (each shown bar's strip, its enum
+// bar_position), then end, which removes the bars that were not set.
+void win32_appbar_begin(void);
+void win32_appbar_set(HWND hwnd, int position, const struct swine_box *zone);
+void win32_appbar_end(void);
+void win32_appbar_window_message(HWND hwnd, UINT msg, WPARAM wparam);
+// A monitor's work area with the bars' own strips given back.
+void win32_appbar_work_area(RECT *work);
+void win32_appbar_finish(void);
+
 // bar.c
 void win32_bar_refresh(void);
 void win32_bar_finish(void);

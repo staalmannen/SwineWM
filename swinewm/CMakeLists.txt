@@ -127,6 +127,7 @@ if(WIN32)
     ${SWINEWM_GENERATED_DIR}/swinewm.rc
     swinewm/main.c
     swinewm/win32/exec.c
+    swinewm/win32/appbar.c
     swinewm/win32/audio.c
     swinewm/win32/bar.c
     swinewm/win32/canvas.c

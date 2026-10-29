@@ -125,7 +125,7 @@ Unicode properties (`\p{…}`).
 | Feature | Status | Notes |
 | --- | --- | --- |
 | `waybar/config.jsonc` / `waybar/config`, JSONC | ✅ | One bar, or an array of bars. Bars on the same edge stack in config order, and a later bar takes its edge of the space earlier bars left (as Waybar's layer-shell surfaces do) |
-| `height`, `width`, `spacing`, `position` (top/bottom/left/right), `output`, `margin`, `margin-top/right/bottom/left`, `exclusive`, `name` | ✅ | `height` is the thickness of a top or bottom bar and `width` of a left or right one (without it a vertical bar is twice the line height); bars always span the monitor. Left and right bars lay their modules out top to bottom. `window#waybar` has the position and `name` as classes. No `layer`, `mode`, `start_hidden`, `ipc` |
+| `height`, `width`, `spacing`, `position` (top/bottom/left/right), `output`, `margin`, `margin-top/right/bottom/left`, `exclusive`, `name` | ✅ | `height` is the thickness of a top or bottom bar and `width` of a left or right one (without it a vertical bar is twice the line height); bars always span the monitor. Next to Explorer, each `exclusive` bar is registered as an AppBar, so windows swinewm does not manage (maximized ones, dialogs) keep clear of it as they do of the taskbar. Left and right bars lay their modules out top to bottom. `window#waybar` has the position and `name` as classes. No `layer`, `mode`, `start_hidden`, `ipc` |
 | `modules-left/center/right` | ✅ | |
 | `sway/workspaces` | 🟡 | `format` with `{name} {value} {index} {icon} {output}`, `format-icons`, `all-outputs`, `disable-scroll`, `disable-click`; no persistent workspaces |
 | `sway/mode`, `sway/window`, `sway/scratchpad` | ✅ | window: `{title} {app_id}`, `max-length` |

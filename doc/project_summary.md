@@ -194,8 +194,8 @@ What an existing sway config needs to load and behave.
 - swinemenu: icons, wofi's `config` and `style.css`, more modes (windows,
   like `rofi -show window`). Done.
 - Next to Explorer (`--set-autostart`, experimental): register the bar as an
-  AppBar so that Explorer reserves its space for every window, and find out
-  which keys Explorer still takes.
+  AppBar so that Explorer reserves its space for every window (done), and
+  find out which keys Explorer still takes.
 
 ### 1.0.0 — long-term release
 
@@ -227,9 +227,10 @@ Feature work stops; reliability and documentation.
   and polls). Whether Windows still shows its own toast banners when
   Explorer is not the shell needs to be tested; `auto` assumes it does not.
 - **The bar and Explorer's taskbar.** The bar reserves its space inside
-  swinewm's own layout. Windows that swinewm does not manage (maximized
-  unmanaged windows, Explorer's taskbar) do not know about it; registering
-  as an AppBar (`SHAppBarMessage`) would fix that while Explorer runs.
+  swinewm's own layout; next to Explorer, each exclusive bar is also
+  registered as an AppBar (`SHAppBarMessage`) so that Explorer takes it out
+  of the work area for windows swinewm does not manage. Not yet tested
+  with a taskbar on the same edge as a bar.
 - **Hiding versus cloaking.** Workspaces currently hide windows
   (`SW_HIDE`), which also removes them from the taskbar and Alt+Tab. That
   matches Sway, but some applications react to being hidden. Moving them
