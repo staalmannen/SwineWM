@@ -214,9 +214,12 @@ static bool parse_flag(const char *value, bool *out) {
 }
 
 static bool parse_int(const char *value, int *out) {
+	if (!value) {
+		return false;
+	}
 	char *end;
-	long v = value ? strtol(value, &end, 10) : 0;
-	if (!value || end == value || *end) {
+	long v = strtol(value, &end, 10);
+	if (end == value || *end) {
 		return false;
 	}
 	*out = (int)v;
