@@ -8,6 +8,12 @@ the MSI and zip with the matching section below as release notes.
 
 ## [Unreleased]
 
+### Added
+
+- GitHub Releases include `SHA256SUMS` with the SHA-256 checksums of the
+  MSI and zip, also listed in the release notes; `doc/packaging.md`
+  explains how to check a download.
+
 ## [0.5.0] - 2026-10-28
 
 ### Added

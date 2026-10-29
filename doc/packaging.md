@@ -156,8 +156,9 @@ look for (their names often look like `Trojan:Win32/Wacatac…` or end in
 ### Before allowing it
 
 Make sure the file is the one you meant to install: an MSI or zip from the
-project's GitHub Releases page, or a `build` run's artifacts in the
-Actions tab, or your own build. In **Windows Security → Virus & threat
+project's GitHub Releases page (its checksum should match, see
+[Verifying a download](#verifying-a-download)), or a `build` run's
+artifacts in the Actions tab, or your own build. In **Windows Security → Virus & threat
 protection → Protection history**, check that the detection names
 `swinewm.exe` (or `swinemenu.exe`, `swinemsg.exe`) in the SwineWM folder.
 
@@ -230,6 +231,30 @@ incorrectly detected file (a false positive). Microsoft usually updates its
 definitions within a few days. Signing the executables (planned for 1.0)
 is the lasting fix.
 
+## Verifying a download
+
+Each GitHub Release has a `SHA256SUMS` file, and the same checksums in its
+notes. A checksum shows that the download is the file CI built and
+published, not one damaged on the way or swapped on a mirror. It does not
+say who made it: that is what code signing (planned for 1.0) adds, and the
+checksums keep being published then.
+
+In PowerShell, compare the output with the line for that file:
+
+```powershell
+Get-FileHash .\SwineWM-0.5.0-win64.msi -Algorithm SHA256
+```
+
+`certutil -hashfile SwineWM-0.5.0-win64.msi SHA256` does the same in
+cmd. On Linux, with the files and `SHA256SUMS` in one folder:
+
+```sh
+sha256sum -c --ignore-missing SHA256SUMS
+```
+
+GitHub also shows a `sha256:` digest next to each file of a release; it
+should be the same.
+
 ## Making a release
 
 1. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [0.1.0] - <date>`,
@@ -241,8 +266,9 @@ is the lasting fix.
    attaches the files to it.
 
 CI builds the tag, and the `release` job publishes a GitHub Release named
-"SwineWM 0.1.0" with `SwineWM-0.1.0-win64.msi`, the zip, and that
-changelog section as the notes.
+"SwineWM 0.1.0" with `SwineWM-0.1.0-win64.msi`, the zip, `SHA256SUMS`, and
+that changelog section with the checksums as the notes (see
+[Verifying a download](#verifying-a-download)).
 
 ## Updating a running swinewm
 
