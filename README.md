@@ -25,7 +25,8 @@ program it replaces.
 | --- | --- | --- |
 | sway | `swinewm.exe` — tiling window manager (sway config) | Early draft, runs |
 | waybar | built into `swinewm.exe` (Waybar config + style.css) | Early draft, runs |
-| mako, notify-send, makoctl | built into `swinewm.exe` (mako config) | Early draft, runs |
+| mako | built into `swinewm.exe` (mako config) | Early draft, runs |
+| notify-send, makoctl | `notify-send.exe`, `makoctl.exe` — same options as on Linux | Early draft, runs |
 | swaymsg | `swinemsg.exe` — IPC client | Early draft, runs |
 | grim | built into `swinewm.exe` (Print key) | Early draft, runs |
 
@@ -33,7 +34,7 @@ program it replaces.
 
 | Path | What |
 | --- | --- |
-| [`swinewm/`](swinewm/) | `swinewm` (window manager, bar, notifications) and `swinemsg`, in C11 ([README](swinewm/README.md)) |
+| [`swinewm/`](swinewm/) | `swinewm` (window manager, bar, notifications), `swinemsg`, `swinemenu`, `notify-send` and `makoctl`, in C11 ([README](swinewm/README.md)) |
 | [`doc/`](doc/) | [Windows for Linux users](doc/linux-users.md), [project summary and roadmap](doc/project_summary.md), [design strategy](doc/design_strategy.md), [architecture](doc/architecture.md), [Sway compatibility](doc/compatibility.md), [packaging](doc/packaging.md) |
 | `sway/`, `waybar/`, `mako/` | Upstream sources (submodules), used as reference |
 

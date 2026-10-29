@@ -24,6 +24,12 @@
 # after ten seconds, since Windows applications rarely set a timeout.
 default-timeout=10000
 
+# Toasts of Windows applications (a SwineWM option): "auto" shows them
+# when SwineWM is the shell, "yes" also next to Explorer (then turn off
+# Windows' own banners), "no" never. Windows asks for permission once:
+# Settings > Privacy & security > Notifications.
+#windows-notifications=auto
+
 # Keep critical notifications until they are dismissed.
 [urgency=critical]
 border-color=#FF0000FF

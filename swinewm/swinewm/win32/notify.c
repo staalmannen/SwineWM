@@ -3,6 +3,7 @@
 // drawn as mako's render_notification draws them (rounded border, progress
 // bar, icon, text; layout ported from mako's render.c, Copyright (c) 2018
 // emersion, MIT).
+#define COBJMACROS
 #include <stdlib.h>
 #include <string.h>
 #include "list.h"
@@ -150,9 +151,65 @@ static uint32_t *image_pixels(const char *path, int max, int *w, int *h) {
 	return px;
 }
 
+// An item of the shell namespace: "shell:AppsFolder\<AppUserModelID>" is
+// how mirrored Windows toasts name their application's icon.
+static uint32_t *shell_item_pixels(const char *name, int size) {
+	wchar_t *wname = utf8_to_utf16(name);
+	IShellItemImageFactory *factory = NULL;
+	HRESULT hr = SHCreateItemFromParsingName(wname, NULL,
+		&IID_IShellItemImageFactory, (void **)&factory);
+	free(wname);
+	if (FAILED(hr)) {
+		return NULL;
+	}
+	SIZE want = {size, size};
+	HBITMAP bitmap = NULL;
+	hr = IShellItemImageFactory_GetImage(factory, want, SIIGBF_ICONONLY,
+		&bitmap);
+	IShellItemImageFactory_Release(factory);
+	if (FAILED(hr) || !bitmap) {
+		return NULL;
+	}
+	BITMAP bm;
+	uint32_t *px = NULL;
+	if (GetObjectW(bitmap, sizeof(bm), &bm) && bm.bmWidth == size &&
+			bm.bmHeight == size) {
+		BITMAPINFO bi = {0};
+		bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+		bi.bmiHeader.biWidth = size;
+		bi.bmiHeader.biHeight = -size;   // top-down
+		bi.bmiHeader.biPlanes = 1;
+		bi.bmiHeader.biBitCount = 32;
+		bi.bmiHeader.biCompression = BI_RGB;
+		px = malloc((size_t)size * (size_t)size * 4);
+		HDC dc = GetDC(NULL);
+		if (!GetDIBits(dc, bitmap, 0, (UINT)size, px, &bi, DIB_RGB_COLORS)) {
+			free(px);
+			px = NULL;
+		}
+		ReleaseDC(NULL, dc);
+	}
+	DeleteObject(bitmap);
+	if (px) {
+		// Premultiplied alpha; a bitmap without any is opaque.
+		size_t n = (size_t)size * (size_t)size;
+		bool has_alpha = false;
+		for (size_t i = 0; i < n && !has_alpha; ++i) {
+			has_alpha = (px[i] >> 24) != 0;
+		}
+		for (size_t i = 0; !has_alpha && i < n; ++i) {
+			px[i] |= 0xFF000000u;
+		}
+	}
+	return px;
+}
+
 static uint32_t *load_icon(const struct swine_notification *n, int max,
 		int *w, int *h) {
 	*w = *h = max;
+	if (has_prefix(n->app_icon, "shell:")) {
+		return shell_item_pixels(n->app_icon, max);
+	}
 	uint32_t *px = stock_icon_pixels(n->app_icon, max);
 	if (px) {
 		return px;

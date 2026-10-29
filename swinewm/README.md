@@ -19,8 +19,8 @@ the recommended reliability and validation priorities.
 
 Releases (GitHub → Releases) have an MSI installer and a portable zip;
 every push also builds them (Actions tab → a `build` run → Artifacts). The installer puts everything in
-`C:\Program Files\SwineWM`, adds a Start menu entry and puts `swinemsg` on
-the PATH. See [`../doc/packaging.md`](../doc/packaging.md), which also
+`C:\Program Files\SwineWM`, adds a Start menu entry and puts `swinemsg`,
+`notify-send` and `makoctl` on the PATH. See [`../doc/packaging.md`](../doc/packaging.md), which also
 explains building the MSI yourself.
 
 If Microsoft Defender flags or quarantines `swinewm.exe`, that is a false
@@ -109,7 +109,17 @@ Control it from scripts with `swinemsg`, as with `swaymsg`:
 ```powershell
 .\build\swinewm\Debug\swinemsg.exe workspace 3
 .\build\swinewm\Debug\swinemsg.exe -t get_tree
-.\build\swinewm\Debug\swinemsg.exe notify-send -u critical "Build done" "All tests passed"
+```
+
+Notifications work as with mako, through `notify-send.exe` and
+`makoctl.exe` (installed next to `swinemsg.exe`):
+
+```powershell
+notify-send -u critical "Build done" "All tests passed"
+notify-send -h int:value:40 -i dialog-information "Copying" "40% done"
+notify-send -A default=Open "Download finished"   # prints "default" when clicked
+makoctl list
+makoctl dismiss --all
 ```
 
 ## Config files

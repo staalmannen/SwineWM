@@ -182,7 +182,9 @@ What an existing sway config needs to load and behave.
   bindings. Still open: markup inside a line, freedesktop icon themes.
 - Notifications from Windows applications: mirror toasts
   (`UserNotificationListener`), or at least show balloon/toast fallbacks
-  as the shell.
+  as the shell. Done without packaging: the listener is read (its change
+  event needs package identity), `windows-notifications=` in the mako
+  config. Still open: toast buttons and opening the app on a click.
 - grim: `slurp` (drag an area), clipboard output (the `wl-copy` habit),
   `grim -` once `exec` supports pipes.
 - Store apps as the shell: done for `exec shell:AppsFolder\<AUMID>`
@@ -217,11 +219,12 @@ Feature work stops; reliability and documentation.
 
 - **Where notifications come from.** Mako receives notifications over
   D-Bus. On Windows, applications send toast notifications to the system.
-  Today swinewm shows what is sent with `notify-send` (a command, also
-  reachable through `exec` and `swinemsg`). Mirroring system toasts through
-  the WinRT `UserNotificationListener` (needs packaging and user consent)
-  is the candidate for the rest. When Explorer is not the shell, whether
-  system toasts are still displayed needs to be tested.
+  swinewm shows what is sent with `notify-send`, tray balloons, and
+  mirrors system toasts read through the WinRT `UserNotificationListener`
+  (user consent; reading works without packaging, only its change event
+  needs package identity, so swinewm watches Windows' notification store
+  and polls). Whether Windows still shows its own toast banners when
+  Explorer is not the shell needs to be tested; `auto` assumes it does not.
 - **The bar and Explorer's taskbar.** The bar reserves its space inside
   swinewm's own layout. Windows that swinewm does not manage (maximized
   unmanaged windows, Explorer's taskbar) do not know about it; registering

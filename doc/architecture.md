@@ -370,6 +370,14 @@ to it there. In swinewm the D-Bus calls are IPC messages:
   modes such as `do-not-disturb`, and bindings. An action invoked with
   `makoctl invoke` closes the notification unless a `notify-send.exe`
   waits for it (that one closes it, as an application would).
+- **Windows toasts** (`win32/toast.c`): with `windows-notifications=`
+  on, a thread reads `UserNotificationListener` (WinRT, called through
+  vtables, the runtime loaded from combase.dll) when Windows writes its
+  notification store under `%LOCALAPPDATA%\Microsoft\Windows\Notifications`
+  and every two seconds, and posts new and removed toasts to the main
+  thread. New ones become notifications (icon `shell:AppsFolder\<AUMID>`);
+  removed ones close theirs; `platform_notification_closed` removes a
+  dismissed one from Windows' list.
 - **Rendering** (`win32/notify.c`): one topmost, non-activating layered
   window per visible notification, stacked from the configured `anchor`
   inside the usable area of the focused (or configured) output, laid out

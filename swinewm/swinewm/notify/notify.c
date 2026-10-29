@@ -64,6 +64,7 @@ static struct {
 	int max_history;
 	uint32_t sort_criteria;
 	uint32_t sort_asc;
+	enum notify_windows windows;
 	bool loaded;
 } st = {0};
 
@@ -176,6 +177,7 @@ static void default_criteria(void) {
 	st.max_history = 5;
 	st.sort_criteria = SORT_TIME;
 	st.sort_asc = 0;
+	st.windows = NOTIFY_WINDOWS_AUTO;
 }
 
 static void ensure_init(void) {
@@ -865,8 +867,22 @@ static bool apply_config_option(const char *key, const char *value) {
 	} else if (strcmp(key, "include") == 0) {
 		swine_log(SWINE_INFO, "mako include is not supported yet");
 		return true;
+	} else if (strcmp(key, "windows-notifications") == 0) {
+		// swinewm's own: mirror the toasts of Windows applications
+		if (strcmp(value, "auto") == 0) {
+			st.windows = NOTIFY_WINDOWS_AUTO;
+		} else {
+			st.windows = parse_bool(value) || strcmp(value, "yes") == 0 ||
+				strcmp(value, "on") == 0 ? NOTIFY_WINDOWS_ON : NOTIFY_WINDOWS_OFF;
+		}
+		return true;
 	}
 	return false;
+}
+
+enum notify_windows notify_windows_mode(void) {
+	ensure_init();
+	return st.windows;
 }
 
 bool notify_parse_config(const char *text, const char *name) {
@@ -1157,6 +1173,7 @@ static void close_notification(struct swine_notification *n,
 		enum notify_close_reason reason, bool to_history) {
 	static const char *reasons[] = {"", "expired", "dismissed", "request"};
 	notification_event("close", n->id, "reason", reasons[reason]);
+	platform_notification_closed(n->id, (int)reason);
 	int index = list_find(st.active, n);
 	if (index != -1) {
 		list_del(st.active, index);

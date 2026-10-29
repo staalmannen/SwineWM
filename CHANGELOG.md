@@ -10,6 +10,13 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- Notifications of Windows applications: their toasts appear as mako
+  notifications, styled and filtered by the mako config (`app-name`,
+  `desktop-entry` is the app's AppUserModelID). `windows-notifications=`
+  in the mako config: `auto` (the default) when swinewm is the shell,
+  `yes`, `no`. Windows asks once for access (Settings → Privacy &
+  security → Notifications). Dismissing one removes it from Windows'
+  notification list.
 - `notify-send.exe` and `makoctl.exe`, installed next to `swinemsg.exe`
   (on PATH): libnotify's notify-send options (`-i`, `-h`, `-p`, `-w`,
   `-A`; with actions it waits and prints the chosen one) and every

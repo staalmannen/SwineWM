@@ -148,6 +148,7 @@ if(WIN32)
     swinewm/win32/swaynag.c
     swinewm/win32/theme.c
     swinewm/win32/titlebar.c
+    swinewm/win32/toast.c
     swinewm/win32/tray.c
     swinewm/win32/util.c
     swinewm/win32/wallpaper.c

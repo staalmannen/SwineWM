@@ -162,6 +162,14 @@ struct notify_line {
 	bool italic;
 };
 
+// windows-notifications= (swinewm): mirror Windows toasts as notifications.
+enum notify_windows {
+	NOTIFY_WINDOWS_AUTO,      // when swinewm is the shell
+	NOTIFY_WINDOWS_ON,
+	NOTIFY_WINDOWS_OFF,
+};
+enum notify_windows notify_windows_mode(void);
+
 // Reads mako/config (or uses defaults). Restyles current notifications.
 void notify_load_config(void);
 void notify_finish(void);

@@ -225,6 +225,11 @@ bool platform_screenshot(const struct swine_box *box, const char *path,
 	return true;
 }
 
+void platform_notification_closed(uint32_t id, int reason) {
+	fake.last_closed_notification = id;
+	fake.last_close_reason = reason;
+}
+
 long long platform_now_ms(void) {
 	return fake.now_ms;
 }
