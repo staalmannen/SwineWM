@@ -1,7 +1,7 @@
 # Builds and tests SwineWM, and on Windows produces the MSI installer and a
 # portable zip as downloadable artifacts (see doc/packaging.md). Pushing a
 # version tag ("0.1.0") also publishes them as a GitHub Release, with the
-# matching CHANGELOG.md section as release notes.
+# matching CHANGELOG.md section as release notes and SHA-256 checksums.
 name: build
 
 on:
@@ -89,6 +89,22 @@ jobs:
           if [ ! -s notes.md ]; then
             section "Unreleased" > notes.md
           fi
+      - name: Checksums
+        run: |
+          # SHA256SUMS in sha256sum's format ("sha256sum -c SHA256SUMS"),
+          # and the same list in the notes for PowerShell's Get-FileHash.
+          (cd dist && sha256sum *.msi *.zip > SHA256SUMS)
+          cat dist/SHA256SUMS
+          {
+            echo
+            echo "### SHA-256 checksums"
+            echo
+            echo '```'
+            cat dist/SHA256SUMS
+            echo '```'
+            echo
+            echo "To check a download, see [Verifying a download](https://github.com/${GITHUB_REPOSITORY}/blob/main/doc/packaging.md#verifying-a-download)."
+          } >> notes.md
           cat notes.md
       - name: Publish
         env:
@@ -97,9 +113,11 @@ jobs:
           # A release made by hand on GitHub (which also creates the tag)
           # keeps its title and notes; the files are attached to it.
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/*.msi dist/*.zip --clobber
+            gh release upload "$GITHUB_REF_NAME" dist/*.msi dist/*.zip \
+              dist/SHA256SUMS --clobber
           else
             gh release create "$GITHUB_REF_NAME" dist/*.msi dist/*.zip \
+              dist/SHA256SUMS \
               --title "SwineWM $GITHUB_REF_NAME" --notes-file notes.md \
               --verify-tag
           fi

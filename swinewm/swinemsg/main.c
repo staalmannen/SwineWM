@@ -77,7 +77,10 @@ static char *quote_args(char **args, int count) {
 	return out;
 }
 
-int main(int argc, char **argv) {
+int main(void) {
+	// main's argv is in the ANSI code page: take the UTF-8 one.
+	int argc;
+	char **argv = ipc_utf8_argv(&argc);
 	bool quiet = false;
 	bool monitor = false;
 	char *pipe_name = NULL;

@@ -8,6 +8,39 @@ the MSI and zip with the matching section below as release notes.
 
 ## [Unreleased]
 
+### Added
+
+- `notify-send.exe` and `makoctl.exe`, installed next to `swinemsg.exe`
+  (on PATH): libnotify's notify-send options (`-i`, `-h`, `-p`, `-w`,
+  `-A`; with actions it waits and prints the chosen one) and every
+  makoctl command, including `list`/`history` (text and `-j`), `invoke
+  [action]`, `menu` (falls back to `swinemenu --dmenu` for wofi, rofi,
+  dmenu, ...) and `dismiss -g`.
+- Notifications as mako draws them: icons (image files, `.ico`/`.exe`,
+  `icon-path`, Windows' info/warning/error icons; tray balloons show
+  theirs), progress bars (`-h int:value:N`, `progress-color`), rounded
+  corners (`border-radius`, `icon-border-radius`) with per-pixel alpha,
+  `icon-location`, `max-icon-size`.
+- Mako grouping (`group-by`, `%g`, `[grouped]`, `[group-index=N]`), the
+  "(N more)" placeholder (`[hidden]`, `%h`, `%t`), replacement by tag
+  (`x-dunst-stack-tag`), `sort=±priority`, and the remaining criteria and
+  bindings: `summary~`/`body~` regexes, `app-icon`, `desktop-entry`,
+  `actionable`, `output`, `anchor`; `on-notify`, `invoke-action`,
+  `dismiss-group`, `dismiss --no-history`, `exec` with `$id`.
+- The notification IPC event and messages behind the new tools (see
+  `doc/compatibility.md`).
+- GitHub Releases include `SHA256SUMS` with the SHA-256 checksums of the
+  MSI and zip, also listed in the release notes; `doc/packaging.md`
+  explains how to check a download.
+
+### Changed
+
+- `swinemsg -t get_notifications` and `get_notification_history` return
+  makoctl's JSON (with `app_icon`, `desktop_entry` and `actions`; `null`
+  for empty fields). A replaced notification keeps its place, as in mako.
+- swinemsg reads its arguments as Unicode, so text outside the ANSI code
+  page (for example `swinemsg notify-send "✓ done"`) arrives intact.
+
 ## [0.5.0] - 2026-10-28
 
 ### Added

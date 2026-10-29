@@ -33,7 +33,7 @@ add_library(swine_common STATIC
 target_include_directories(swine_common PUBLIC include)
 if(WIN32)
   target_compile_definitions(swine_common PRIVATE UNICODE _UNICODE)
-  target_link_libraries(swine_common PUBLIC advapi32)
+  target_link_libraries(swine_common PUBLIC advapi32 shell32)
 endif()
 
 # Built-in defaults are generated from the files in resources/, which are
@@ -129,6 +129,7 @@ if(WIN32)
     swinewm/win32/exec.c
     swinewm/win32/audio.c
     swinewm/win32/bar.c
+    swinewm/win32/canvas.c
     swinewm/win32/decor.c
     swinewm/win32/draw.c
     swinewm/win32/ipc.c
@@ -170,6 +171,15 @@ if(WIN32)
   target_compile_definitions(swinemsg PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
   target_link_libraries(swinemsg PRIVATE swine_common)
   target_include_directories(swinemsg PRIVATE ${SWINEWM_GENERATED_DIR})
+
+  # The front ends of the built-in Mako, named as on Linux so that scripts
+  # and configs that call them keep working.
+  foreach(tool notify-send makoctl)
+    add_executable(${tool} ${tool}/main.c)
+    target_compile_definitions(${tool} PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
+    target_link_libraries(${tool} PRIVATE swine_common)
+    target_include_directories(${tool} PRIVATE ${SWINEWM_GENERATED_DIR})
+  endforeach()
 
   # Put the default config files next to the executable in the build tree
   # too, laid out as they are installed, so a build runs like an install.

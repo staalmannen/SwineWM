@@ -161,6 +161,7 @@ static uint32_t subscription_for_event(uint32_t type) {
 	case (uint32_t)IPC_EVENT_SHUTDOWN: return IPC_SUB_SHUTDOWN;
 	case (uint32_t)IPC_EVENT_TICK: return IPC_SUB_TICK;
 	case (uint32_t)IPC_EVENT_INPUT: return IPC_SUB_INPUT;
+	case (uint32_t)SWINE_IPC_EVENT_NOTIFICATION: return IPC_SUB_NOTIFICATION;
 	default: return 0;
 	}
 }

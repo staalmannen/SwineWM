@@ -32,6 +32,12 @@ enum ipc_command_type {
 	// swinewm extensions (the integrated Mako's "makoctl list/history")
 	SWINE_IPC_GET_NOTIFICATIONS = 1000,
 	SWINE_IPC_GET_NOTIFICATION_HISTORY = 1001,
+	// notify-send.exe and makoctl.exe: the payload is the tool's argument
+	// list as a JSON array of strings
+	SWINE_IPC_NOTIFY_SEND = 1002,
+	SWINE_IPC_MAKOCTL = 1003,
+	// the payload is a notification id (D-Bus CloseNotification)
+	SWINE_IPC_CLOSE_NOTIFICATION = 1004,
 
 	IPC_EVENT_WORKSPACE = (int)((1u << 31) | 0),
 	IPC_EVENT_OUTPUT = (int)((1u << 31) | 1),
@@ -42,6 +48,8 @@ enum ipc_command_type {
 	IPC_EVENT_SHUTDOWN = (int)((1u << 31) | 6),
 	IPC_EVENT_TICK = (int)((1u << 31) | 7),
 	IPC_EVENT_INPUT = (int)((1u << 31) | 21),
+	// swinewm: notification actions and closes ("notification")
+	SWINE_IPC_EVENT_NOTIFICATION = (int)((1u << 31) | 1000),
 };
 
 // Default pipe name pattern; %s is the user name. Overridden by SWINESOCK.

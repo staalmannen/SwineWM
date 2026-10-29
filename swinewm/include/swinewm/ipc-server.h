@@ -14,6 +14,7 @@ enum ipc_subscription {
 	IPC_SUB_SHUTDOWN = 1u << 6,
 	IPC_SUB_TICK = 1u << 7,
 	IPC_SUB_INPUT = 1u << 8,
+	IPC_SUB_NOTIFICATION = 1u << 9,
 };
 
 // Parses the sway SUBSCRIBE payload into a bit mask. Unknown event names and

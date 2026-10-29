@@ -162,7 +162,32 @@ struct tray_balloon {
 	char *app_name;
 	char *summary;
 	char *body;
+	char *icon;
 };
+
+// The balloon's icon: Windows' info, warning or error icon, otherwise
+// the program's own.
+static char *balloon_icon(const struct tray_icon *icon,
+		const struct tray_nid *nid) {
+	switch (nid->dwInfoFlags & NIIF_ICON_MASK) {
+	case NIIF_INFO: return swine_strdup("dialog-information");
+	case NIIF_WARNING: return swine_strdup("dialog-warning");
+	case NIIF_ERROR: return swine_strdup("dialog-error");
+	default: break;
+	}
+	char *path = NULL;
+	HANDLE process = icon->pid ? OpenProcess(
+		PROCESS_QUERY_LIMITED_INFORMATION, FALSE, icon->pid) : NULL;
+	if (process) {
+		wchar_t buf[MAX_PATH];
+		DWORD len = MAX_PATH;
+		if (QueryFullProcessImageNameW(process, 0, buf, &len)) {
+			path = utf16_to_utf8(buf);
+		}
+		CloseHandle(process);
+	}
+	return path ? path : swine_strdup("");
+}
 
 static void post_balloon(const struct tray_icon *icon,
 		const struct tray_nid *nid) {
@@ -180,10 +205,12 @@ static void post_balloon(const struct tray_icon *icon,
 	b->summary = utf16_to_utf8(nid->szInfoTitle[0] ? nid->szInfoTitle :
 		nid->szInfo);
 	b->body = utf16_to_utf8(nid->szInfoTitle[0] ? nid->szInfo : L"");
+	b->icon = balloon_icon(icon, nid);
 	if (!PostMessageW(win32_shell_hwnd, WM_SWINE_TRAY, 1, (LPARAM)b)) {
 		free(b->app_name);
 		free(b->summary);
 		free(b->body);
+		free(b->icon);
 		free(b);
 	}
 }
@@ -672,6 +699,7 @@ void win32_tray_handle_message(WPARAM wparam, LPARAM lparam) {
 		p.app_name = b->app_name;
 		p.summary = b->summary;
 		p.body = b->body;
+		p.app_icon = b->icon;
 		// Balloons are transient, even "error" ones; critical
 		// notifications would stay until dismissed.
 		p.urgency = NOTIFY_URGENCY_NORMAL;
@@ -680,6 +708,7 @@ void win32_tray_handle_message(WPARAM wparam, LPARAM lparam) {
 		free(b->app_name);
 		free(b->summary);
 		free(b->body);
+		free(b->icon);
 		free(b);
 		platform_ui_refresh();
 		return;

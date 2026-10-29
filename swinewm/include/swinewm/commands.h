@@ -53,6 +53,11 @@ const char *cmd_current_name(void);
 // With persistent_only, only programs that stay running (waybar, mako) are
 // handled: "exec" lines are skipped on reload, but their effect must remain.
 struct cmd_results *exec_builtin(const char *cmdline, bool persistent_only);
+// notify-send.exe and makoctl.exe (the SWINE_IPC_NOTIFY_SEND and
+// SWINE_IPC_MAKOCTL messages): argv as typed after the program name.
+// Return a JSON reply: {"success":..., "error":..., "id":..., "output":...}.
+char *notify_send_tool(int argc, char **argv);
+char *makoctl_tool(int argc, char **argv);
 struct cmd_results *config_subcommand(char **argv, int argc,
 		const struct cmd_handler *handlers, size_t handlers_size);
 struct cmd_results *checkarg(int argc, const char *name,

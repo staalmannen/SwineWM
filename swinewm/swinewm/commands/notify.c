@@ -4,6 +4,7 @@
 // config are routed here too.
 #include <stdlib.h>
 #include <string.h>
+#include "json.h"
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/bar/bar.h"
@@ -45,42 +46,113 @@ static bool parse_urgency(const char *v, enum notify_urgency *out) {
 	return true;
 }
 
-// notify-send [OPTION...] <SUMMARY> [BODY]
-struct cmd_results *cmd_notify_send(int argc, char **argv) {
-	struct notify_params p = {
-		.urgency = NOTIFY_URGENCY_NORMAL,
-		.expire_timeout = -1,
-	};
+// What a notify-send command line asks for.
+struct notify_send_args {
+	struct notify_params p;
+	list_t *keys, *titles;   // char *, for p.action_keys/action_titles
+	bool wait;
+	bool print_id;
+};
+
+static void free_send_args(struct notify_send_args *a) {
+	list_free_items_and_destroy(a->keys);
+	list_free_items_and_destroy(a->titles);
+}
+
+// -h TYPE:NAME:VALUE, the hints mako reads (dbus/xdg.c).
+static struct cmd_results *parse_hint(const char *hint,
+		struct notify_send_args *a) {
+	const char *c1 = strchr(hint, ':');
+	const char *c2 = c1 ? strchr(c1 + 1, ':') : NULL;
+	if (!c2) {
+		return cmd_results_new(CMD_INVALID,
+			"Invalid hint syntax specified. Use TYPE:NAME:VALUE.");
+	}
+	char *type = swine_strndup(hint, (size_t)(c1 - hint));
+	char *name = swine_strndup(c1 + 1, (size_t)(c2 - c1 - 1));
+	const char *value = c2 + 1;
+	struct cmd_results *error = NULL;
+	if (strcmp(type, "int") != 0 && strcmp(type, "double") != 0 &&
+			strcmp(type, "string") != 0 && strcmp(type, "byte") != 0 &&
+			strcmp(type, "boolean") != 0 && strcmp(type, "variant") != 0) {
+		error = cmd_results_new(CMD_INVALID, "Invalid hint type \"%s\". "
+			"Valid types are int, double, string, byte, boolean and variant.",
+			type);
+	} else if (strcmp(name, "value") == 0) {
+		a->p.has_progress = true;
+		a->p.progress = atoi(value);
+	} else if (strcmp(name, "urgency") == 0) {
+		if (!parse_urgency(value, &a->p.urgency)) {
+			error = cmd_results_new(CMD_INVALID, "Unknown urgency %s", value);
+		}
+	} else if (strcmp(name, "category") == 0) {
+		a->p.category = value;
+	} else if (strcmp(name, "desktop-entry") == 0) {
+		a->p.desktop_entry = value;
+	} else if (strcmp(name, "image-path") == 0 ||
+			strcmp(name, "image_path") == 0) {
+		// mako shows the image in place of the icon
+		a->p.app_icon = value;
+	} else if (strcmp(name, "x-canonical-private-synchronous") == 0 ||
+			strcmp(name, "x-dunst-stack-tag") == 0) {
+		a->p.tag = value;
+	}
+	free(type);
+	free(name);
+	return error;
+}
+
+// notify-send [OPTION...] <SUMMARY> [BODY], as libnotify's notify-send.
+// The strings in a->p point into argv.
+static struct cmd_results *parse_notify_send(int argc, char **argv,
+		struct notify_send_args *a) {
+	memset(a, 0, sizeof(*a));
+	a->p.urgency = NOTIFY_URGENCY_NORMAL;
+	a->p.expire_timeout = -1;
+	a->keys = create_list();
+	a->titles = create_list();
 	const char *positional[2] = {NULL, NULL};
 	int npos = 0;
 	bool options_done = false;
 	for (int i = 0; i < argc; ++i) {
 		const char *v = NULL;
 		if (!options_done && argv[i][0] == '-' && argv[i][1]) {
+			struct cmd_results *error = NULL;
 			if (strcmp(argv[i], "--") == 0) {
 				options_done = true;
 			} else if (take_option(&i, argc, argv, "-u", "--urgency", &v)) {
-				if (!parse_urgency(v, &p.urgency)) {
+				if (!parse_urgency(v, &a->p.urgency)) {
 					return cmd_results_new(CMD_INVALID, "Unknown urgency %s", v);
 				}
 			} else if (take_option(&i, argc, argv, "-t", "--expire-time", &v)) {
-				p.expire_timeout = atoi(v);
+				a->p.expire_timeout = atoi(v);
 			} else if (take_option(&i, argc, argv, "-a", "--app-name", &v)) {
-				p.app_name = v;
+				a->p.app_name = v;
 			} else if (take_option(&i, argc, argv, "-c", "--category", &v)) {
-				p.category = v;
+				a->p.category = v;
 			} else if (take_option(&i, argc, argv, "-r", "--replace-id", &v)) {
-				p.replaces_id = (uint32_t)strtoul(v, NULL, 10);
-			} else if (take_option(&i, argc, argv, "-i", "--icon", &v) ||
-					take_option(&i, argc, argv, "-h", "--hint", &v) ||
-					take_option(&i, argc, argv, "-A", "--action", &v)) {
-				// icons, hints and actions are not supported yet
+				a->p.replaces_id = (uint32_t)strtoul(v, NULL, 10);
+			} else if (take_option(&i, argc, argv, "-i", "--icon", &v)) {
+				a->p.app_icon = v;
+			} else if (take_option(&i, argc, argv, "-h", "--hint", &v)) {
+				if ((error = parse_hint(v, a))) {
+					return error;
+				}
+			} else if (take_option(&i, argc, argv, "-A", "--action", &v)) {
+				// [NAME=]Text; unnamed actions are numbered from 0
+				const char *eq = strchr(v, '=');
+				list_add(a->keys, eq ? swine_strndup(v, (size_t)(eq - v)) :
+					format_str("%d", a->keys->length));
+				list_add(a->titles, swine_strdup(eq ? eq + 1 : v));
+			} else if (strcmp(argv[i], "-w") == 0 ||
+					strcmp(argv[i], "--wait") == 0) {
+				a->wait = true;
+			} else if (strcmp(argv[i], "-p") == 0 ||
+					strcmp(argv[i], "--print-id") == 0) {
+				a->print_id = true;
 			} else if (strcmp(argv[i], "-e") == 0 ||
-					strcmp(argv[i], "--transient") == 0 ||
-					strcmp(argv[i], "-p") == 0 ||
-					strcmp(argv[i], "--print-id") == 0 ||
-					strcmp(argv[i], "-w") == 0 || strcmp(argv[i], "--wait") == 0) {
-				// accepted, no effect
+					strcmp(argv[i], "--transient") == 0) {
+				// mako has no transient notifications either
 			} else {
 				return cmd_results_new(CMD_INVALID,
 					"Unknown notify-send option '%s'", argv[i]);
@@ -97,14 +169,31 @@ struct cmd_results *cmd_notify_send(int argc, char **argv) {
 	if (!positional[0]) {
 		return cmd_results_new(CMD_INVALID, "No summary specified");
 	}
-	p.summary = positional[0];
-	p.body = positional[1];
-	notify_add(&p, platform_now_ms());
-	return cmd_results_new(CMD_SUCCESS, NULL);
+	a->p.summary = positional[0];
+	a->p.body = positional[1];
+	a->p.action_keys = (const char **)a->keys->items;
+	a->p.action_titles = (const char **)a->titles->items;
+	a->p.action_count = a->keys->length;
+	// libnotify's notify-send waits when there are actions
+	if (a->p.action_count > 0) {
+		a->wait = true;
+	}
+	return NULL;
+}
+
+struct cmd_results *cmd_notify_send(int argc, char **argv) {
+	struct notify_send_args a;
+	struct cmd_results *error = parse_notify_send(argc, argv, &a);
+	if (!error) {
+		// Nobody waits here: invoking an action closes the notification.
+		notify_add(&a.p, platform_now_ms());
+	}
+	free_send_args(&a);
+	return error ? error : cmd_results_new(CMD_SUCCESS, NULL);
 }
 
 static struct cmd_results *makoctl_dismiss(int argc, char **argv) {
-	bool all = false, history = true;
+	bool all = false, group = false, history = true;
 	uint32_t id = 0;
 	for (int i = 0; i < argc; ++i) {
 		const char *v = NULL;
@@ -112,7 +201,7 @@ static struct cmd_results *makoctl_dismiss(int argc, char **argv) {
 			all = true;
 		} else if (strcmp(argv[i], "-g") == 0 ||
 				strcmp(argv[i], "--group") == 0) {
-			// no grouping yet: a group is a single notification
+			group = true;
 		} else if (strcmp(argv[i], "-h") == 0 ||
 				strcmp(argv[i], "--no-history") == 0) {
 			history = false;
@@ -123,38 +212,80 @@ static struct cmd_results *makoctl_dismiss(int argc, char **argv) {
 				"Unknown makoctl dismiss option '%s'", argv[i]);
 		}
 	}
+	if (all && group) {
+		return cmd_results_new(CMD_INVALID, "-a and -g cannot be used together");
+	} else if ((all || group) && id != 0) {
+		return cmd_results_new(CMD_INVALID, "-n cannot be used with -a or -g");
+	}
 	if (all) {
 		notify_dismiss_all(history);
-	} else if (!notify_dismiss(id, history)) {
-		return cmd_results_new(CMD_FAILURE, "No notification to dismiss");
+	} else if (group) {
+		notify_dismiss_group(0, history);
+	} else {
+		notify_dismiss(id, history);   // mako: nothing to dismiss is fine
 	}
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 
-static struct cmd_results *makoctl_mode(int argc, char **argv) {
-	if (argc == 0) {
-		return cmd_results_new(CMD_SUCCESS, NULL);
-	}
-	if (strcmp(argv[0], "-s") == 0) {
+static struct cmd_results *makoctl_mode(int argc, char **argv, char **output) {
+	if (argc > 0 && strcmp(argv[0], "-s") == 0) {
 		notify_set_modes(argv + 1, argc - 1);
-		return cmd_results_new(CMD_SUCCESS, NULL);
-	}
-	for (int i = 0; i + 1 < argc; i += 2) {
-		if (strcmp(argv[i], "-a") == 0) {
-			notify_add_mode(argv[i + 1]);
-		} else if (strcmp(argv[i], "-r") == 0) {
-			notify_remove_mode(argv[i + 1]);
-		} else if (strcmp(argv[i], "-t") == 0) {
-			notify_toggle_mode(argv[i + 1]);
-		} else {
-			return cmd_results_new(CMD_INVALID,
-				"Expected 'makoctl mode [-a|-r|-t <mode>]... | -s <mode>...'");
+	} else {
+		for (int i = 0; i < argc; ++i) {
+			if (i + 1 >= argc || argv[i][0] != '-') {
+				return cmd_results_new(CMD_INVALID, "Expected 'makoctl mode "
+					"[-a|-r|-t <mode>]... | -s <mode>...'");
+			}
+			const char *mode = argv[i + 1];
+			if (strcmp(argv[i], "-a") == 0) {
+				notify_add_mode(mode);
+			} else if (strcmp(argv[i], "-r") == 0) {
+				notify_remove_mode(mode);
+			} else if (strcmp(argv[i], "-t") == 0) {
+				notify_toggle_mode(mode);
+			} else {
+				return cmd_results_new(CMD_INVALID, "Expected 'makoctl mode "
+					"[-a|-r|-t <mode>]... | -s <mode>...'");
+			}
+			i++;
 		}
 	}
+	// makoctl prints the modes afterwards
+	list_t *modes = notify_modes();
+	char *text = swine_strdup("");
+	for (int i = 0; i < modes->length; ++i) {
+		char *next = format_str("%s%s\n", text, (char *)modes->items[i]);
+		free(text);
+		text = next;
+	}
+	*output = text;
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 
-struct cmd_results *cmd_makoctl(int argc, char **argv) {
+static struct cmd_results *makoctl_list(list_t *notifications, int argc,
+		char **argv, char **output) {
+	bool json = false;
+	for (int i = 0; i < argc; ++i) {
+		if (strcmp(argv[i], "-j") == 0) {
+			json = true;
+		} else {
+			return cmd_results_new(CMD_INVALID,
+				"Unknown makoctl option '%s'", argv[i]);
+		}
+	}
+	if (json) {
+		char *list = notify_list_json(notifications);
+		*output = format_str("%s\n", list);
+		free(list);
+	} else {
+		*output = notify_list_text(notifications);
+	}
+	return cmd_results_new(CMD_SUCCESS, NULL);
+}
+
+// makoctl <command> [options...]. Text for standard output goes to *output.
+static struct cmd_results *makoctl(int argc, char **argv, char **output) {
+	*output = NULL;
 	struct cmd_results *error = NULL;
 	if ((error = checkarg(argc, "makoctl", EXPECTED_AT_LEAST, 1))) {
 		return error;
@@ -163,33 +294,105 @@ struct cmd_results *cmd_makoctl(int argc, char **argv) {
 	if (strcmp(sub, "dismiss") == 0) {
 		return makoctl_dismiss(argc - 1, argv + 1);
 	} else if (strcmp(sub, "restore") == 0) {
-		if (!notify_restore(platform_now_ms())) {
-			return cmd_results_new(CMD_FAILURE, "History is empty");
-		}
+		notify_restore(platform_now_ms());
 	} else if (strcmp(sub, "invoke") == 0) {
-		// Without action support, invoking the default action dismisses.
 		uint32_t id = 0;
+		const char *action = "default";
 		for (int i = 1; i < argc; ++i) {
 			const char *v = NULL;
 			if (take_option(&i, argc, argv, "-n", "--id", &v)) {
 				id = (uint32_t)strtoul(v, NULL, 10);
+			} else {
+				action = argv[i];
 			}
 		}
-		if (!notify_dismiss(id, true)) {
-			return cmd_results_new(CMD_FAILURE, "No notification to invoke");
+		if (!notify_invoke(id, action)) {
+			return cmd_results_new(CMD_FAILURE, "No notification with action "
+				"'%s'", action);
 		}
 	} else if (strcmp(sub, "mode") == 0) {
-		return makoctl_mode(argc - 1, argv + 1);
+		return makoctl_mode(argc - 1, argv + 1, output);
 	} else if (strcmp(sub, "reload") == 0) {
 		notify_load_config();
-	} else if (strcmp(sub, "list") == 0 || strcmp(sub, "history") == 0) {
-		return cmd_results_new(CMD_FAILURE, "Use 'swinemsg -t "
-			"get_notifications' or '-t get_notification_history'");
+	} else if (strcmp(sub, "list") == 0) {
+		return makoctl_list(notify_active(), argc - 1, argv + 1, output);
+	} else if (strcmp(sub, "history") == 0) {
+		return makoctl_list(notify_history(), argc - 1, argv + 1, output);
+	} else if (strcmp(sub, "menu") == 0) {
+		// It runs a program and reads its answer: makoctl.exe does that.
+		return cmd_results_new(CMD_FAILURE,
+			"makoctl menu runs only as the makoctl program");
 	} else {
 		return cmd_results_new(CMD_INVALID,
 			"Unknown makoctl command '%s'", sub);
 	}
 	return cmd_results_new(CMD_SUCCESS, NULL);
+}
+
+struct cmd_results *cmd_makoctl(int argc, char **argv) {
+	char *output = NULL;
+	struct cmd_results *res = makoctl(argc, argv, &output);
+	free(output);   // nobody to print it to
+	return res;
+}
+
+static char *tool_reply(struct cmd_results *res, long long id, bool wait,
+		const char *output) {
+	struct json_writer w;
+	json_init(&w);
+	json_begin_object(&w);
+	json_key(&w, "success");
+	json_bool(&w, res->status == CMD_SUCCESS);
+	if (res->error) {
+		json_key(&w, "error");
+		json_string(&w, res->error);
+	}
+	if (id) {
+		json_key(&w, "id");
+		json_int(&w, id);
+	}
+	if (wait) {
+		json_key(&w, "wait");
+		json_bool(&w, true);
+	}
+	if (output) {
+		json_key(&w, "output");
+		json_string(&w, output);
+	}
+	json_end_object(&w);
+	free_cmd_results(res);
+	return json_finish(&w);
+}
+
+char *notify_send_tool(int argc, char **argv) {
+	struct notify_send_args a;
+	struct cmd_results *res = parse_notify_send(argc, argv, &a);
+	uint32_t id = 0;
+	char *output = NULL;
+	if (!res) {
+		// notify-send.exe stays to print the action and closes the
+		// notification, as libnotify's does.
+		a.p.waited_on = a.wait;
+		id = notify_add(&a.p, platform_now_ms());
+		platform_ui_refresh();
+		if (a.print_id) {
+			output = format_str("%u\n", id);
+		}
+		res = cmd_results_new(CMD_SUCCESS, NULL);
+	}
+	char *reply = tool_reply(res, id, id && a.wait, output);
+	free(output);
+	free_send_args(&a);
+	return reply;
+}
+
+char *makoctl_tool(int argc, char **argv) {
+	char *output = NULL;
+	struct cmd_results *res = makoctl(argc, argv, &output);
+	platform_ui_refresh();
+	char *reply = tool_reply(res, 0, false, output);
+	free(output);
+	return reply;
 }
 
 // Lower-case base name of the program, without directory or ".exe".
@@ -284,7 +487,9 @@ static struct cmd_results *run_builtin(int argc, char **argv,
 		res = cmd_results_new(CMD_SUCCESS, NULL);
 	} else if (persistent_only) {
 		res = NULL;
-	} else if (strcmp(name, "makoctl") == 0) {
+	} else if (strcmp(name, "makoctl") == 0 &&
+			!(argc > 1 && strcmp(argv[1], "menu") == 0)) {
+		// (makoctl menu runs as the makoctl program: it starts the menu)
 		res = cmd_makoctl(argc - 1, argv + 1);
 	} else if (strcmp(name, "notify-send") == 0) {
 		res = cmd_notify_send(argc - 1, argv + 1);
@@ -334,7 +539,8 @@ struct cmd_results *exec_builtin(const char *cmdline, bool persistent_only) {
 				continue;
 			}
 			char *name = program_name(argv[start]);
-			bool builtin = strcmp(name, "makoctl") == 0 ||
+			bool builtin = (strcmp(name, "makoctl") == 0 &&
+					!(i - start > 1 && strcmp(argv[start + 1], "menu") == 0)) ||
 				strcmp(name, "notify-send") == 0 || strcmp(name, "grim") == 0 ||
 				is_msg_command(name, i - start, argv + start) ||
 				((strcmp(name, "pkill") == 0 || strcmp(name, "killall") == 0) &&

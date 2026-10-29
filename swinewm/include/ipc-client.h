@@ -11,6 +11,10 @@
 // Caller frees.
 char *ipc_subscribe_payload(const char *text);
 
+// Windows only. The program's arguments in UTF-8 (main's argv is in the
+// ANSI code page, which loses characters outside it).
+char **ipc_utf8_argv(int *argc);
+
 // Windows only. Returns the pipe name to use: $SWINESOCK if set, otherwise
 // the per-user default. Caller frees.
 char *get_ipc_pipe_name(void);
