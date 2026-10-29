@@ -57,6 +57,50 @@ COLORREF win32_blend(struct swine_color color, COLORREF under);
 void win32_fill(HDC dc, const RECT *rect, COLORREF color);
 double win32_output_scale(struct swine_output *output);
 
+// canvas.c: per-pixel alpha drawing for layered windows (bar, popups)
+struct canvas {
+	HDC dc;              // the bitmap below, for measuring text
+	uint32_t *px;        // premultiplied BGRA, top-down
+	HDC mask_dc;         // black, for text and icons
+	uint32_t *mask;
+	HDC white_dc;        // white, for icons
+	uint32_t *white;
+	int w, h;
+	HBITMAP bitmap, mask_bitmap, white_bitmap;
+	HGDIOBJ old[3];
+};
+HBITMAP win32_dib(HDC ref, int w, int h, uint32_t **bits);
+// A transparent canvas of w x h; false if the bitmaps cannot be made.
+bool canvas_init(struct canvas *c, HDC ref, int w, int h);
+void canvas_finish(struct canvas *c);
+// The rect, cut to the canvas; false if nothing is left.
+bool canvas_clip(const struct canvas *c, const RECT *r, RECT *out);
+// "Source over" of a premultiplied pixel.
+uint32_t canvas_over(uint32_t dst, unsigned r, unsigned g, unsigned b,
+		unsigned a);
+void canvas_fill(struct canvas *c, const RECT *rect, struct swine_color color);
+// Text: clear the mask (and, for icons, the white copy) in rect, draw white
+// text into mask_dc (or the icon into mask_dc and white_dc), then blend.
+void canvas_mask_clear(struct canvas *c, const RECT *rect, bool white);
+void canvas_mask_blend(struct canvas *c, const RECT *rect,
+		struct swine_color color);
+void canvas_icon_blend(struct canvas *c, const RECT *rect);
+// Coverage (0-255) of pixel x, y by a rounded rectangle; radii from the
+// top-left corner clockwise.
+unsigned canvas_rounded_coverage(const RECT *r, const double radii[4],
+		int x, int y);
+// Draws premultiplied BGRA pixels, with rounded corners if radius > 0.
+void canvas_image(struct canvas *c, int x, int y, int w, int h,
+		const uint32_t *src, double radius);
+// Shows the canvas as hwnd's content at x, y (UpdateLayeredWindow).
+void canvas_present(struct canvas *c, HWND hwnd, int x, int y);
+
+// wallpaper.c: images through WIC
+// Decodes path scaled by scale into a premultiplied top-down 32-bit DIB.
+HBITMAP win32_image_load(const char *path, int *width, int *height,
+		double scale);
+bool win32_image_size(const char *path, UINT *width, UINT *height);
+
 // titlebar.c: tabs of tabbed and stacked containers
 // True if hwnd is a tab bar; *con is the child under the point.
 bool win32_titlebar_hit(HWND hwnd, POINT pt, struct swine_container **con);

@@ -1,5 +1,6 @@
 #ifdef _WIN32
 #include <windows.h>
+#include <shellapi.h>
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,6 +45,20 @@ static char *narrow(const wchar_t *w) {
 		s[0] = '\0';
 	}
 	return s;
+}
+
+char **ipc_utf8_argv(int *argc) {
+	wchar_t **wide = CommandLineToArgvW(GetCommandLineW(), argc);
+	if (!wide) {
+		*argc = 0;
+		return calloc(1, sizeof(char *));
+	}
+	char **argv = calloc((size_t)*argc + 1, sizeof(char *));
+	for (int i = 0; i < *argc; ++i) {
+		argv[i] = narrow(wide[i]);
+	}
+	LocalFree(wide);
+	return argv;
 }
 
 char *get_ipc_pipe_name(void) {

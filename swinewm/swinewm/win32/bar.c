@@ -191,141 +191,26 @@ static void draw_text(struct bar_window *bw, HDC dc, const RECT *rect,
 }
 
 // --- painting ------------------------------------------------------------
-// The bar is a layered window painted with per-pixel alpha, so translucent
-// backgrounds (Waybar's default is rgba(43, 48, 59, 0.5)) show the desktop
-// behind it. GDI ignores alpha, so shapes are filled here directly into a
-// premultiplied 32-bit bitmap; text is drawn white on black into a mask
-// and blended by its coverage; tray icons are drawn over black and over
-// white, which gives their colour and alpha.
-
-struct canvas {
-	HDC dc;              // the bitmap below, for measuring text
-	uint32_t *px;        // premultiplied BGRA, top-down
-	HDC mask_dc;         // black, for text and icons
-	uint32_t *mask;
-	HDC white_dc;        // white, for icons
-	uint32_t *white;
-	int w, h;
-};
-
-static HBITMAP dib(HDC ref, int w, int h, uint32_t **bits) {
-	BITMAPINFO bi = {0};
-	bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
-	bi.bmiHeader.biWidth = w;
-	bi.bmiHeader.biHeight = -h;   // top-down
-	bi.bmiHeader.biPlanes = 1;
-	bi.bmiHeader.biBitCount = 32;
-	bi.bmiHeader.biCompression = BI_RGB;
-	void *data = NULL;
-	HBITMAP bitmap = CreateDIBSection(ref, &bi, DIB_RGB_COLORS, &data, NULL, 0);
-	*bits = data;
-	return bitmap;
-}
-
-// The rect, cut to the canvas.
-static bool clip(const struct canvas *c, const RECT *r, RECT *out) {
-	out->left = r->left < 0 ? 0 : r->left;
-	out->top = r->top < 0 ? 0 : r->top;
-	out->right = r->right > c->w ? c->w : r->right;
-	out->bottom = r->bottom > c->h ? c->h : r->bottom;
-	return out->left < out->right && out->top < out->bottom;
-}
-
-// "Source over" of a premultiplied pixel.
-static uint32_t over(uint32_t dst, unsigned r, unsigned g, unsigned b,
-		unsigned a) {
-	unsigned keep = 255 - a;
-	unsigned db = dst & 0xFF, dg = (dst >> 8) & 0xFF, dr = (dst >> 16) & 0xFF,
-		da = dst >> 24;
-	return (r + dr * keep / 255) << 16 | (g + dg * keep / 255) << 8 |
-		(b + db * keep / 255) | (a + da * keep / 255) << 24;
-}
-
-static void canvas_fill(struct canvas *c, const RECT *rect,
-		struct swine_color color) {
-	RECT r;
-	if (!color.a || !clip(c, rect, &r)) {
-		return;
-	}
-	unsigned a = color.a;
-	unsigned pr = color.r * a / 255, pg = color.g * a / 255,
-		pb = color.b * a / 255;
-	for (int y = r.top; y < r.bottom; ++y) {
-		uint32_t *row = c->px + (size_t)y * c->w;
-		for (int x = r.left; x < r.right; ++x) {
-			row[x] = over(row[x], pr, pg, pb, a);
-		}
-	}
-}
+// The bar is a layered window painted with per-pixel alpha (canvas.c), so
+// translucent backgrounds (Waybar's default is rgba(43, 48, 59, 0.5)) show
+// the desktop behind it.
 
 // Draws white on the black mask inside rect, then blends color through it.
 static void canvas_text(struct bar_window *bw, struct canvas *c,
 		const RECT *rect, const wchar_t *text, const struct swine_style *s,
 		int rotate, struct swine_color color) {
-	RECT r;
-	if (!clip(c, rect, &r)) {
-		return;
-	}
-	for (int y = r.top; y < r.bottom; ++y) {
-		memset(c->mask + (size_t)y * c->w + r.left, 0,
-			sizeof(uint32_t) * (size_t)(r.right - r.left));
-	}
+	canvas_mask_clear(c, rect, false);
 	SetTextColor(c->mask_dc, RGB(255, 255, 255));
 	draw_text(bw, c->mask_dc, rect, text, s, rotate);
-	GdiFlush();
-	for (int y = r.top; y < r.bottom; ++y) {
-		uint32_t *row = c->px + (size_t)y * c->w;
-		const uint32_t *m = c->mask + (size_t)y * c->w;
-		for (int x = r.left; x < r.right; ++x) {
-			unsigned v = m[x];
-			// ClearType draws per channel; their mean is the coverage.
-			unsigned cover = ((v & 0xFF) + ((v >> 8) & 0xFF) +
-				((v >> 16) & 0xFF)) / 3;
-			if (!cover) {
-				continue;
-			}
-			unsigned a = cover * color.a / 255;
-			row[x] = over(row[x], color.r * a / 255, color.g * a / 255,
-				color.b * a / 255, a);
-		}
-	}
+	canvas_mask_blend(c, rect, color);
 }
 
 static void canvas_tray_icon(struct bar_window *bw, struct canvas *c,
 		const RECT *rect, const struct bar_item *item) {
-	RECT r;
-	if (!clip(c, rect, &r)) {
-		return;
-	}
-	for (int y = r.top; y < r.bottom; ++y) {
-		memset(c->mask + (size_t)y * c->w + r.left, 0,
-			sizeof(uint32_t) * (size_t)(r.right - r.left));
-		memset(c->white + (size_t)y * c->w + r.left, 0xFF,
-			sizeof(uint32_t) * (size_t)(r.right - r.left));
-	}
+	canvas_mask_clear(c, rect, true);
 	win32_tray_draw(c->mask_dc, item->tray_id, item->icon_path, rect, bw->hwnd);
 	win32_tray_draw(c->white_dc, item->tray_id, item->icon_path, rect, bw->hwnd);
-	GdiFlush();
-	for (int y = r.top; y < r.bottom; ++y) {
-		uint32_t *row = c->px + (size_t)y * c->w;
-		const uint32_t *k = c->mask + (size_t)y * c->w;
-		const uint32_t *wh = c->white + (size_t)y * c->w;
-		for (int x = r.left; x < r.right; ++x) {
-			// Over black the icon is colour * alpha; white shows the rest.
-			unsigned kb = k[x] & 0xFF, kg = (k[x] >> 8) & 0xFF,
-				kr = (k[x] >> 16) & 0xFF;
-			unsigned wb = wh[x] & 0xFF, wg = (wh[x] >> 8) & 0xFF,
-				wr = (wh[x] >> 16) & 0xFF;
-			int through = ((int)(wr - kr) + (int)(wg - kg) + (int)(wb - kb)) / 3;
-			unsigned a = through < 0 ? 255 : through > 255 ? 0 :
-				255 - (unsigned)through;
-			if (!a) {
-				continue;
-			}
-			row[x] = over(row[x], kr < a ? kr : a, kg < a ? kg : a,
-				kb < a ? kb : a, a);
-		}
-	}
+	canvas_icon_blend(c, rect);
 }
 
 static void draw_edges(struct bar_window *bw, struct canvas *c, const RECT *r,
@@ -492,21 +377,12 @@ static void render(struct bar_window *bw) {
 		return;
 	}
 	HDC screen = GetDC(NULL);
-	struct canvas c = { .w = w, .h = h };
-	c.dc = CreateCompatibleDC(screen);
-	c.mask_dc = CreateCompatibleDC(screen);
-	c.white_dc = CreateCompatibleDC(screen);
-	HBITMAP bitmap = dib(screen, w, h, &c.px);
-	HBITMAP mask = dib(screen, w, h, &c.mask);
-	HBITMAP white = dib(screen, w, h, &c.white);
-	if (!bitmap || !mask || !white) {
-		goto done;
+	struct canvas c;
+	bool ok = canvas_init(&c, screen, w, h);
+	ReleaseDC(NULL, screen);
+	if (!ok) {
+		return;
 	}
-	HGDIOBJ old_bitmap = SelectObject(c.dc, bitmap);
-	HGDIOBJ old_mask = SelectObject(c.mask_dc, mask);
-	HGDIOBJ old_white = SelectObject(c.white_dc, white);
-	SetBkMode(c.mask_dc, TRANSPARENT);
-	memset(c.px, 0, sizeof(uint32_t) * (size_t)w * (size_t)h);
 	clear_hits(bw);
 
 	struct bar_model *model = bw->model;
@@ -549,23 +425,8 @@ static void render(struct bar_window *bw) {
 		}
 	}
 
-	POINT pos = {bw->rect.x, bw->rect.y};
-	SIZE size = {w, h};
-	POINT origin = {0, 0};
-	BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
-	UpdateLayeredWindow(bw->hwnd, screen, &pos, &size, c.dc, &origin, 0,
-		&blend, ULW_ALPHA);
-	SelectObject(c.dc, old_bitmap);
-	SelectObject(c.mask_dc, old_mask);
-	SelectObject(c.white_dc, old_white);
-done:
-	if (bitmap) DeleteObject(bitmap);
-	if (mask) DeleteObject(mask);
-	if (white) DeleteObject(white);
-	DeleteDC(c.dc);
-	DeleteDC(c.mask_dc);
-	DeleteDC(c.white_dc);
-	ReleaseDC(NULL, screen);
+	canvas_present(&c, bw->hwnd, bw->rect.x, bw->rect.y);
+	canvas_finish(&c);
 }
 
 static struct hit *hit_test(struct bar_window *bw, int x, int y) {

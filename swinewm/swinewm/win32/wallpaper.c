@@ -150,7 +150,7 @@ static HBITMAP create_dib(int width, int height, void **bits) {
 }
 
 // Decodes path and scales it to width x height (premultiplied BGRA).
-static HBITMAP load_scaled(const char *path, int *width, int *height,
+HBITMAP win32_image_load(const char *path, int *width, int *height,
 		double scale) {
 	if (!ensure_factory()) {
 		return NULL;
@@ -165,7 +165,7 @@ static HBITMAP load_scaled(const char *path, int *width, int *height,
 		NULL, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder);
 	free(wpath);
 	if (FAILED(hr)) {
-		swine_log(SWINE_ERROR, "Unable to load wallpaper '%s' (0x%08lx)", path,
+		swine_log(SWINE_ERROR, "Unable to load image '%s' (0x%08lx)", path,
 			(unsigned long)hr);
 		return NULL;
 	}
@@ -208,7 +208,7 @@ out:
 	return result;
 }
 
-static bool image_size(const char *path, UINT *w, UINT *h) {
+bool win32_image_size(const char *path, UINT *w, UINT *h) {
 	if (!ensure_factory()) {
 		return false;
 	}
@@ -249,7 +249,7 @@ static HBITMAP compose(const struct output_config *oc, int width, int height) {
 	win32_fill(dc, &all, RGB(color.r, color.g, color.b));
 
 	UINT src_w = 0, src_h = 0;
-	if (!solid && image_size(oc->background, &src_w, &src_h) && src_w && src_h) {
+	if (!solid && win32_image_size(oc->background, &src_w, &src_h) && src_w && src_h) {
 		const char *mode = oc->background_mode;
 		double sx = (double)width / src_w, sy = (double)height / src_h;
 		double scale = strcmp(mode, "fill") == 0 ? (sx > sy ? sx : sy) :
@@ -258,7 +258,7 @@ static HBITMAP compose(const struct output_config *oc, int width, int height) {
 		HBITMAP image;
 		if (strcmp(mode, "stretch") == 0) {
 			// Scale each axis independently: load at 1:1, stretch with GDI.
-			image = load_scaled(oc->background, &w, &h, 1.0);
+			image = win32_image_load(oc->background, &w, &h, 1.0);
 			if (image) {
 				HDC idc = CreateCompatibleDC(NULL);
 				HBITMAP iold = SelectObject(idc, image);
@@ -269,7 +269,7 @@ static HBITMAP compose(const struct output_config *oc, int width, int height) {
 				DeleteDC(idc);
 				DeleteObject(image);
 			}
-		} else if ((image = load_scaled(oc->background, &w, &h, scale))) {
+		} else if ((image = win32_image_load(oc->background, &w, &h, scale))) {
 			HDC idc = CreateCompatibleDC(NULL);
 			HBITMAP iold = SelectObject(idc, image);
 			if (strcmp(mode, "tile") == 0) {

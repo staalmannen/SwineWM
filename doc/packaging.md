@@ -30,6 +30,8 @@ Everything goes into one directory, `C:\Program Files\SwineWM` by default:
 | --- | --- |
 | `swinewm.exe` | The window manager, bar and notifications |
 | `swinemsg.exe` | IPC client (like `swaymsg`) |
+| `swinemenu.exe` | Launcher (like wofi), the default `$menu` |
+| `notify-send.exe`, `makoctl.exe` | Notification tools, as on Linux |
 | `config` | Default sway config ([`swinewm/config.in`](../swinewm/config.in)) |
 | `waybar\config.jsonc`, `waybar\style.css` | Default bar ([`swinewm/resources/waybar/`](../swinewm/resources/waybar/)) |
 | `mako\config` | Default notifications ([`swinewm/resources/mako/`](../swinewm/resources/mako/)) |
@@ -160,7 +162,8 @@ project's GitHub Releases page (its checksum should match, see
 [Verifying a download](#verifying-a-download)), or a `build` run's
 artifacts in the Actions tab, or your own build. In **Windows Security → Virus & threat
 protection → Protection history**, check that the detection names
-`swinewm.exe` (or `swinemenu.exe`, `swinemsg.exe`) in the SwineWM folder.
+`swinewm.exe` (or `swinemenu.exe`, `swinemsg.exe`, `notify-send.exe`,
+`makoctl.exe`) in the SwineWM folder.
 
 ### Allowing it
 
@@ -172,8 +175,9 @@ protection → Protection history**, check that the detection names
    Folder**, and choose `C:\Program Files\SwineWM` (or wherever you unpacked
    the zip). This needs administrator rights.
 
-The folder exclusion covers `swinewm.exe`, `swinemenu.exe` and
-`swinemsg.exe`, and stays valid when an update replaces the files, so a
+The folder exclusion covers every program in it (`swinewm.exe`,
+`swinemenu.exe`, `swinemsg.exe`, `notify-send.exe`, `makoctl.exe`), and
+stays valid when an update replaces the files, so a
 separate file exclusion is not needed. Exclude only SwineWM's own folder:
 Defender no longer scans anything in it.
 

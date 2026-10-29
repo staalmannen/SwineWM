@@ -340,27 +340,44 @@ it was.
 
 ## Built-in notifications (Mako)
 
-Mako receives notifications over D-Bus. In swinewm, `notify-send` is a
-command (so it works in bindings, over `swinemsg`, and as
-`exec notify-send ...` from scripts started by swinewm), and `makoctl
-dismiss|restore|invoke|mode|reload` likewise. `exec makoctl ...` and
-`exec mako` lines in sway configs are routed to the built-in versions.
+Mako receives notifications over D-Bus, and makoctl and notify-send talk
+to it there. In swinewm the D-Bus calls are IPC messages:
 
-- **Config** (`swinewm/notify/notify.c`): `mako/config` in the swinewm
-  config directories, in mako's format: global options, then `[criteria]`
-  sections (`app-name`, `summary`, `body`, `urgency`, `category`, `mode`,
-  `expiring`) applied in order. Styles are resolved when a notification
-  arrives and again when modes change or the config is reloaded.
+- `notify-send.exe` sends its arguments (`NOTIFY_SEND`, a JSON array) and
+  gets the id back. With actions or `--wait` it first subscribes to the
+  `notification` event on the same connection, then waits for its
+  notification's `action` (prints the key and sends `CLOSE_NOTIFICATION`,
+  as libnotify's notify-send closes it) or `close` event.
+- `makoctl.exe` sends its arguments (`MAKOCTL`) and prints the reply's
+  `output` (`list`, `history`, `mode`). `menu` runs in makoctl.exe: it
+  gets `list -j`, starts the menu program with pipes, and sends `invoke`.
+- `notify-send` and `makoctl` are also swinewm commands (bindings,
+  `swinemsg`), and `exec notify-send|makoctl ...` lines run them inside
+  swinewm, except `makoctl menu`. `exec mako` is ignored.
+
+- **Store and config** (`swinewm/notify/notify.c`, ported from mako's
+  `criteria.c`, `notification.c` and `config.c`): `mako/config` in the
+  swinewm config directories, in mako's format. Notifications are kept in
+  display order (mako's `insert_notification` for `sort`); `group-by`
+  gathers a group where its first member is and numbers it
+  (`group_notifications`), again whenever one closes. Styles are matched
+  twice, as mako does: once to find the notification's output and anchor,
+  then with `output=`/`anchor=` criteria; and again whenever the list,
+  the modes or the config change, and before drawing.
 - **Behaviour** follows mako(5): `default-timeout` (0 = never), history of
   `max-history` dismissed or expired notifications for `makoctl restore`,
-  `max-visible`, `sort`, `invisible`, modes such as `do-not-disturb`, the
-  `format` specifiers `%a %s %b %h %t`, and button actions.
-- **Rendering** (`win32/notify.c`): one topmost, non-activating window per
-  visible notification, stacked from the configured `anchor` inside the
-  usable area of the focused (or configured) output. Expiry uses a one-shot
-  timer set for the next deadline.
-- `swinemsg -t get_notifications` / `get_notification_history` list them
-  (swinewm IPC extensions 1000 and 1001).
+  `max-visible` per output and anchor with the "(%h more)" placeholder,
+  modes such as `do-not-disturb`, and bindings. An action invoked with
+  `makoctl invoke` closes the notification unless a `notify-send.exe`
+  waits for it (that one closes it, as an application would).
+- **Rendering** (`win32/notify.c`): one topmost, non-activating layered
+  window per visible notification, stacked from the configured `anchor`
+  inside the usable area of the focused (or configured) output, laid out
+  as mako's `render_notification`: the border is a band along the rounded
+  edge (anti-aliased, per-pixel alpha through `win32/canvas.c`, shared with
+  the bar), the progress bar fills the inside, the icon (WIC for images,
+  the shell for `.ico`/`.exe` and stock icons) sits left, right, above or
+  below the text. Expiry uses a one-shot timer set for the next deadline.
 
 ## Urgency and fullscreen requests
 

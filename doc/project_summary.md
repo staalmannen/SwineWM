@@ -70,7 +70,7 @@ follows the Linux programs, so existing files keep working:
 | `sway` | `swinewm.exe` window manager | sway's `config` | Draft working: see [`compatibility.md`](compatibility.md) |
 | `waybar` | built-in bar | Waybar's `config.jsonc` + `style.css` | Draft working |
 | `mako` | built-in notifications | mako's `config` | Draft working |
-| `notify-send`, `makoctl` | swinewm commands (also via `exec` and `swinemsg`) | — | Draft working |
+| `notify-send`, `makoctl` | `notify-send.exe`, `makoctl.exe` (IPC clients), also swinewm commands | — | Draft working |
 | `swaymsg` | `swinemsg.exe` | — | Draft working |
 | `swaynag` | Native config-error nag window | — | Persistent error details with reload and dismiss actions |
 | `wofi`/`wmenu` | `swinemenu.exe`, a separate small program, the default `$menu` | — (colours and font from the bar, over `get_bar_config`) | Draft working: drun (Start menu and Store apps), run (PATH) and dmenu modes; the choice is started by swinewm over IPC |
@@ -177,7 +177,9 @@ What an existing sway config needs to load and behave.
 ### 0.6.0 — Mako, grim and the rest of the desktop
 
 - Mako: icons, actions (`makoctl invoke`/`menu`), `border-radius`,
-  progress bars, grouping, `makoctl list|history` output.
+  progress bars, grouping, `makoctl list|history` output. Done:
+  `notify-send.exe` and `makoctl.exe`, all of mako's criteria and
+  bindings. Still open: markup inside a line, freedesktop icon themes.
 - Notifications from Windows applications: mirror toasts
   (`UserNotificationListener`), or at least show balloon/toast fallbacks
   as the shell.
