@@ -161,6 +161,22 @@ static void test_for_window(void) {
 	CHECK_STR(video->container->workspace->name, "9");
 	CHECK(!view_set_title(video, "Picture-in-Picture"));   // already ran
 	fake_teardown();
+
+	// A reload frees the rules: the views must forget them, or a new rule
+	// at a freed one's address would count as run.
+	fake_setup();
+	CHECK(load_main_config(SWINEWM_SOURCE_DIR "/tests/data/reload/config",
+		false, false));
+	struct swine_view *pip = map("PiP", "firefox.exe", "Mozilla");
+	CHECK(container_is_floating(pip->container));
+	CHECK_INT(pip->executed_criteria->length, 1);
+	CHECK(load_main_config(SWINEWM_SOURCE_DIR "/tests/data/reload/config",
+		false, false));
+	CHECK_INT(pip->executed_criteria->length, 0);
+	// as in sway, the new rules run on the next title change
+	CHECK(view_set_title(pip, "PiP"));
+	CHECK_INT(pip->executed_criteria->length, 1);
+	fake_teardown();
 }
 
 static void test_assign_and_no_focus(void) {

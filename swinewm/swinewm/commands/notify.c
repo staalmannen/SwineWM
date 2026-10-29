@@ -523,8 +523,9 @@ static void join_substitutions(char **argv, int *argc) {
 			free(argv[i]);
 			free(argv[i + 1]);
 			argv[i] = joined;
+			// with split_args' terminating NULL
 			memmove(argv + i + 1, argv + i + 2,
-				sizeof(char *) * (size_t)(*argc - i - 2));
+				sizeof(char *) * (size_t)(*argc - i - 1));
 			(*argc)--;
 		}
 	}

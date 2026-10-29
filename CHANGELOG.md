@@ -55,6 +55,23 @@ the MSI and zip with the matching section below as release notes.
 - swinemsg reads its arguments as Unicode, so text outside the ANSI code
   page (for example `swinemsg notify-send "✓ done"`) arrives intact.
 
+### Fixed
+
+- `bindsym --release` bindings run when the modifier is let go before the
+  key, as in sway (the binding is armed when its keys go down and runs at
+  the next key release); the press no longer reaches Windows' own
+  shortcuts (Win+X).
+- After `reload`, for_window rules could be skipped for existing windows
+  when a new rule reused a freed rule's memory.
+- The list of hidden windows that `--recover` restores is written to a
+  temporary file and renamed into place, so a crash while it is written
+  cannot leave it cut short.
+- Regular expressions in criteria can no longer exhaust the stack with a
+  pathological pattern on a long title.
+- Window events that arrive while others are handled are not handled
+  twice; title and position changes of controls inside windows are
+  ignored early.
+
 ## [0.5.0] - 2026-10-28
 
 ### Added

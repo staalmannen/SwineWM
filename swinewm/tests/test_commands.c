@@ -477,6 +477,13 @@ static void test_grim_slurp(void) {
 	CHECK_INT(notify_active()->length, 1);   // the rest of the chain ran
 
 	// Cancelled (Escape): nothing, and the chain stops.
+	// unquoted, sh would split "$(slurp -d -w 5)": it is joined again
+	CHECK(run("exec grim -g $(slurp -d -w 5) C:/j.png"));
+	CHECK_INT(fake.last_slurp.border_weight, 5);
+	CHECK(fake.last_slurp.dimensions);
+	grim_slurp_done(true, &area, NULL);
+	CHECK_STR(fake.last_screenshot_path, "C:/j.png");
+	fake.screenshot_calls--;
 	CHECK(run("exec grim -g $(slurp) C:/b.png && notify-send never"));
 	grim_slurp_done(false, NULL, NULL);
 	CHECK_INT(fake.screenshot_calls, 1);

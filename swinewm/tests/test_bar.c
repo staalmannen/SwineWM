@@ -40,6 +40,16 @@ static void test_json_parse(void) {
 	v = json_parse("[1, 2] x", &error);
 	CHECK(v == NULL);
 	free(error);
+	// A backslash at the very end, or a cut \u escape, is an error, not a
+	// read past the end.
+	const char *cut[] = {"\"abc\\", "[\"\\", "\"\\u12", "\"\\u"};
+	for (size_t i = 0; i < sizeof(cut) / sizeof(cut[0]); ++i) {
+		error = NULL;
+		v = json_parse(cut[i], &error);
+		CHECK(v == NULL);
+		CHECK(error != NULL);
+		free(error);
+	}
 }
 
 static void test_css(void) {

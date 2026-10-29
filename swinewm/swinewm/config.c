@@ -11,6 +11,8 @@
 #include "swinewm/criteria.h"
 #include "swinewm/notify.h"
 #include "swinewm/platform.h"
+#include "swinewm/server.h"
+#include "swinewm/tree/view.h"
 #include "swinewm/tree/root.h"
 #include "swinewm/tree/workspace.h"
 
@@ -178,6 +180,10 @@ char *read_file(const char *path) {
 		return NULL;
 	}
 	char *text = malloc((size_t)size + 1);
+	if (!text) {
+		fclose(f);
+		return NULL;
+	}
 	size_t n = fread(text, 1, (size_t)size, f);
 	text[n] = '\0';
 	fclose(f);
@@ -515,6 +521,15 @@ bool load_main_config(const char *path, bool is_active, bool validating) {
 
 	config->reading = false;
 	config->current_mode = config_find_mode("default");
+	if (old_config && server.views) {
+		// The views remember which for_window rules ran by pointer; those
+		// rules go with the old config, and a new one could get the same
+		// address and be skipped.
+		for (int i = 0; i < server.views->length; ++i) {
+			struct swine_view *view = server.views->items[i];
+			view->executed_criteria->length = 0;
+		}
+	}
 	free_config(old_config);
 
 	if (!validating && root) {

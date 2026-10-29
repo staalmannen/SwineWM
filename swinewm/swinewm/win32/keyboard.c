@@ -23,6 +23,9 @@ static HHOOK hook = NULL;
 static bool key_down[256];
 static bool swallowed[256];
 static bool suppress_logo_menu = false;
+// A --release binding whose keys are down, run at the next key release
+// (sway's held_binding): letting go of $mod before the key still runs it.
+static struct swine_binding *held_release = NULL;
 static bool suppress_alt_menu = false;
 
 static bool is_down(int vk) {
@@ -138,7 +141,20 @@ static LRESULT CALLBACK keyboard_proc(int code, WPARAM wparam, LPARAM lparam) {
 		}
 	}
 
+	if (!down && held_release) {
+		struct swine_binding *binding = held_release;
+		held_release = NULL;
+		// It may have gone with a reloaded config.
+		if (config && config->current_mode &&
+				list_find(config->current_mode->keysym_bindings, binding) != -1) {
+			post_binding(binding);
+		}
+	}
+
 	uint32_t mod = modifier_for_vk(vk);
+	if (mod && down && !repeat) {
+		held_release = NULL;   // other modifiers: no longer that binding
+	}
 	if (mod) {
 		if (!down && mod == SWINE_MOD_LOGO && suppress_logo_menu) {
 			// Win was used for a binding: stop the Start menu from opening.
@@ -154,6 +170,22 @@ static LRESULT CALLBACK keyboard_proc(int code, WPARAM wparam, LPARAM lparam) {
 
 	uint32_t mods = current_modifiers();
 	if (down) {
+		struct swine_binding *release = keyboard_find_binding(mods, vk, true);
+		held_release = release;   // another key cancels a held one
+		if (release) {
+			// Windows' own shortcuts (Win+X, ...) would act on the press.
+			swallowed[vk] = true;
+			if (lock >= 0 && !repeat) {
+				locks[lock] = !locks[lock];   // swallowed: it does not toggle
+			}
+			if (mods & SWINE_MOD_LOGO) {
+				suppress_logo_menu = true;
+			}
+			if (mods & SWINE_MOD_ALT) {
+				suppress_alt_menu = true;
+			}
+			return 1;
+		}
 		struct swine_binding *binding = keyboard_find_binding(mods, vk, false);
 		if (binding) {
 			if (!(repeat && (binding->flags & BINDING_NOREPEAT))) {
@@ -172,12 +204,6 @@ static LRESULT CALLBACK keyboard_proc(int code, WPARAM wparam, LPARAM lparam) {
 			return 1;
 		}
 	} else {
-		struct swine_binding *binding = keyboard_find_binding(mods, vk, true);
-		if (binding) {
-			post_binding(binding);
-			swallowed[vk] = false;
-			return 1;
-		}
 		if (swallowed[vk]) {
 			// Swallow the release of a key whose press we swallowed.
 			swallowed[vk] = false;
