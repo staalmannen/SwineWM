@@ -10,6 +10,8 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- A click on a notification mirrored from a Windows toast opens its
+  application.
 - `include=` in the mako config.
 - Next to Explorer, bars are registered as AppBars: maximized windows,
   dialogs and other windows swinewm does not manage keep clear of the bar,

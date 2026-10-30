@@ -184,7 +184,8 @@ What an existing sway config needs to load and behave.
   (`UserNotificationListener`), or at least show balloon/toast fallbacks
   as the shell. Done without packaging: the listener is read (its change
   event needs package identity), `windows-notifications=` in the mako
-  config. Still open: toast buttons and opening the app on a click.
+  config. A click opens the app. Toast buttons cannot be mirrored: the
+  listener does not give them out.
 - grim: `slurp` (drag an area), clipboard output (the `wl-copy` habit),
   `grim -` once `exec` supports pipes. Done: slurp, `| wl-copy`,
   `$(slurp)` and grimshot as built-ins.

@@ -242,6 +242,11 @@ void platform_notification_closed(uint32_t id, int reason) {
 	fake.last_close_reason = reason;
 }
 
+void platform_notification_action(uint32_t id, const char *action) {
+	fake.last_action_notification = id;
+	snprintf(fake.last_action, sizeof(fake.last_action), "%s", action);
+}
+
 long long platform_now_ms(void) {
 	return fake.now_ms;
 }

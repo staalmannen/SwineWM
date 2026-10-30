@@ -388,6 +388,7 @@ static DWORD WINAPI toast_thread(LPVOID param) {
 struct mirrored {
 	uint32_t toast_id;
 	uint32_t notification_id;
+	char *aumid;     // its application, opened by a click
 };
 static list_t *mirrored = NULL;   // struct mirrored *
 
@@ -450,7 +451,9 @@ static struct mirrored *find(uint32_t toast_id, uint32_t notification_id,
 }
 
 static void forget(int index) {
-	free(mirrored->items[index]);
+	struct mirrored *m = mirrored->items[index];
+	free(m->aumid);
+	free(m);
 	list_del(mirrored, index);
 }
 
@@ -481,8 +484,18 @@ void win32_toast_message(LPARAM lparam) {
 			.urgency = NOTIFY_URGENCY_NORMAL,
 			.expire_timeout = -1,
 		};
+		// A click on a toast opens its application (with the toast's own
+		// arguments, which the listener does not give out); here the
+		// default action does the same, without them.
+		const char *keys[] = {"default"}, *titles[] = {"Open"};
+		if (*t->aumid) {
+			p.action_keys = keys;
+			p.action_titles = titles;
+			p.action_count = 1;
+		}
 		struct mirrored *entry = calloc(1, sizeof(*entry));
 		entry->toast_id = t->toast_id;
+		entry->aumid = swine_strdup(t->aumid);
 		list_add(mirrored, entry);
 		entry->notification_id = notify_add(&p, platform_now_ms());
 		free(icon);
@@ -507,6 +520,16 @@ void platform_notification_closed(uint32_t id, int reason) {
 		removals[removal_count++] = toast_id;
 		LeaveCriticalSection(&lock);
 		SetEvent(wake_event);
+	}
+}
+
+void platform_notification_action(uint32_t id, const char *action) {
+	int index;
+	struct mirrored *m = find(0, id, &index);
+	if (m && *m->aumid && strcmp(action, "default") == 0) {
+		char *command = format_str("shell:AppsFolder\\%s", m->aumid);
+		platform_spawn(command);
+		free(command);
 	}
 }
 

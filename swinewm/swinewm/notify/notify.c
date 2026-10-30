@@ -1282,6 +1282,7 @@ static bool invoke_action(struct swine_notification *n, const char *key) {
 		struct notify_action_item *a = n->actions->items[i];
 		if (strcmp(a->key, key) == 0) {
 			notification_event("action", n->id, "action", key);
+			platform_notification_action(n->id, key);
 			return true;
 		}
 	}

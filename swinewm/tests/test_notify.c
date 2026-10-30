@@ -540,6 +540,14 @@ static void test_windows_notifications(void) {
 	CHECK(run("makoctl dismiss"));
 	CHECK_INT(fake.last_closed_notification, id);
 	CHECK_INT(fake.last_close_reason, NOTIFY_CLOSE_DISMISSED);
+	// A click (the default action) is passed on, so that a mirrored toast
+	// opens its application, before the notification closes.
+	CHECK(run("notify-send -A default=Open hi"));
+	id = newest()->id;
+	CHECK(notify_invoke(0, NULL));
+	CHECK_INT(fake.last_action_notification, id);
+	CHECK_STR(fake.last_action, "default");
+	CHECK_INT(fake.last_closed_notification, id);
 	fake_teardown();
 }
 

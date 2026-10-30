@@ -92,10 +92,12 @@ bool platform_spawn(const char *cmdline) {
 		ExpandEnvironmentStringsW(raw, wide, n);
 		free(raw);
 	}
+	// A desktop app's ID (a Start menu shortcut's AppUserModelID) cannot
+	// be activated; next to Explorer, ShellExecute below starts it.
 	bool started = false;
-	if (activate_store_app(wide, cmdline, &started)) {
+	if (activate_store_app(wide, cmdline, &started) && started) {
 		free(wide);
-		return started;
+		return true;
 	}
 	STARTUPINFOW si = { .cb = sizeof(si) };
 	PROCESS_INFORMATION pi = {0};

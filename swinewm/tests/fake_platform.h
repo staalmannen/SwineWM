@@ -88,6 +88,8 @@ struct fake_platform_state {
 	int kb_set_calls;
 	uint32_t last_closed_notification;
 	int last_close_reason;
+	uint32_t last_action_notification;
+	char last_action[64];
 	int swaynag_show_calls;
 	bool swaynag_visible;
 	char swaynag_details[2048];
