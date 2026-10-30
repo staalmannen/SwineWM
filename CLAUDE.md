@@ -53,7 +53,8 @@ status changes.
   `git submodule update --init --depth 1 sway waybar mako`.
 - `tools/` — helper scripts for Windows bug reports
   (`list-windows.bat`: every visible window with class, styles, owner and
-  cloaking, for windows swinewm handles badly).
+  cloaking, for windows swinewm handles badly; `key-test.conf`: a mode
+  that shows which key combinations reach swinewm and which Windows keeps).
 - `doc/archive/` — notes from the abandoned port strategy.
 - `doc/research/windows-shell.md` — how Cairo Desktop / ManagedShell solve
   shell problems (being the shell, AppBars, tray, task tracking,
