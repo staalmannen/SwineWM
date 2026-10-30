@@ -581,6 +581,30 @@ static void test_notify_icons(void) {
 	c = notify_icon_candidates(&n);
 	CHECK_INT(c->length, 0);
 	list_free_items_and_destroy(c);
+
+	// An icon theme, as mako looks it up: the exact size, else the
+	// largest that fits; not SVG, not mailbox.png for "mail".
+	snprintf(n.style.icon_path, sizeof(n.style.icon_path), "%s",
+		SWINEWM_SOURCE_DIR "/tests/data/icons/hicolor");
+	n.app_icon = "mail";
+	n.style.max_icon_size = 48;
+	c = notify_icon_candidates(&n);
+	CHECK_INT(c->length, 7);
+	CHECK(c->length == 7 && strstr(c->items[6], "48x48") &&
+		strstr(c->items[6], "mail.png"));
+	list_free_items_and_destroy(c);
+	n.style.max_icon_size = 40;
+	c = notify_icon_candidates(&n);
+	CHECK(c->length == 7 && strstr(c->items[6], "32x32@2"));
+	list_free_items_and_destroy(c);
+	n.style.max_icon_size = 20;
+	c = notify_icon_candidates(&n);
+	CHECK(c->length == 7 && strstr(c->items[6], "16x16"));
+	list_free_items_and_destroy(c);
+	n.style.max_icon_size = 8;
+	c = notify_icon_candidates(&n);
+	CHECK_INT(c->length, 6);
+	list_free_items_and_destroy(c);
 }
 
 void test_notify_all(void) {

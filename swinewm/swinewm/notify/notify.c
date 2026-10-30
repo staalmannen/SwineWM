@@ -17,6 +17,7 @@
 #include "swinewm/notify.h"
 #include "swinewm/platform.h"
 #include "swinewm/tree/output.h"
+#include "swinewm/tree/root.h"
 #include "swinewm/tree/workspace.h"
 
 // Criteria sections, matched as mako's match_criteria does. NULL and -1
@@ -1548,6 +1549,95 @@ static bool is_path(const char *s) {
 		(isalpha((unsigned char)s[0]) && s[1] == ':');
 }
 
+static const char *icon_exts[] = {"png", "ico", "jpg", "jpeg", "bmp", "gif"};
+
+// True if file is name.<an image type swinewm loads> (no SVG).
+static bool is_icon_file(const char *file, const char *name) {
+	size_t len = strlen(name);
+	if (strlen(file) <= len || file[len] != '.' ||
+			swine_strncasecmp(file, name, len) != 0) {
+		return false;
+	}
+	for (size_t e = 0; e < sizeof(icon_exts) / sizeof(icon_exts[0]); ++e) {
+		if (swine_strcasecmp(file + len + 1, icon_exts[e]) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static int largest_output_scale(void) {
+	int max = 1;
+	for (int i = 0; root && root->outputs && i < root->outputs->length; ++i) {
+		struct swine_output *o = root->outputs->items[i];
+		int scale = (int)(o->scale + 0.99);
+		if (scale > max) {
+			max = scale;
+		}
+	}
+	return max;
+}
+
+// An icon name in an icon theme (<theme>\48x48\apps\name.png, or
+// <theme>\apps\48\name.png), chosen as mako's resolve_icon does: the
+// size max-icon-size at the largest output scale at once, otherwise the
+// largest that fits. Ported from mako's icon.c (Copyright (c) 2018
+// emersion, MIT).
+static char *theme_icon(const char *theme, const char *sep,
+		const char *slash, const char *name, int max_icon_size, int max_scale) {
+	char *best = NULL;
+	int best_size = 0;
+	bool exact = false;
+	list_t *firsts = platform_list_dir(theme);
+	for (int i = 0; firsts && i < firsts->length && !exact; ++i) {
+		const char *first = firsts->items[i];
+		char *first_path = format_str("%s%s%s", theme, sep, first);
+		list_t *seconds = platform_list_dir(first_path);
+		for (int j = 0; seconds && j < seconds->length && !exact; ++j) {
+			const char *second = seconds->items[j];
+			// The size is the first directory's, or else the second's.
+			const char *size_dir = atoi(first) > 0 ? first : second;
+			int size = atoi(size_dir);
+			if (size <= 0) {
+				continue;
+			}
+			const char *at = strchr(size_dir, '@');
+			int scale = at ? atoi(at + 1) : 1;
+			char *dir = format_str("%s%s%s", first_path, slash, second);
+			list_t *files = platform_list_dir(dir);
+			for (int k = 0; files && k < files->length; ++k) {
+				const char *file = files->items[k];
+				if (!is_icon_file(file, name)) {
+					continue;
+				}
+				if (size == max_icon_size && scale == max_scale) {
+					free(best);
+					best = format_str("%s%s%s", dir, slash, file);
+					exact = true;
+					break;
+				} else if (size < max_icon_size * max_scale &&
+						size > best_size) {
+					free(best);
+					best = format_str("%s%s%s", dir, slash, file);
+					best_size = size;
+				}
+			}
+			if (files) {
+				list_free_items_and_destroy(files);
+			}
+			free(dir);
+		}
+		if (seconds) {
+			list_free_items_and_destroy(seconds);
+		}
+		free(first_path);
+	}
+	if (firsts) {
+		list_free_items_and_destroy(firsts);
+	}
+	return best;
+}
+
 list_t *notify_icon_candidates(const struct swine_notification *n) {
 	list_t *out = create_list();
 	const char *icon = n->app_icon;
@@ -1563,8 +1653,9 @@ list_t *notify_icon_candidates(const struct swine_notification *n) {
 		return out;
 	}
 	// An icon name: look in the icon-path directories, separated by ';'
-	// or by ':' where that is not a drive letter's.
-	static const char *exts[] = {"png", "ico", "jpg", "jpeg", "bmp", "gif"};
+	// or by ':' where that is not a drive letter's: name.png and so on in
+	// the directory itself, then in it as an icon theme.
+	int max_scale = largest_output_scale();
 	const char *dirs = n->style.icon_path;
 	while (*dirs) {
 		size_t len = 0;
@@ -1575,13 +1666,23 @@ list_t *notify_icon_candidates(const struct swine_notification *n) {
 		if (len > 0) {
 			char *dir = swine_strndup(dirs, len);
 			size_t dlen = strlen(dir);
+			// The directory's own separator; '\\' if it has none.
+			const char *slash = strchr(dir, '/') && !strchr(dir, '\\') ?
+				"/" : "\\";
 			const char *sep = dir[dlen - 1] == '\\' || dir[dlen - 1] == '/' ?
-				"" : "\\";
+				"" : slash;
 			if (strchr(icon, '.')) {
 				list_add(out, format_str("%s%s%s", dir, sep, icon));
 			}
-			for (size_t e = 0; e < sizeof(exts) / sizeof(exts[0]); ++e) {
-				list_add(out, format_str("%s%s%s.%s", dir, sep, icon, exts[e]));
+			for (size_t e = 0; e < sizeof(icon_exts) / sizeof(icon_exts[0]);
+					++e) {
+				list_add(out, format_str("%s%s%s.%s", dir, sep, icon,
+					icon_exts[e]));
+			}
+			char *themed = theme_icon(dir, sep, slash, icon,
+				n->style.max_icon_size, max_scale);
+			if (themed) {
+				list_add(out, themed);
 			}
 			free(dir);
 		}

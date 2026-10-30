@@ -10,6 +10,8 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- Icon themes in mako's `icon-path` (e.g. a copy of `hicolor` or
+  Papirus): the icon of the right size is picked as mako does.
 - A click on a notification mirrored from a Windows toast opens its
   application.
 - `include=` in the mako config.

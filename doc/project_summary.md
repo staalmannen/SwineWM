@@ -179,7 +179,7 @@ What an existing sway config needs to load and behave.
 - Mako: icons, actions (`makoctl invoke`/`menu`), `border-radius`,
   progress bars, grouping, `makoctl list|history` output. Done:
   `notify-send.exe` and `makoctl.exe`, all of mako's criteria and
-  bindings. Still open: markup inside a line, freedesktop icon themes.
+  bindings. Still open: markup inside a line.
 - Notifications from Windows applications: mirror toasts
   (`UserNotificationListener`), or at least show balloon/toast fallbacks
   as the shell. Done without packaging: the listener is read (its change
