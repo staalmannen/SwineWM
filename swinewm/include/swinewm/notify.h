@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include "list.h"
 #include "swinewm/bar/css.h"
+#include "swinewm/bar/format.h"
 
 // The integrated Mako clone. Notifications arrive through the notify-send
 // command (also reachable as "exec notify-send ..." and over IPC), are
@@ -157,9 +158,8 @@ enum notify_close_reason {
 };
 
 struct notify_line {
-	char *text;
-	bool bold;
-	bool italic;
+	char *text;      // without markup
+	list_t *spans;   // struct markup_span *: the text with its attributes
 };
 
 // windows-notifications= (swinewm): mirror Windows toasts as notifications.

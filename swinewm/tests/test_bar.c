@@ -172,6 +172,43 @@ static void test_format(void) {
 	s = markup_strip("<span style=\"italic\">resize</span> &amp; &lt;go&gt;");
 	CHECK_STR(s, "resize & <go>");
 	free(s);
+	s = markup_strip("&#233;&#x20AC;&#;&bogus;");
+	CHECK_STR(s, "\xC3\xA9\xE2\x82\xAC&#;&bogus;");
+	free(s);
+
+	// Runs with their attributes, as Pango would give them.
+	list_t *spans = markup_spans("New <b>mail</b> from "
+		"<span weight=\"bold\" style='italic'>Jens</span>"
+		"<i><u>!</u></i><s>x</s><big>y</big> &amp; z");
+	CHECK_INT(spans->length, 7);
+	if (spans->length == 7) {
+		struct markup_span **sp = (struct markup_span **)spans->items;
+		CHECK_STR(sp[0]->text, "New ");
+		CHECK(!sp[0]->bold && !sp[0]->italic);
+		CHECK_STR(sp[1]->text, "mail");
+		CHECK(sp[1]->bold && !sp[1]->italic);
+		CHECK_STR(sp[2]->text, " from ");
+		CHECK_STR(sp[3]->text, "Jens");
+		CHECK(sp[3]->bold && sp[3]->italic);
+		CHECK_STR(sp[4]->text, "!");
+		CHECK(sp[4]->italic && sp[4]->underline && !sp[4]->bold);
+		CHECK_STR(sp[5]->text, "x");
+		CHECK(sp[5]->strikethrough && !sp[5]->underline);
+		// other tags add nothing: one run with what follows
+		CHECK_STR(sp[6]->text, "y & z");
+	}
+	markup_spans_free(spans);
+	spans = markup_spans("<b>a</b><span weight='700'>b</span>"
+		"<span weight=\"400\">c</span>");
+	CHECK_INT(spans->length, 2);   // a and b merge
+	if (spans->length == 2) {
+		CHECK_STR(((struct markup_span *)spans->items[0])->text, "ab");
+		CHECK(!((struct markup_span *)spans->items[1])->bold);
+	}
+	markup_spans_free(spans);
+	spans = markup_spans("");
+	CHECK_INT(spans->length, 0);
+	markup_spans_free(spans);
 }
 
 static struct bar_module_view *find_view(struct bar_model *model, int index) {

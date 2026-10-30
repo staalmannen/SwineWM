@@ -10,6 +10,9 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- Notifications: Pango markup anywhere in a line (`<b>`, `<i>`, `<u>`,
+  `<s>`, `<span weight= style= underline= strikethrough=>`), wrapped
+  as one text; before, a line could only be bold or italic as a whole.
 - Icon themes in mako's `icon-path` (e.g. a copy of `hicolor` or
   Papirus): the icon of the right size is picked as mako does.
 - A click on a notification mirrored from a Windows toast opens its

@@ -253,18 +253,178 @@ static void update_icon(struct popup *p, const struct swine_notification *n) {
 
 // --- layout and drawing --------------------------------------------------
 
-static HFONT line_font(const struct popup *p, const struct notify_style *s,
-		const struct notify_line *line) {
+static HFONT span_font(const struct popup *p, const struct notify_style *s,
+		const struct markup_span *span) {
 	// Pango sizes are points: 1pt = 1/72", 96 dpi at scale 1.
 	int px = (int)(s->font_size * 96.0 / 72.0 * p->scale + 0.5);
-	return win32_font(s->font_family, px, s->font_bold || line->bold,
-		line->italic);
+	return win32_font(s->font_family, px, s->font_bold || span->bold,
+		span->italic);
 }
 
-static UINT text_flags(const struct notify_style *s) {
-	return DT_WORDBREAK | DT_NOPREFIX | DT_END_ELLIPSIS |
-		(s->text_alignment == 1 ? DT_CENTER :
-		s->text_alignment == 2 ? DT_RIGHT : DT_LEFT);
+// A word of a span with the spaces after it: lines break between words.
+struct word {
+	const wchar_t *text;
+	int len;
+	HFONT font;
+	const struct markup_span *span;
+};
+
+// A word, or the part of one, placed on a visual line.
+struct placed {
+	const struct word *word;
+	int start, len;
+	int x;
+};
+
+struct text_layout {
+	HDC dc;
+	RECT area;
+	UINT align;           // 0 left, 1 center, 2 right
+	bool draw;
+	int y;
+	int widest;
+	struct placed *placed;
+	int count, cap;
+};
+
+static int extent(HDC dc, HFONT font, const wchar_t *text, int len) {
+	SIZE size = {0};
+	HFONT old = SelectObject(dc, font);
+	GetTextExtentPoint32W(dc, text, len, &size);
+	SelectObject(dc, old);
+	return size.cx;
+}
+
+static int trimmed_len(const wchar_t *text, int len) {
+	while (len > 0 && text[len - 1] == L' ') {
+		len--;
+	}
+	return len;
+}
+
+static void place(struct text_layout *t, const struct word *w, int start,
+		int len, int x) {
+	if (t->count == t->cap) {
+		t->cap = t->cap ? t->cap * 2 : 16;
+		t->placed = realloc(t->placed, sizeof(*t->placed) * (size_t)t->cap);
+	}
+	t->placed[t->count++] = (struct placed){w, start, len, x};
+}
+
+// Ends a visual line: aligns it, draws it (at a common baseline) and
+// moves down by its height.
+static void flush_line(struct text_layout *t) {
+	if (!t->count) {
+		return;
+	}
+	int ascent = 0, descent = 0, width = 0;
+	for (int i = 0; i < t->count; ++i) {
+		struct placed *pl = &t->placed[i];
+		HFONT old = SelectObject(t->dc, pl->word->font);
+		TEXTMETRICW tm;
+		GetTextMetricsW(t->dc, &tm);
+		SelectObject(t->dc, old);
+		if (tm.tmAscent > ascent) ascent = tm.tmAscent;
+		if (tm.tmDescent > descent) descent = tm.tmDescent;
+		int len = i == t->count - 1 ?
+			trimmed_len(pl->word->text + pl->start, pl->len) : pl->len;
+		int right = pl->x + extent(t->dc, pl->word->font,
+			pl->word->text + pl->start, len);
+		if (right > width) width = right;
+	}
+	int avail = t->area.right - t->area.left;
+	int offset = t->align == 1 ? (avail - width) / 2 :
+		t->align == 2 ? avail - width : 0;
+	if (offset < 0) {
+		offset = 0;
+	}
+	if (width > t->widest) {
+		t->widest = width;
+	}
+	int baseline = t->y + ascent;
+	for (int i = 0; t->draw && i < t->count; ++i) {
+		struct placed *pl = &t->placed[i];
+		const struct markup_span *span = pl->word->span;
+		int x = t->area.left + offset + pl->x;
+		HFONT old = SelectObject(t->dc, pl->word->font);
+		UINT old_align = SetTextAlign(t->dc, TA_BASELINE | TA_LEFT);
+		TextOutW(t->dc, x, baseline, pl->word->text + pl->start, pl->len);
+		SetTextAlign(t->dc, old_align);
+		if (span->underline || span->strikethrough) {
+			// The font's own positions; a line under or through the text,
+			// not under the spaces that end a line.
+			OUTLINETEXTMETRICW otm = {.otmSize = sizeof(otm)};
+			bool have = GetOutlineTextMetricsW(t->dc, sizeof(otm), &otm) != 0;
+			int len = i == t->count - 1 ?
+				trimmed_len(pl->word->text + pl->start, pl->len) : pl->len;
+			int w = extent(t->dc, pl->word->font,
+				pl->word->text + pl->start, len);
+			int thick = have && otm.otmsUnderscoreSize > 0 ?
+				(int)otm.otmsUnderscoreSize : 1;
+			HBRUSH white = GetStockObject(WHITE_BRUSH);
+			if (span->underline) {
+				int under = have ? -otm.otmsUnderscorePosition : ascent / 8 + 1;
+				RECT r = {x, baseline + under, x + w, baseline + under + thick};
+				FillRect(t->dc, &r, white);
+			}
+			if (span->strikethrough) {
+				int through = have ? (int)otm.otmsStrikeoutPosition : ascent / 3;
+				int sthick = have && otm.otmsStrikeoutSize > 0 ?
+					(int)otm.otmsStrikeoutSize : thick;
+				RECT r = {x, baseline - through, x + w,
+					baseline - through + sthick};
+				FillRect(t->dc, &r, white);
+			}
+		}
+		SelectObject(t->dc, old);
+	}
+	t->y += ascent + descent;
+	t->count = 0;
+}
+
+// Lays out one line of the format: its words wrap at the area's width, a
+// word wider than the area is broken where it must.
+static void layout_line(struct text_layout *t, const struct word *words,
+		int count) {
+	int avail = t->area.right - t->area.left;
+	int x = 0;
+	for (int i = 0; i < count && t->y < t->area.bottom; ++i) {
+		const struct word *w = &words[i];
+		int start = 0;
+		while (start < w->len && t->y < t->area.bottom) {
+			int len = w->len - start;
+			int ink = extent(t->dc, w->font, w->text + start,
+				trimmed_len(w->text + start, len));
+			if (x > 0 && x + ink > avail) {
+				flush_line(t);
+				x = 0;
+			}
+			if (ink > avail - x) {
+				// Too wide even alone: as many characters as fit (at
+				// least one), the rest on the next line.
+				int fit = 0;
+				SIZE size;
+				HFONT old = SelectObject(t->dc, w->font);
+				GetTextExtentExPointW(t->dc, w->text + start, len,
+					avail - x, &fit, NULL, &size);
+				SelectObject(t->dc, old);
+				if (fit < 1) {
+					fit = 1;
+				}
+				if (fit < len) {
+					place(t, w, start, fit, x);
+					flush_line(t);
+					x = 0;
+					start += fit;
+					continue;
+				}
+			}
+			place(t, w, start, len, x);
+			x += extent(t->dc, w->font, w->text + start, len);
+			start = w->len;
+		}
+	}
+	flush_line(t);
 }
 
 // Measures (and with draw, draws white into dc) the lines inside area.
@@ -272,33 +432,54 @@ static UINT text_flags(const struct notify_style *s) {
 static int layout_text(const struct popup *p, HDC dc,
 		const struct swine_notification *n, RECT area, bool draw, int *width) {
 	list_t *lines = notify_format_lines(n);
-	int y = area.top;
-	int widest = 0;
-	UINT flags = text_flags(&n->style);
-	for (int i = 0; i < lines->length && y < area.bottom; ++i) {
+	struct text_layout t = {
+		.dc = dc,
+		.area = area,
+		.align = (UINT)n->style.text_alignment,
+		.draw = draw,
+		.y = area.top,
+	};
+	for (int i = 0; i < lines->length && t.y < area.bottom; ++i) {
 		struct notify_line *line = lines->items[i];
-		wchar_t *text = utf8_to_utf16(line->text);
-		HFONT old = SelectObject(dc, line_font(p, &n->style, line));
-		RECT measure = {area.left, y, area.right, area.bottom};
-		DrawTextW(dc, text, -1, &measure, flags | DT_CALCRECT);
-		int line_h = measure.bottom - measure.top;
-		if (measure.right - measure.left > widest) {
-			widest = measure.right - measure.left;
+		list_t *texts = create_list();   // wchar_t *, one per span
+		struct word *words = NULL;
+		int count = 0, cap = 0;
+		for (int s = 0; s < line->spans->length; ++s) {
+			const struct markup_span *span = line->spans->items[s];
+			wchar_t *text = utf8_to_utf16(span->text);
+			if (!text) {
+				continue;
+			}
+			list_add(texts, text);
+			HFONT font = span_font(p, &n->style, span);
+			const wchar_t *c = text;
+			while (*c) {
+				const wchar_t *e = c;
+				while (*e && *e != L' ') {
+					e++;
+				}
+				while (*e == L' ') {
+					e++;
+				}
+				if (count == cap) {
+					cap = cap ? cap * 2 : 16;
+					words = realloc(words, sizeof(*words) * (size_t)cap);
+				}
+				words[count++] = (struct word){c, (int)(e - c), font, span};
+				c = e;
+			}
 		}
-		if (draw) {
-			RECT r = {area.left, y, area.right,
-				y + line_h < area.bottom ? y + line_h : area.bottom};
-			DrawTextW(dc, text, -1, &r, flags);
-		}
-		y += line_h;
-		SelectObject(dc, old);
-		free(text);
+		layout_line(&t, words, count);
+		free(words);
+		list_free_items_and_destroy(texts);
 	}
+	free(t.placed);
 	notify_free_lines(lines);
+	int avail = area.right - area.left;
 	if (width) {
-		*width = widest > area.right - area.left ? area.right - area.left : widest;
+		*width = t.widest > avail ? avail : t.widest;
 	}
-	int h = y - area.top;
+	int h = t.y - area.top;
 	return h < area.bottom - area.top ? h : area.bottom - area.top;
 }
 

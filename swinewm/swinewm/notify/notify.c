@@ -1768,19 +1768,27 @@ list_t *notify_format_lines(const struct swine_notification *n) {
 		char *line = raw->items[i];
 		struct notify_line *out = calloc(1, sizeof(*out));
 		if (n->style.markup) {
-			size_t l = strlen(line);
-			out->bold = has_prefix(line, "<b>") && l >= 7 &&
-				strcmp(line + l - 4, "</b>") == 0;
-			out->italic = has_prefix(line, "<i>") && l >= 7 &&
-				strcmp(line + l - 4, "</i>") == 0;
-			out->text = markup_strip(line);
+			out->spans = markup_spans(line);
 		} else {
-			out->text = swine_strdup(line);
+			out->spans = create_list();
+			if (*line) {
+				struct markup_span *span = calloc(1, sizeof(*span));
+				span->text = swine_strdup(line);
+				list_add(out->spans, span);
+			}
 		}
-		if (!*out->text) {
-			free(out->text);
+		if (!out->spans->length) {
+			markup_spans_free(out->spans);
 			free(out);
 			continue;
+		}
+		size_t total = 1;
+		for (int s = 0; s < out->spans->length; ++s) {
+			total += strlen(((struct markup_span *)out->spans->items[s])->text);
+		}
+		out->text = calloc(1, total);
+		for (int s = 0; s < out->spans->length; ++s) {
+			strcat(out->text, ((struct markup_span *)out->spans->items[s])->text);
 		}
 		list_add(lines, out);
 	}
@@ -1793,6 +1801,7 @@ void notify_free_lines(list_t *lines) {
 	for (int i = 0; i < lines->length; ++i) {
 		struct notify_line *l = lines->items[i];
 		free(l->text);
+		markup_spans_free(l->spans);
 		free(l);
 	}
 	list_free(lines);

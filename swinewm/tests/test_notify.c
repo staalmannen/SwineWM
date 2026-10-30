@@ -33,9 +33,11 @@ static void test_notify_send(void) {
 		struct notify_line *l0 = lines->items[0];
 		struct notify_line *l1 = lines->items[1];
 		CHECK_STR(l0->text, "New mail");
-		CHECK(l0->bold);
+		CHECK(l0->spans->length == 1 &&
+			((struct markup_span *)l0->spans->items[0])->bold);
 		CHECK_STR(l1->text, "From: Jens");
-		CHECK(!l1->bold);
+		CHECK(l1->spans->length == 1 &&
+			!((struct markup_span *)l1->spans->items[0])->bold);
 		notify_free_lines(lines);
 	}
 	CHECK(!run("notify-send"));
