@@ -864,9 +864,6 @@ static bool apply_config_option(const char *key, const char *value) {
 	} else if (strcmp(key, "max-history") == 0) {
 		st.max_history = atoi(value);
 		return true;
-	} else if (strcmp(key, "include") == 0) {
-		swine_log(SWINE_INFO, "mako include is not supported yet");
-		return true;
 	} else if (strcmp(key, "windows-notifications") == 0) {
 		// swinewm's own: mirror the toasts of Windows applications
 		if (strcmp(value, "auto") == 0) {
@@ -885,9 +882,45 @@ enum notify_windows notify_windows_mode(void) {
 	return st.windows;
 }
 
+static bool parse_config_text(const char *text, const char *name, int depth);
+
+// mako's include: another config file read in place, starting in the global
+// section. mako wants an absolute path or ~/; here a relative one is also
+// taken relative to the including file.
+static bool include_config(const char *value, const char *name, int depth) {
+	if (depth >= 16) {
+		swine_log(SWINE_ERROR, "%s: too many nested includes", name);
+		return false;
+	}
+	char *path = resolve_path(value, name);
+	char *text = read_file(path);
+	bool ok = text != NULL;
+	if (!text) {
+		swine_log(SWINE_ERROR, "Unable to open %s for reading", path);
+	} else {
+		ok = parse_config_text(text, path, depth + 1);
+	}
+	free(text);
+	free(path);
+	return ok;
+}
+
 bool notify_parse_config(const char *text, const char *name) {
 	free_config_state();
 	ensure_init();
+	bool ok = parse_config_text(text, name, 0);
+	for (int i = 1; i < st.criteria->length; ++i) {
+		struct criteria *c = st.criteria->items[i];
+		if (!c->invalid && !validate_criteria(c, name)) {
+			c->invalid = true;
+			ok = false;
+		}
+	}
+	restyle_all();
+	return ok;
+}
+
+static bool parse_config_text(const char *text, const char *name, int depth) {
 	struct criteria *global = st.criteria->items[0];
 	struct criteria *current = global;
 	bool ok = true;
@@ -929,6 +962,12 @@ bool notify_parse_config(const char *text, const char *name) {
 		char *value = eq + 1;
 		strip_whitespace(key);
 		strip_whitespace(value);
+		if (current == global && strcmp(key, "include") == 0) {
+			if (!include_config(value, name, depth)) {
+				ok = false;
+			}
+			continue;
+		}
 		if (current == global && apply_config_option(key, value)) {
 			continue;
 		}
@@ -941,14 +980,6 @@ bool notify_parse_config(const char *text, const char *name) {
 		add_option(current, key, value);
 	}
 	list_free_items_and_destroy(lines);
-	for (int i = 1; i < st.criteria->length; ++i) {
-		struct criteria *c = st.criteria->items[i];
-		if (!c->invalid && !validate_criteria(c, name)) {
-			c->invalid = true;
-			ok = false;
-		}
-	}
-	restyle_all();
 	return ok;
 }
 

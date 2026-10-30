@@ -259,6 +259,21 @@ static void test_mako_criteria(void) {
 	CHECK(!notify_parse_config("frobnicate=1\n", "bad"));
 	CHECK(notify_parse_config("[anchor=top-left]\nmax-visible=1\n"
 		"[output=DISPLAY1 hidden]\nformat=+%h\n", "good"));
+
+	// include: the included file starts in the global section; its
+	// sections come before the including file's later ones.
+	const char *path = SWINEWM_SOURCE_DIR "/tests/data/mako/config";
+	char *text = read_file(path);
+	CHECK(text && notify_parse_config(text, path));
+	free(text);
+	CHECK(run("notify-send -u critical -a late x"));
+	n = newest();
+	CHECK(n && n->style.background.r == 0x12 && n->style.border.r == 0xab);
+	CHECK(n && n->style.width == 50);
+	CHECK(run("notify-send y"));
+	CHECK(newest() && newest()->style.width == 300);
+	CHECK(!notify_parse_config("include=does-not-exist\n", path));
+	CHECK(!notify_parse_config("[app-name=x]\ninclude=colors\n", path));
 	fake_teardown();
 }
 

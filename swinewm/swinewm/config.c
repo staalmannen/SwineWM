@@ -571,9 +571,12 @@ static bool path_is_absolute(const char *p) {
 }
 
 char *config_resolve_path(const char *path) {
+	return resolve_path(path, config->current_file ? config->current_file :
+		config->current_config_path);
+}
+
+char *resolve_path(const char *path, const char *base) {
 	char *expanded = platform_expand_path(path);
-	const char *base = config->current_file ? config->current_file :
-		config->current_config_path;
 	if (path_is_absolute(expanded) || !base) {
 		return expanded;
 	}

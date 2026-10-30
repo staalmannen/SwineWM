@@ -1,0 +1,4 @@
+# Included from config (a relative path)
+background-color=#123456
+[urgency=critical]
+border-color=#abcdef
