@@ -151,6 +151,9 @@ void platform_swaynag_show(const char *details);
 // A notification closed (reason as enum notify_close_reason): one mirrored
 // from a Windows toast and dismissed by the user goes from Windows' list too.
 void platform_notification_closed(uint32_t id, int reason);
+// An action of a notification was invoked ("default": it was clicked): one
+// mirrored from a Windows toast opens its application.
+void platform_notification_action(uint32_t id, const char *action);
 // Milliseconds on a monotonic clock, for notification timeouts.
 long long platform_now_ms(void);
 // Shows windows left hidden by a previous instance that did not exit

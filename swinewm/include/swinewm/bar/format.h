@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <time.h>
+#include "list.h"
 
 // Waybar format strings use {fmt} syntax: "{name}", "{}" (first argument),
 // "{used:0.1f}" (number with a printf-like spec), "{:%H:%M}" (strftime on
@@ -35,5 +36,19 @@ char *markup_escape(const char *text);
 
 // Removes Pango markup tags and decodes the XML entities Pango accepts.
 char *markup_strip(const char *text);
+
+// A run of text with one set of Pango attributes.
+struct markup_span {
+	char *text;
+	bool bold, italic, underline, strikethrough;
+};
+
+// Pango markup as runs: <b>, <i>, <u>, <s> and <span> with weight, style,
+// underline and strikethrough; the entities decoded. Other tags and
+// attributes are ignored, their text kept. Returns struct markup_span *
+// items, merged where the attributes are the same; free with
+// markup_spans_free.
+list_t *markup_spans(const char *text);
+void markup_spans_free(list_t *spans);
 
 #endif

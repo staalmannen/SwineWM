@@ -179,12 +179,13 @@ What an existing sway config needs to load and behave.
 - Mako: icons, actions (`makoctl invoke`/`menu`), `border-radius`,
   progress bars, grouping, `makoctl list|history` output. Done:
   `notify-send.exe` and `makoctl.exe`, all of mako's criteria and
-  bindings. Still open: markup inside a line, freedesktop icon themes.
+  bindings, markup inside a line (bold, italic, underline, strikethrough).
 - Notifications from Windows applications: mirror toasts
   (`UserNotificationListener`), or at least show balloon/toast fallbacks
   as the shell. Done without packaging: the listener is read (its change
   event needs package identity), `windows-notifications=` in the mako
-  config. Still open: toast buttons and opening the app on a click.
+  config. A click opens the app. Toast buttons cannot be mirrored: the
+  listener does not give them out.
 - grim: `slurp` (drag an area), clipboard output (the `wl-copy` habit),
   `grim -` once `exec` supports pipes. Done: slurp, `| wl-copy`,
   `$(slurp)` and grimshot as built-ins.

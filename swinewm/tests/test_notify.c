@@ -33,9 +33,11 @@ static void test_notify_send(void) {
 		struct notify_line *l0 = lines->items[0];
 		struct notify_line *l1 = lines->items[1];
 		CHECK_STR(l0->text, "New mail");
-		CHECK(l0->bold);
+		CHECK(l0->spans->length == 1 &&
+			((struct markup_span *)l0->spans->items[0])->bold);
 		CHECK_STR(l1->text, "From: Jens");
-		CHECK(!l1->bold);
+		CHECK(l1->spans->length == 1 &&
+			!((struct markup_span *)l1->spans->items[0])->bold);
 		notify_free_lines(lines);
 	}
 	CHECK(!run("notify-send"));
@@ -259,6 +261,21 @@ static void test_mako_criteria(void) {
 	CHECK(!notify_parse_config("frobnicate=1\n", "bad"));
 	CHECK(notify_parse_config("[anchor=top-left]\nmax-visible=1\n"
 		"[output=DISPLAY1 hidden]\nformat=+%h\n", "good"));
+
+	// include: the included file starts in the global section; its
+	// sections come before the including file's later ones.
+	const char *path = SWINEWM_SOURCE_DIR "/tests/data/mako/config";
+	char *text = read_file(path);
+	CHECK(text && notify_parse_config(text, path));
+	free(text);
+	CHECK(run("notify-send -u critical -a late x"));
+	n = newest();
+	CHECK(n && n->style.background.r == 0x12 && n->style.border.r == 0xab);
+	CHECK(n && n->style.width == 50);
+	CHECK(run("notify-send y"));
+	CHECK(newest() && newest()->style.width == 300);
+	CHECK(!notify_parse_config("include=does-not-exist\n", path));
+	CHECK(!notify_parse_config("[app-name=x]\ninclude=colors\n", path));
 	fake_teardown();
 }
 
@@ -525,6 +542,14 @@ static void test_windows_notifications(void) {
 	CHECK(run("makoctl dismiss"));
 	CHECK_INT(fake.last_closed_notification, id);
 	CHECK_INT(fake.last_close_reason, NOTIFY_CLOSE_DISMISSED);
+	// A click (the default action) is passed on, so that a mirrored toast
+	// opens its application, before the notification closes.
+	CHECK(run("notify-send -A default=Open hi"));
+	id = newest()->id;
+	CHECK(notify_invoke(0, NULL));
+	CHECK_INT(fake.last_action_notification, id);
+	CHECK_STR(fake.last_action, "default");
+	CHECK_INT(fake.last_closed_notification, id);
 	fake_teardown();
 }
 
@@ -557,6 +582,30 @@ static void test_notify_icons(void) {
 	n.app_icon = "";
 	c = notify_icon_candidates(&n);
 	CHECK_INT(c->length, 0);
+	list_free_items_and_destroy(c);
+
+	// An icon theme, as mako looks it up: the exact size, else the
+	// largest that fits; not SVG, not mailbox.png for "mail".
+	snprintf(n.style.icon_path, sizeof(n.style.icon_path), "%s",
+		SWINEWM_SOURCE_DIR "/tests/data/icons/hicolor");
+	n.app_icon = "mail";
+	n.style.max_icon_size = 48;
+	c = notify_icon_candidates(&n);
+	CHECK_INT(c->length, 7);
+	CHECK(c->length == 7 && strstr(c->items[6], "48x48") &&
+		strstr(c->items[6], "mail.png"));
+	list_free_items_and_destroy(c);
+	n.style.max_icon_size = 40;
+	c = notify_icon_candidates(&n);
+	CHECK(c->length == 7 && strstr(c->items[6], "32x32@2"));
+	list_free_items_and_destroy(c);
+	n.style.max_icon_size = 20;
+	c = notify_icon_candidates(&n);
+	CHECK(c->length == 7 && strstr(c->items[6], "16x16"));
+	list_free_items_and_destroy(c);
+	n.style.max_icon_size = 8;
+	c = notify_icon_candidates(&n);
+	CHECK_INT(c->length, 6);
 	list_free_items_and_destroy(c);
 }
 

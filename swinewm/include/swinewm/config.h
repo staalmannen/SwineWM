@@ -208,6 +208,8 @@ char *do_var_replacement(char *str);   // may realloc; returns the new pointer
 // Expands ~ and %VAR%; a relative path is taken relative to the directory
 // of the config file being read. Caller frees.
 char *config_resolve_path(const char *path);
+// The same with an explicit base file (NULL: none).
+char *resolve_path(const char *path, const char *base);
 struct output_config *config_find_output_config(const char *name);
 // The config whose background applies to an output: its own if it sets a
 // background, else the "*" one, else NULL.
