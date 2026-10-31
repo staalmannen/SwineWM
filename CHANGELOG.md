@@ -10,6 +10,7 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+
 - Notifications: Pango markup anywhere in a line (`<b>`, `<i>`, `<u>`,
   `<s>`, `<span weight= style= underline= strikethrough=>`), wrapped
   as one text; before, a line could only be bold or italic as a whole.
@@ -18,6 +19,9 @@ the MSI and zip with the matching section below as release notes.
 - A click on a notification mirrored from a Windows toast opens its
   application.
 - `include=` in the mako config.
+- A new kawaii pig default wallpaper, with lipstick and a matching
+  SwineWM wordmark.
+
 - Next to Explorer, bars are registered as AppBars: maximized windows,
   dialogs and other windows swinewm does not manage keep clear of the bar,
   as they keep clear of the taskbar.
