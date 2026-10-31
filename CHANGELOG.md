@@ -10,6 +10,8 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- A new kawaii pig default wallpaper, with lipstick and a matching
+  SwineWM wordmark.
 - Next to Explorer, bars are registered as AppBars: maximized windows,
   dialogs and other windows swinewm does not manage keep clear of the bar,
   as they keep clear of the taskbar.
