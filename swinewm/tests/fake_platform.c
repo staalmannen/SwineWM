@@ -215,8 +215,10 @@ bool platform_output_configure(struct swine_output *output,
 }
 
 bool platform_screenshot(const struct swine_box *box, const char *path,
-		bool jpeg, bool clipboard, bool cursor, char **error) {
+		bool jpeg, int jpeg_quality, bool clipboard, bool cursor,
+		char **error) {
 	(void)jpeg;
+	(void)jpeg_quality;
 	(void)cursor;
 	(void)error;
 	fake.screenshot_calls++;

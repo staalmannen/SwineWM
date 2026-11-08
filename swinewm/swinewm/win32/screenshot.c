@@ -27,11 +27,13 @@ char *platform_pictures_dir(void) {
 }
 
 // Encodes bitmap as PNG or JPEG into stream (a file or memory).
-static HRESULT encode(HBITMAP bitmap, IStream *stream, bool jpeg) {
+static HRESULT encode(HBITMAP bitmap, IStream *stream, bool jpeg,
+		int jpeg_quality) {
 	IWICImagingFactory *factory = NULL;
 	IWICBitmap *source = NULL;
 	IWICBitmapEncoder *encoder = NULL;
 	IWICBitmapFrameEncode *frame = NULL;
+	IPropertyBag2 *options = NULL;
 	HRESULT hr = CoCreateInstance(&CLSID_WICImagingFactory, NULL,
 		CLSCTX_INPROC_SERVER, &IID_IWICImagingFactory, (void **)&factory);
 	if (SUCCEEDED(hr)) {
@@ -47,10 +49,24 @@ static HRESULT encode(HBITMAP bitmap, IStream *stream, bool jpeg) {
 			WICBitmapEncoderNoCache);
 	}
 	if (SUCCEEDED(hr)) {
-		hr = IWICBitmapEncoder_CreateNewFrame(encoder, &frame, NULL);
+		hr = IWICBitmapEncoder_CreateNewFrame(encoder, &frame, &options);
 	}
 	if (SUCCEEDED(hr)) {
-		hr = IWICBitmapFrameEncode_Initialize(frame, NULL);
+		if (jpeg) {
+			if (!options) {
+				hr = E_POINTER;
+			} else {
+				PROPBAG2 property = {0};
+				property.pstrName = L"ImageQuality";
+				VARIANT value = {0};
+				value.vt = VT_R4;
+				value.fltVal = jpeg_quality / 100.0f;
+				hr = IPropertyBag2_Write(options, 1, &property, &value);
+			}
+		}
+	}
+	if (SUCCEEDED(hr)) {
+		hr = IWICBitmapFrameEncode_Initialize(frame, options);
 	}
 	if (SUCCEEDED(hr)) {
 		hr = IWICBitmapFrameEncode_WriteSource(frame,
@@ -63,13 +79,15 @@ static HRESULT encode(HBITMAP bitmap, IStream *stream, bool jpeg) {
 		hr = IWICBitmapEncoder_Commit(encoder);
 	}
 	if (frame) IWICBitmapFrameEncode_Release(frame);
+	if (options) IPropertyBag2_Release(options);
 	if (encoder) IWICBitmapEncoder_Release(encoder);
 	if (source) IWICBitmap_Release(source);
 	if (factory) IWICImagingFactory_Release(factory);
 	return hr;
 }
 
-static HRESULT save_file(HBITMAP bitmap, const char *path, bool jpeg) {
+static HRESULT save_file(HBITMAP bitmap, const char *path, bool jpeg,
+		int jpeg_quality) {
 	IWICImagingFactory *factory = NULL;
 	IWICStream *stream = NULL;
 	HRESULT hr = CoCreateInstance(&CLSID_WICImagingFactory, NULL,
@@ -83,7 +101,7 @@ static HRESULT save_file(HBITMAP bitmap, const char *path, bool jpeg) {
 		free(wpath);
 	}
 	if (SUCCEEDED(hr)) {
-		hr = encode(bitmap, (IStream *)stream, jpeg);
+		hr = encode(bitmap, (IStream *)stream, jpeg, jpeg_quality);
 	}
 	if (stream) IWICStream_Release(stream);
 	if (factory) IWICImagingFactory_Release(factory);
@@ -140,7 +158,7 @@ static HGLOBAL png_global(HBITMAP bitmap) {
 		return NULL;
 	}
 	HGLOBAL mem = NULL;
-	if (SUCCEEDED(encode(bitmap, stream, false))) {
+	if (SUCCEEDED(encode(bitmap, stream, false, 80))) {
 		GetHGlobalFromStream(stream, &mem);
 	} else if (SUCCEEDED(GetHGlobalFromStream(stream, &mem))) {
 		GlobalFree(mem);
@@ -199,7 +217,8 @@ bool platform_clipboard_set_text(const char *text) {
 }
 
 bool platform_screenshot(const struct swine_box *box, const char *path,
-		bool jpeg, bool clipboard, bool cursor, char **error) {
+		bool jpeg, int jpeg_quality, bool clipboard, bool cursor,
+		char **error) {
 	HDC screen = GetDC(NULL);
 	HDC dc = CreateCompatibleDC(screen);
 	HBITMAP bitmap = CreateCompatibleBitmap(screen, box->width, box->height);
@@ -232,7 +251,7 @@ bool platform_screenshot(const struct swine_box *box, const char *path,
 		return false;
 	}
 	if (path) {
-		HRESULT hr = save_file(bitmap, path, jpeg);
+		HRESULT hr = save_file(bitmap, path, jpeg, jpeg_quality);
 		if (FAILED(hr)) {
 			*error = win32_error_string((DWORD)hr);
 			ok = false;

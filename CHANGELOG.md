@@ -10,7 +10,8 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
-- `grim -c` and `grimshot --cursor` include the visible pointer in screenshots.
+- `grim -c` and `grimshot --cursor` include the visible pointer in screenshots;
+  `grim -q` controls JPEG fidelity (0–100, default 80).
 - Notifications: Pango markup anywhere in a line (`<b>`, `<i>`, `<u>`,
   `<s>`, `<span weight= style= underline= strikethrough=>`), wrapped
   as one text; before, a line could only be bold or italic as a whole.
