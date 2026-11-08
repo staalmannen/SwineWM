@@ -10,3 +10,6 @@
 [submodule "wofi"]
 	path = wofi
 	url = https://github.com/SimplyCEO/wofi
+[submodule "grim"]
+	path = grim
+	url = https://gitlab.freedesktop.org/emersion/grim.git
