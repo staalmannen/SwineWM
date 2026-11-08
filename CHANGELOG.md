@@ -211,6 +211,8 @@ the MSI and zip with the matching section below as release notes.
   `-m`/`--monitor`, as `swaymsg` does.
 - Newly mapped floating windows are raised above their parent without
   activating them, so owned dialogs do not remain obscured.
+- When an owner window is activated, its last active visible owned popup is
+  kept directly above it without taking focus or becoming desktop-wide topmost.
 - Focus-follows-mouse keeps a visible owned dialog focused rather than
   activating its owner and dropping the dialog behind it.
 - Gap values are range-checked and cannot overflow layout geometry.
