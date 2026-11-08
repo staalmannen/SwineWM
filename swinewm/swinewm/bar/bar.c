@@ -406,14 +406,18 @@ enum bar_position bar_position_n(int index) {
 	return instance_position(bar.bars->items[index]);
 }
 
-int bar_height(void) {
+int bar_height_n(int index) {
 	ensure_loaded();
-	if (!bar.bars->length) {
+	if (index < 0 || index >= bar.bars->length) {
 		return 0;
 	}
-	struct bar_instance *b = bar.bars->items[0];
+	struct bar_instance *b = bar.bars->items[index];
 	enum bar_position pos = instance_position(b);
 	return pos == BAR_LEFT || pos == BAR_RIGHT ? b->width : b->height;
+}
+
+int bar_height(void) {
+	return bar_height_n(0);
 }
 
 bool bar_at_top(void) {

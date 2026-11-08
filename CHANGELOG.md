@@ -13,6 +13,8 @@ the MSI and zip with the matching section below as release notes.
 - `grim -c` and `grimshot --cursor` include the visible pointer in screenshots;
   `grim -q` controls JPEG fidelity (0–100, default 80) and `-s` scales the
   output image.
+- IPC `GET_BAR_CONFIG` lists each configured Waybar bar as `bar-N` and returns
+  its position and height.
 - Notifications: Pango markup anywhere in a line (`<b>`, `<i>`, `<u>`,
   `<s>`, `<span weight= style= underline= strikethrough=>`), wrapped
   as one text; before, a line could only be bold or italic as a whole.

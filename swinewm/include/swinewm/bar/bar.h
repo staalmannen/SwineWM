@@ -89,6 +89,7 @@ enum bar_position {
 };
 int bar_count(void);
 enum bar_position bar_position_n(int index);
+int bar_height_n(int index);
 // Whether the bar has a "tray" module, i.e. should host the tray.
 bool bar_has_tray(void);
 // Height in logical pixels; multiply by output->scale for device pixels.
