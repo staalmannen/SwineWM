@@ -268,6 +268,7 @@ struct capture {
 	char *path;               // NULL: none (clipboard only)
 	bool jpeg;
 	bool clipboard;           // | wl-copy
+	bool cursor;               // grim -c / grimshot --cursor
 	bool copy_geometry;       // slurp | wl-copy: the text, not an image
 	// grimshot --notify: what to say afterwards
 	bool notify;
@@ -337,7 +338,8 @@ static struct cmd_results *run_capture(struct capture *c) {
 		return cmd_results_new(CMD_FAILURE, "Nothing to capture");
 	}
 	char *error = NULL;
-	if (!platform_screenshot(&c->box, c->path, c->jpeg, c->clipboard, &error)) {
+	if (!platform_screenshot(&c->box, c->path, c->jpeg, c->clipboard,
+			c->cursor, &error)) {
 		struct cmd_results *res = cmd_results_new(CMD_FAILURE,
 			"Unable to %s screenshot%s%s: %s", c->path ? "save" : "copy",
 			c->path ? " " : "", c->path ? c->path : "", error ? error : "");
@@ -512,7 +514,7 @@ static struct cmd_results *parse_grim(int argc, char **argv, struct capture *c,
 				strcmp(arg, "-s") == 0) && has_value) {
 			++i;   // quality, compression level, scale: defaults are used
 		} else if (strcmp(arg, "-c") == 0) {
-			// The cursor is never part of the capture.
+			c->cursor = true;
 		} else if (strcmp(arg, "-h") == 0) {
 			return cmd_results_new(CMD_SUCCESS,
 				"Usage: grim [-t png|jpeg] [-g \"x,y wxh\"] [-o output] "
@@ -583,9 +585,10 @@ static struct cmd_results *grimshot(int argc, char **argv, const char *rest,
 		const char *a = argv[i];
 		if (strcmp(a, "-n") == 0 || strcmp(a, "--notify") == 0) {
 			c->notify = true;
-		} else if (strcmp(a, "-c") == 0 || strcmp(a, "--cursor") == 0 ||
-				strcmp(a, "-f") == 0 || strcmp(a, "--freeze") == 0) {
-			// The cursor is never captured; nothing to freeze.
+		} else if (strcmp(a, "-c") == 0 || strcmp(a, "--cursor") == 0) {
+			c->cursor = true;
+		} else if (strcmp(a, "-f") == 0 || strcmp(a, "--freeze") == 0) {
+			// There is no separate frame to freeze on Windows.
 		} else if (strcmp(a, "-w") == 0 || strcmp(a, "--wait") == 0) {
 			if (i + 1 < argc && isdigit((unsigned char)argv[i + 1][0])) {
 				i++;

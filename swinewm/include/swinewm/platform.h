@@ -117,9 +117,10 @@ char *platform_expand_path(const char *path);
 char *platform_pictures_dir(void);
 // Saves the screen area box (desktop coordinates) as a PNG or JPEG file
 // (path NULL: none), and with clipboard also puts it on the clipboard.
+// cursor draws the current visible Windows pointer into the image.
 // On failure *error may receive a message (caller frees).
 bool platform_screenshot(const struct swine_box *box, const char *path,
-		bool jpeg, bool clipboard, char **error);
+		bool jpeg, bool clipboard, bool cursor, char **error);
 // Puts text on the clipboard ("" empties it).
 bool platform_clipboard_set_text(const char *text);
 // Shows slurp's selection over every output; grim_slurp_done (grim.h)

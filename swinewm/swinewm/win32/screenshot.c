@@ -199,7 +199,7 @@ bool platform_clipboard_set_text(const char *text) {
 }
 
 bool platform_screenshot(const struct swine_box *box, const char *path,
-		bool jpeg, bool clipboard, char **error) {
+		bool jpeg, bool clipboard, bool cursor, char **error) {
 	HDC screen = GetDC(NULL);
 	HDC dc = CreateCompatibleDC(screen);
 	HBITMAP bitmap = CreateCompatibleBitmap(screen, box->width, box->height);
@@ -207,6 +207,22 @@ bool platform_screenshot(const struct swine_box *box, const char *path,
 	// CAPTUREBLT includes layered windows (notification popups).
 	bool ok = BitBlt(dc, 0, 0, box->width, box->height, screen, box->x,
 		box->y, SRCCOPY | CAPTUREBLT) != FALSE;
+	if (ok && cursor) {
+		CURSORINFO ci = {.cbSize = sizeof(ci)};
+		if (GetCursorInfo(&ci) && (ci.flags & CURSOR_SHOWING) && ci.hCursor) {
+			ICONINFO ii;
+			if (GetIconInfo(ci.hCursor, &ii)) {
+				int x = ci.ptScreenPos.x - box->x - (int)ii.xHotspot;
+				int y = ci.ptScreenPos.y - box->y - (int)ii.yHotspot;
+				if (!DrawIconEx(dc, x, y, ci.hCursor, 0, 0, 0, NULL,
+						DI_NORMAL)) {
+					ok = false;
+				}
+				if (ii.hbmColor) DeleteObject(ii.hbmColor);
+				if (ii.hbmMask) DeleteObject(ii.hbmMask);
+			}
+		}
+	}
 	SelectObject(dc, old);
 	DeleteDC(dc);
 	ReleaseDC(NULL, screen);
