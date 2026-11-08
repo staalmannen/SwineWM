@@ -172,7 +172,7 @@ area to the clipboard).
 | --- | --- | --- |
 | `grim [file]` | ✅ | Whole desktop; default file `<date>_grim.png` in `%GRIM_DEFAULT_DIR%` or the Pictures folder |
 | `-o <output>`, `-g "x,y wxh"`, `-t png\|jpeg` | ✅ | Desktop coordinates in physical pixels |
-| `-c`, `-q <0–100>`, `-l`, `-s` | 🟡 | `-c` includes the visible cursor; JPEG `-q` controls fidelity (default 80); PNG compression level and output scale use defaults |
+| `-c`, `-q <0–100>`, `-l`, `-s <factor>` | 🟡 | `-c` includes the visible cursor; JPEG `-q` controls fidelity (default 80); `-s` resamples the output (default 1.0); PNG compression level uses the default |
 | `grim -g "$(slurp [options])"`, `slurp \| grim -g - …` | ✅ | slurp draws its selection over every output as slurp does: drag an area, click a predefined rectangle, Space moves the selection, Shift keeps it square, Escape (or the right button) cancels. Options `-d -b -c -s -B -w -F -f -p -o -r -a -x`. The capture, and the rest of an `&&` chain, happen once the selection is made; nothing happens if it is cancelled |
 | `grim - \| wl-copy`, `slurp \| wl-copy`, `wl-copy <text>`, `wl-copy --clear` | ✅ | The clipboard: images as a bitmap and as PNG, text as text. `-t`/`--type` is accepted |
 | `grimshot [--notify] [--cursor] copy\|save\|savecopy active\|screen\|output\|area\|window\|anything [file]`, `check`, `usage` | ✅ | sway-contrib's grimshot, with its notifications (the saved image as their icon). Files go to `%XDG_SCREENSHOTS_DIR%` or the Pictures folder, named by `%GRIMSHOT_FILENAME_FORMAT%` (strftime) or `2026-10-29T12-34-56` (no colons, which Windows file names cannot have). `--wait` and `--freeze` have no effect |

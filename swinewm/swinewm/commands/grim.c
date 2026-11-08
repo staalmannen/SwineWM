@@ -17,6 +17,7 @@
 // grimshot's logic follows sway-contrib's grimshot script (MIT).
 #include <ctype.h>
 #include <errno.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -270,6 +271,7 @@ struct capture {
 	bool jpeg;
 	int jpeg_quality;
 	bool jpeg_quality_set;
+	double scale;
 	bool clipboard;           // | wl-copy
 	bool cursor;               // grim -c / grimshot --cursor
 	bool copy_geometry;       // slurp | wl-copy: the text, not an image
@@ -301,6 +303,7 @@ static struct capture *capture_create(void) {
 	struct capture *c = calloc(1, sizeof(*c));
 	c->box = desktop_box();
 	c->jpeg_quality = 80;
+	c->scale = 1.0;
 	slurp_defaults(&c->slurp);
 	return c;
 }
@@ -343,7 +346,7 @@ static struct cmd_results *run_capture(struct capture *c) {
 	}
 	char *error = NULL;
 	if (!platform_screenshot(&c->box, c->path, c->jpeg, c->jpeg_quality,
-			c->clipboard, c->cursor, &error)) {
+			c->scale, c->clipboard, c->cursor, &error)) {
 		struct cmd_results *res = cmd_results_new(CMD_FAILURE,
 			"Unable to %s screenshot%s%s: %s", c->path ? "save" : "copy",
 			c->path ? " " : "", c->path ? c->path : "", error ? error : "");
@@ -525,14 +528,24 @@ static struct cmd_results *parse_grim(int argc, char **argv, struct capture *c,
 			}
 			c->jpeg_quality = (int)quality;
 			c->jpeg_quality_set = true;
-		} else if ((strcmp(arg, "-l") == 0 || strcmp(arg, "-s") == 0) &&
-				has_value) {
-			++i;	   // PNG compression level and output scale use defaults
+		} else if (strcmp(arg, "-s") == 0 && has_value) {
+			const char *value = argv[++i];
+			char *end = NULL;
+			errno = 0;
+			c->scale = strtod(value, &end);
+			if (errno || !*value || *end || !isfinite(c->scale) ||
+					c->scale <= 0.0) {
+				return cmd_results_new(CMD_INVALID,
+					"grim: scale must be a finite number greater than zero");
+			}
+		} else if (strcmp(arg, "-l") == 0 && has_value) {
+			++i;	   // PNG compression level uses the default
 		} else if (strcmp(arg, "-c") == 0) {
 			c->cursor = true;
 		} else if (strcmp(arg, "-h") == 0) {
 			return cmd_results_new(CMD_SUCCESS,
-				"Usage: grim [-t png|jpeg] [-q 0-100] [-g \"x,y wxh\"] [-o output] "
+				"Usage: grim [-t png|jpeg] [-q 0-100] [-s factor] "
+				"[-g \"x,y wxh\"] [-o output] "
 				"[output-file]");
 		} else if (arg[0] == '-' && arg[1] != '\0') {
 			return cmd_results_new(CMD_INVALID, "Unsupported grim option '%s'",

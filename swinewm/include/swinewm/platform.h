@@ -117,10 +117,11 @@ char *platform_expand_path(const char *path);
 char *platform_pictures_dir(void);
 // Saves the screen area box (desktop coordinates) as a PNG or JPEG file
 // (path NULL: none), and with clipboard also puts it on the clipboard.
-// jpeg_quality sets JPEG fidelity (0-100); cursor draws the visible pointer.
+// jpeg_quality sets JPEG fidelity (0-100); scale resizes the image; cursor
+// draws the visible pointer.
 // On failure *error may receive a message (caller frees).
 bool platform_screenshot(const struct swine_box *box, const char *path,
-		bool jpeg, int jpeg_quality, bool clipboard, bool cursor,
+		bool jpeg, int jpeg_quality, double scale, bool clipboard, bool cursor,
 		char **error);
 // Puts text on the clipboard ("" empties it).
 bool platform_clipboard_set_text(const char *text);
