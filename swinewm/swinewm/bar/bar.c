@@ -934,7 +934,7 @@ static struct swine_regex *window_rewrite_regex(const char *rule,
 	}
 	char *pattern = swine_strndup(start, (size_t)(end - start));
 	char *error = NULL;
-	struct swine_regex *regex = swine_regex_compile(pattern, false, &error);
+	struct swine_regex *regex = swine_regex_compile(pattern, true, &error);
 	free(pattern);
 	free(error);
 	return regex;
@@ -966,6 +966,12 @@ static bool window_rewrite_matches(const char *rule,
 	return matches;
 }
 
+static int window_rewrite_priority(const char *rule) {
+	bool has_class = strstr(rule, "class<") != NULL;
+	bool has_title = strstr(rule, "title<") != NULL;
+	return has_class && has_title ? 3 : has_title ? 2 : has_class ? 1 : 0;
+}
+
 static void append_workspace_window(struct swine_container *con, void *data) {
 	struct workspace_windows_ctx *ctx = data;
 	if (!con->view || !con->view->title ||
@@ -978,13 +984,15 @@ static void append_workspace_window(struct swine_container *con, void *data) {
 		return;
 	}
 	const char *rewrite = NULL;
+	int best_priority = -1;
 	for (int i = 0; i < rules->keys->length; ++i) {
 		const char *rule = rules->keys->items[i];
 		struct json_value *value = rules->items->items[i];
-		if (value->type == JSON_STRING &&
+		int priority = window_rewrite_priority(rule);
+		if (value->type == JSON_STRING && priority > best_priority &&
 				window_rewrite_matches(rule, con->view)) {
 			rewrite = value->string;
-			break;
+			best_priority = priority;
 		}
 	}
 	if (!rewrite) {
