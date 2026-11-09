@@ -917,6 +917,19 @@ static bool workspace_ignored(struct bar_module *m, const char *name) {
 	return false;
 }
 
+static char *workspace_click_command(const char *name,
+		bool disable_auto_back_and_forth, bool no_switch_output) {
+	char *focus = disable_auto_back_and_forth ?
+		format_str("workspace --no-auto-back-and-forth \"%s\"", name) :
+		format_str("workspace \"%s\"", name);
+	char *command = no_switch_output ? format_str(
+		"[workspace=\"^%s$\"] move workspace to output current; %s",
+		name, focus) :
+		swine_strdup(focus);
+	free(focus);
+	return command;
+}
+
 static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 		int index) {
 	struct bar_module_view *view = new_view(m, index);
@@ -931,6 +944,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 	bool disable_click = json_get_bool(m->cfg, "disable-click", false);
 	bool disable_auto_back_and_forth = json_get_bool(m->cfg,
 		"disable-auto-back-and-forth", false);
+	bool no_switch_output = json_get_bool(m->cfg, "no-switch-output", false);
 	bool current_only = json_get_bool(m->cfg, "current-only", false);
 	const char *format = json_get_string(m->cfg, "format", "{name}");
 	struct swine_workspace *focused_ws = seat_get_focused_workspace();
@@ -976,10 +990,9 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			struct css_element el = {"button", NULL, classes, &box_el};
 			compute_item_style(&el, &view->style, item);
 			if (!disable_click) {
-				item->on_click = disable_auto_back_and_forth ?
-					format_str("workspace --no-auto-back-and-forth \"%s\"",
-						ws->name) :
-					format_str("workspace \"%s\"", ws->name);
+				item->on_click = workspace_click_command(ws->name,
+					disable_auto_back_and_forth,
+					no_switch_output);
 			}
 			if (!disable_scroll) {
 				item->on_scroll_up = swine_strdup(all_outputs ?
@@ -1050,9 +1063,9 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			struct css_element el = {"button", NULL, classes, &box_el};
 			compute_item_style(&el, &view->style, item);
 			if (!disable_click) {
-				item->on_click = disable_auto_back_and_forth ?
-					format_str("workspace --no-auto-back-and-forth \"%s\"",
-						name) : format_str("workspace \"%s\"", name);
+				item->on_click = workspace_click_command(name,
+					disable_auto_back_and_forth,
+					no_switch_output);
 			}
 			if (!disable_scroll) {
 				item->on_scroll_up = swine_strdup(all_outputs ?
