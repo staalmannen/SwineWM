@@ -1155,6 +1155,16 @@ static char *workspace_click_command(const char *name,
 	return command;
 }
 
+static char *persistent_workspace_click_command(const char *name,
+		const char *output) {
+	char *focus = format_str("workspace --no-auto-back-and-forth \"%s\"",
+		name);
+	char *command = format_str("%s; move workspace to output \"%s\"; %s",
+		focus, output, focus);
+	free(focus);
+	return command;
+}
+
 static bool workspace_scroll_at_edge(struct swine_workspace *current,
 		bool all_outputs, bool up) {
 	if (!current) {
@@ -1404,9 +1414,8 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			struct css_element el = {"button", NULL, classes, &box_el};
 			compute_item_style(&el, &view->style, item);
 			if (!disable_click) {
-				item->on_click = workspace_click_command(name,
-					disable_auto_back_and_forth,
-					no_switch_output);
+				item->on_click = persistent_workspace_click_command(name,
+					ctx->output->name);
 			}
 			if (!disable_scroll) {
 				item->on_scroll_up = workspace_scroll_command(focused_ws,
