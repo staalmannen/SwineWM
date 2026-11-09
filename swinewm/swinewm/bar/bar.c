@@ -1061,6 +1061,14 @@ struct workspace_bar_ref {
 	bool alphabetical;
 };
 
+struct persistent_bar_ref {
+	const char *name;
+	struct bar_item *item;
+	int custom_priority;
+	int original_order;
+	bool alphabetical;
+};
+
 static const char *workspace_trim_name(const char *name) {
 	const char *colon = strchr(name, ':');
 	return colon ? colon + 1 : name;
@@ -1101,6 +1109,22 @@ static int workspace_bar_sort_cmp(const void *a, const void *b) {
 	}
 	if (left->alphabetical && right->alphabetical) {
 		return strcmp(left->workspace->name, right->workspace->name);
+	}
+	return left->original_order - right->original_order;
+}
+
+static int persistent_bar_sort_cmp(const void *a, const void *b) {
+	const struct persistent_bar_ref *left = *(void *const *)a;
+	const struct persistent_bar_ref *right = *(void *const *)b;
+	if (left->custom_priority >= 0 || right->custom_priority >= 0) {
+		if (left->custom_priority < 0) return 1;
+		if (right->custom_priority < 0) return -1;
+		if (left->custom_priority != right->custom_priority) {
+			return left->custom_priority - right->custom_priority;
+		}
+	}
+	if (left->alphabetical && right->alphabetical) {
+		return strcmp(left->name, right->name);
 	}
 	return left->original_order - right->original_order;
 }
@@ -1286,6 +1310,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 	struct json_value *persistent = json_object_get(m->cfg,
 		"persistent-workspaces");
 	if (persistent && persistent->type == JSON_OBJECT) {
+		list_t *placeholders = create_list();
 		for (int p = 0; p < persistent->keys->length; ++p) {
 			const char *name = persistent->keys->items[p];
 			if (current_only || workspace_ignored(m, name) ||
@@ -1368,8 +1393,24 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 					all_outputs, false, warp_on_scroll, reverse_scroll,
 					disable_scroll_wraparound);
 			}
-			list_add(view->items, item);
+			struct persistent_bar_ref *ref = calloc(1, sizeof(*ref));
+			ref->name = name;
+			ref->item = item;
+			ref->custom_priority = workspace_custom_priority(m->cfg, name);
+			ref->original_order = placeholders->length;
+			ref->alphabetical = alphabetical_sort;
+			list_add(placeholders, ref);
 		}
+		if (alphabetical_sort || json_object_get(m->cfg, "custom-sort")) {
+			qsort(placeholders->items, (size_t)placeholders->length,
+				sizeof(void *), persistent_bar_sort_cmp);
+		}
+		for (int i = 0; i < placeholders->length; ++i) {
+			struct persistent_bar_ref *ref = placeholders->items[i];
+			list_add(view->items, ref->item);
+			free(ref);
+		}
+		list_free(placeholders);
 	}
 	list_free(outputs);
 	list_add(ctx->model->modules, view);
