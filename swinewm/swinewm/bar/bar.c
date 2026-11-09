@@ -869,26 +869,53 @@ static const char *module_format(struct bar_module *m, const char *state,
 	return json_get_string(m->cfg, "format", fallback);
 }
 
-static const char *workspace_icon(struct bar_module *m,
-		struct swine_workspace *ws, bool focused, bool visible) {
+static const char *workspace_icon(struct bar_module *m, const char *name,
+		bool urgent, bool focused, bool visible, bool persistent) {
 	struct json_value *icons = json_object_get(m->cfg, "format-icons");
 	if (!icons || icons->type != JSON_OBJECT) {
-		return ws->name;
+		return name;
 	}
 	const char *icon;
-	if (ws->urgent && (icon = json_get_string(icons, "urgent", NULL))) {
+	struct json_value *high_priority = json_object_get(icons,
+		"high-priority-named");
+	const char *colon = strchr(name, ':');
+	const char *trimmed = colon ? colon + 1 : name;
+	if (high_priority && high_priority->type == JSON_ARRAY) {
+		for (int i = 0; i < high_priority->items->length; ++i) {
+			struct json_value *entry = high_priority->items->items[i];
+			const char *entry_colon = entry->type == JSON_STRING ?
+				strchr(entry->string, ':') : NULL;
+			const char *entry_trimmed = entry_colon ? entry_colon + 1 :
+				entry->type == JSON_STRING ? entry->string : "";
+			if (entry->type == JSON_STRING &&
+					(strcmp(entry->string, name) == 0 ||
+					strcmp(entry->string, trimmed) == 0 ||
+					strcmp(entry_trimmed, trimmed) == 0)) {
+				icon = json_get_string(icons, name, NULL);
+				if (!icon) icon = json_get_string(icons, trimmed, NULL);
+				if (icon) return icon;
+			}
+		}
+	}
+	if (urgent && (icon = json_get_string(icons, "urgent", NULL))) {
 		return icon;
 	}
 	if (focused && (icon = json_get_string(icons, "focused", NULL))) {
 		return icon;
 	}
-	if ((icon = json_get_string(icons, ws->name, NULL))) {
+	if (persistent && (icon = json_get_string(icons, "persistent", NULL))) {
+		return icon;
+	}
+	if ((icon = json_get_string(icons, name, NULL))) {
+		return icon;
+	}
+	if ((icon = json_get_string(icons, trimmed, NULL))) {
 		return icon;
 	}
 	if (visible && (icon = json_get_string(icons, "visible", NULL))) {
 		return icon;
 	}
-	return json_get_string(icons, "default", ws->name);
+	return json_get_string(icons, "default", name);
 }
 
 static bool workspace_ignored(struct bar_module *m, const char *name) {
@@ -1101,7 +1128,8 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 				{"name", false, ws->name, 0},
 				{"value", false, ws->name, 0},
 				{"index", false, num >= 0 ? num_text : "", 0},
-				{"icon", false, workspace_icon(m, ws, focused, visible), 0},
+				{"icon", false, workspace_icon(m, ws->name, ws->urgent,
+					focused, visible, false), 0},
 				{"output", false, output->name, 0},
 			};
 			char *text = format_waybar(ws_format, args, 5, &ctx->tm);
@@ -1170,9 +1198,8 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			snprintf(num_text, sizeof(num_text), "%d", num);
 			const char *ws_format = num < 0 ? json_get_string(m->cfg,
 				"format-for-negative-index", format) : format;
-			struct json_value *icons = json_object_get(m->cfg, "format-icons");
-			const char *icon = json_get_string(icons, name,
-				json_get_string(icons, "default", name));
+			const char *icon = workspace_icon(m, name, false, false,
+				false, true);
 			struct fmt_arg args[] = {
 				{"name", false, name, 0},
 				{"value", false, name, 0},
