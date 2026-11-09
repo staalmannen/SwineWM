@@ -982,10 +982,36 @@ static char *workspace_click_command(const char *name,
 	return command;
 }
 
-static char *workspace_scroll_command(bool all_outputs, bool up,
-		bool warp_on_scroll, bool reverse_scroll) {
+static bool workspace_scroll_at_edge(struct swine_workspace *current,
+		bool all_outputs, bool up) {
+	if (!current) {
+		return true;
+	}
+	list_t *workspaces = create_list();
+	if (all_outputs) {
+		for (int i = 0; i < root->outputs->length; ++i) {
+			struct swine_output *output = root->outputs->items[i];
+			list_cat(workspaces, output->workspaces);
+		}
+	} else if (current->output) {
+		list_cat(workspaces, current->output->workspaces);
+	}
+	int index = list_find(workspaces, current);
+	bool at_edge = index == -1 || (up ? index == 0 :
+		index == workspaces->length - 1);
+	list_free(workspaces);
+	return at_edge;
+}
+
+static char *workspace_scroll_command(struct swine_workspace *current,
+		bool all_outputs, bool up, bool warp_on_scroll,
+		bool reverse_scroll, bool disable_wraparound) {
 	if (reverse_scroll) {
 		up = !up;
+	}
+	if (disable_wraparound && workspace_scroll_at_edge(current,
+			all_outputs, up)) {
+		return NULL;
 	}
 	char *workspace = swine_strdup(all_outputs ?
 		(up ? "workspace prev" : "workspace next") :
@@ -1018,6 +1044,8 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 	bool alphabetical_sort = json_get_bool(m->cfg, "alphabetical_sort", false);
 	bool warp_on_scroll = json_get_bool(m->cfg, "warp-on-scroll", true);
 	bool reverse_scroll = json_get_bool(m->cfg, "reverse-scroll", false);
+	bool disable_scroll_wraparound = json_get_bool(m->cfg,
+		"disable-scroll-wraparound", false);
 	const char *format = json_get_string(m->cfg, "format", "{name}");
 	struct swine_workspace *focused_ws = seat_get_focused_workspace();
 
@@ -1085,10 +1113,12 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 					no_switch_output);
 			}
 			if (!disable_scroll) {
-				item->on_scroll_up = workspace_scroll_command(all_outputs, true,
-					warp_on_scroll, reverse_scroll);
-				item->on_scroll_down = workspace_scroll_command(all_outputs, false,
-					warp_on_scroll, reverse_scroll);
+				item->on_scroll_up = workspace_scroll_command(focused_ws,
+					all_outputs, true, warp_on_scroll, reverse_scroll,
+					disable_scroll_wraparound);
+				item->on_scroll_down = workspace_scroll_command(focused_ws,
+					all_outputs, false, warp_on_scroll, reverse_scroll,
+					disable_scroll_wraparound);
 			}
 			list_add(view->items, item);
 	}
@@ -1158,10 +1188,12 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 					no_switch_output);
 			}
 			if (!disable_scroll) {
-				item->on_scroll_up = workspace_scroll_command(all_outputs, true,
-					warp_on_scroll, reverse_scroll);
-				item->on_scroll_down = workspace_scroll_command(all_outputs, false,
-					warp_on_scroll, reverse_scroll);
+				item->on_scroll_up = workspace_scroll_command(focused_ws,
+					all_outputs, true, warp_on_scroll, reverse_scroll,
+					disable_scroll_wraparound);
+				item->on_scroll_down = workspace_scroll_command(focused_ws,
+					all_outputs, false, warp_on_scroll, reverse_scroll,
+					disable_scroll_wraparound);
 			}
 			list_add(view->items, item);
 		}
