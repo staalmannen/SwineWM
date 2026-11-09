@@ -982,6 +982,20 @@ static char *workspace_click_command(const char *name,
 	return command;
 }
 
+static char *workspace_scroll_command(bool all_outputs, bool up,
+		bool warp_on_scroll) {
+	char *workspace = swine_strdup(all_outputs ?
+		(up ? "workspace prev" : "workspace next") :
+		(up ? "workspace prev_on_output" : "workspace next_on_output"));
+	if (warp_on_scroll) {
+		return workspace;
+	}
+	char *command = format_str("mouse_warping none; %s; mouse_warping container",
+		workspace);
+	free(workspace);
+	return command;
+}
+
 static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 		int index) {
 	struct bar_module_view *view = new_view(m, index);
@@ -999,6 +1013,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 	bool no_switch_output = json_get_bool(m->cfg, "no-switch-output", false);
 	bool current_only = json_get_bool(m->cfg, "current-only", false);
 	bool alphabetical_sort = json_get_bool(m->cfg, "alphabetical_sort", false);
+	bool warp_on_scroll = json_get_bool(m->cfg, "warp-on-scroll", true);
 	const char *format = json_get_string(m->cfg, "format", "{name}");
 	struct swine_workspace *focused_ws = seat_get_focused_workspace();
 
@@ -1066,10 +1081,10 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 					no_switch_output);
 			}
 			if (!disable_scroll) {
-				item->on_scroll_up = swine_strdup(all_outputs ?
-					"workspace prev" : "workspace prev_on_output");
-				item->on_scroll_down = swine_strdup(all_outputs ?
-					"workspace next" : "workspace next_on_output");
+				item->on_scroll_up = workspace_scroll_command(all_outputs, true,
+					warp_on_scroll);
+				item->on_scroll_down = workspace_scroll_command(all_outputs, false,
+					warp_on_scroll);
 			}
 			list_add(view->items, item);
 	}
@@ -1139,10 +1154,10 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 					no_switch_output);
 			}
 			if (!disable_scroll) {
-				item->on_scroll_up = swine_strdup(all_outputs ?
-					"workspace prev" : "workspace prev_on_output");
-				item->on_scroll_down = swine_strdup(all_outputs ?
-					"workspace next" : "workspace next_on_output");
+				item->on_scroll_up = workspace_scroll_command(all_outputs, true,
+					warp_on_scroll);
+				item->on_scroll_down = workspace_scroll_command(all_outputs, false,
+					warp_on_scroll);
 			}
 			list_add(view->items, item);
 		}
