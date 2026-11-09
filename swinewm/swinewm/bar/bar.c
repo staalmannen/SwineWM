@@ -2384,6 +2384,59 @@ static char *month_calendar(const struct tm *tm, int first_day) {
 	return out;
 }
 
+static char *year_calendar(const struct tm *tm, int first_day, int columns) {
+	if (columns != 1 && columns != 2 && columns != 3 && columns != 4 &&
+			columns != 6 && columns != 12) {
+		columns = 3;
+	}
+	char cells[12][8][24] = {{{0}}};
+	for (int month = 0; month < 12; ++month) {
+		struct tm month_tm = *tm;
+		month_tm.tm_mon = month;
+		month_tm.tm_mday = 1;
+		month_tm.tm_hour = 12;
+		month_tm.tm_min = 0;
+		month_tm.tm_sec = 0;
+		month_tm.tm_isdst = -1;
+		mktime(&month_tm);
+		strftime(cells[month][0], sizeof(cells[month][0]), "%B", &month_tm);
+		char *calendar = month_calendar(&month_tm, first_day);
+		char *line = calendar;
+		for (int row = 1; row < 8 && line; ++row) {
+			char *end = strchr(line, '\n');
+			if (end) {
+				*end = '\0';
+			}
+			snprintf(cells[month][row], sizeof(cells[month][row]), "%s", line);
+			line = end ? end + 1 : NULL;
+		}
+		free(calendar);
+	}
+	char *out = calloc(4096, 1);
+	char *write = out;
+	for (int group = 0; group < 12; group += columns) {
+		for (int row = 0; row < 8; ++row) {
+			for (int col = 0; col < columns; ++col) {
+				int month = group + col;
+				const char *cell = month < 12 ? cells[month][row] : "";
+				size_t len = strlen(cell);
+				memcpy(write, cell, len);
+				write += len;
+				size_t padding = len < 21 ? 21 - len : 0;
+				memset(write, ' ', padding);
+				write += padding;
+				if (col + 1 < columns) {
+					*write++ = ' ';
+					*write++ = ' ';
+				}
+			}
+			*write++ = '\n';
+		}
+	}
+	*write = '\0';
+	return out;
+}
+
 static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		int index) {
 	switch (m->kind) {
@@ -2478,7 +2531,10 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 				"calendar");
 			int first_day = (int)json_get_number(calendar_cfg,
 				"first-day-of-week", 1);
-			char *calendar = month_calendar(&ctx->tm, first_day);
+			const char *mode = json_get_string(calendar_cfg, "mode", "month");
+			char *calendar = strcmp(mode, "year") == 0 ? year_calendar(
+				&ctx->tm, first_day, (int)json_get_number(calendar_cfg,
+					"mode-mon-col", 1)) : month_calendar(&ctx->tm, first_day);
 			struct fmt_arg args[] = {{"calendar", false, calendar, 0}};
 			set_tooltip(ctx, m, item, NULL, NULL, args, 1, NULL);
 			free(calendar);
