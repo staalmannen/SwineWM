@@ -440,6 +440,29 @@ static struct hit *hit_test(struct bar_window *bw, int x, int y) {
 	return NULL;
 }
 
+static const char *workspace_bar_scroll(struct bar_window *bw, bool up,
+		int *module_index) {
+	if (!bw || !bw->model) {
+		return NULL;
+	}
+	for (int i = 0; i < bw->model->modules->length; ++i) {
+		struct bar_module_view *module = bw->model->modules->items[i];
+		if (!module->scroll_entire_bar) {
+			continue;
+		}
+		for (int j = 0; j < module->items->length; ++j) {
+			struct bar_item *item = module->items->items[j];
+			const char *command = up ? item->on_scroll_up :
+				item->on_scroll_down;
+			if (command) {
+				*module_index = module->module_index;
+				return command;
+			}
+		}
+	}
+	return NULL;
+}
+
 // --- tooltips ------------------------------------------------------------
 // One small window of our own, styled by "tooltip" and "tooltip label" in
 // style.css, shown after the hover delay as GTK shows Waybar's tooltips.
@@ -746,6 +769,14 @@ static LRESULT CALLBACK bar_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 			bar_module_event(index);
 		} else if (index >= 0 && bar_module_scroll(index, delta > 0)) {
 			win32_bar_refresh();
+		} else {
+			command = workspace_bar_scroll(bw, delta > 0, &index);
+			if (command) {
+				char *copy = swine_strdup(command);
+				win32_run_command(copy);
+				free(copy);
+				bar_module_event(index);
+			}
 		}
 		return 0;
 	}

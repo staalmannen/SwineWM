@@ -1029,6 +1029,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 		int index) {
 	struct bar_module_view *view = new_view(m, index);
 	view->is_box = true;
+	view->scroll_entire_bar = json_get_bool(m->cfg, "enable-bar-scroll", false);
 	const char *box_classes[2] = {m->css_class, NULL};
 	struct css_element box_el = {"box", "workspaces",
 		m->css_class ? box_classes : NULL, &ctx->window_el};

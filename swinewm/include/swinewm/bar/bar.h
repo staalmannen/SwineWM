@@ -48,6 +48,8 @@ struct bar_module_view {
 	// true: items are buttons inside a box styled by `style` (workspaces).
 	// false: one label that carries its own style (style == item style).
 	bool is_box;
+	// sway/workspaces can receive wheel input over the whole bar.
+	bool scroll_entire_bar;
 	int item_spacing;        // px between items ("spacing" of the tray)
 	list_t *items;           // struct bar_item *
 };
