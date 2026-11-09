@@ -1111,15 +1111,26 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 				continue;
 			}
 			bool visible = workspace_is_visible(ws);
-			const char *classes[5];
+			int num = workspace_number(ws->name);
+			const char *classes[8];
 			int n = 0;
 			if (focused) classes[n++] = "focused";
 			if (visible) classes[n++] = "visible";
 			if (ws->urgent) classes[n++] = "urgent";
 			if (output == ctx->output) classes[n++] = "current_output";
+			if (!ws->tiling->length && !ws->floating->length) {
+				classes[n++] = "empty";
+			}
+			char index_class[32];
+			snprintf(index_class, sizeof(index_class), "workspace-index-%d", num);
+			classes[n++] = index_class;
+			const char *output_class = json_get_string(json_object_get(m->cfg,
+				"output-classes"), output->name, NULL);
+			if (output_class && *output_class) {
+				classes[n++] = output_class;
+			}
 			classes[n] = NULL;
 
-			int num = workspace_number(ws->name);
 			char num_text[16];
 			snprintf(num_text, sizeof(num_text), "%d", num);
 			const char *ws_format = num < 0 ? json_get_string(m->cfg,
@@ -1200,6 +1211,10 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 				"format-for-negative-index", format) : format;
 			const char *icon = workspace_icon(m, name, false, false,
 				false, true);
+			char index_class[32];
+			snprintf(index_class, sizeof(index_class), "workspace-index-%d", num);
+			const char *output_class = json_get_string(json_object_get(m->cfg,
+				"output-classes"), ctx->output->name, NULL);
 			struct fmt_arg args[] = {
 				{"name", false, name, 0},
 				{"value", false, name, 0},
@@ -1211,7 +1226,14 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			struct bar_item *item = calloc(1, sizeof(*item));
 			item->text = markup_strip(text);
 			free(text);
-			const char *classes[] = {"current_output", NULL};
+			const char *classes[6];
+			int n = 0;
+			classes[n++] = "persistent";
+			classes[n++] = "empty";
+			classes[n++] = "current_output";
+			classes[n++] = index_class;
+			if (output_class && *output_class) classes[n++] = output_class;
+			classes[n] = NULL;
 			struct css_element el = {"button", NULL, classes, &box_el};
 			compute_item_style(&el, &view->style, item);
 			if (!disable_click) {
