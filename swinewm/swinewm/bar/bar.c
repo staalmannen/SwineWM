@@ -920,12 +920,53 @@ static bool workspace_ignored(struct bar_module *m, const char *name) {
 struct workspace_bar_ref {
 	struct swine_workspace *workspace;
 	struct swine_output *output;
+	int custom_priority;
+	int original_order;
+	bool alphabetical;
 };
 
-static int workspace_bar_alpha_cmp(const void *a, const void *b) {
+static const char *workspace_trim_name(const char *name) {
+	const char *colon = strchr(name, ':');
+	return colon ? colon + 1 : name;
+}
+
+static int workspace_custom_priority(struct json_value *cfg,
+		const char *name) {
+	struct json_value *custom = json_object_get(cfg, "custom-sort");
+	if (!custom || custom->type != JSON_ARRAY) {
+		return -1;
+	}
+	const char *trimmed = workspace_trim_name(name);
+	for (int i = 0; i < custom->items->length; ++i) {
+		struct json_value *entry = custom->items->items[i];
+		if (entry->type != JSON_STRING) {
+			continue;
+		}
+		const char *entry_trimmed = workspace_trim_name(entry->string);
+		if (strcmp(name, entry->string) == 0 ||
+				strcmp(name, entry_trimmed) == 0 ||
+				strcmp(trimmed, entry->string) == 0 ||
+				strcmp(trimmed, entry_trimmed) == 0) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+static int workspace_bar_sort_cmp(const void *a, const void *b) {
 	const struct workspace_bar_ref *left = *(void *const *)a;
 	const struct workspace_bar_ref *right = *(void *const *)b;
-	return strcmp(left->workspace->name, right->workspace->name);
+	if (left->custom_priority >= 0 || right->custom_priority >= 0) {
+		if (left->custom_priority < 0) return 1;
+		if (right->custom_priority < 0) return -1;
+		if (left->custom_priority != right->custom_priority) {
+			return left->custom_priority - right->custom_priority;
+		}
+	}
+	if (left->alphabetical && right->alphabetical) {
+		return strcmp(left->workspace->name, right->workspace->name);
+	}
+	return left->original_order - right->original_order;
 }
 
 static char *workspace_click_command(const char *name,
@@ -974,12 +1015,16 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			struct workspace_bar_ref *ref = calloc(1, sizeof(*ref));
 			ref->workspace = output->workspaces->items[i];
 			ref->output = output;
+			ref->custom_priority = workspace_custom_priority(m->cfg,
+				ref->workspace->name);
+			ref->original_order = workspaces->length;
+			ref->alphabetical = alphabetical_sort;
 			list_add(workspaces, ref);
 		}
 	}
-	if (alphabetical_sort) {
+	if (alphabetical_sort || json_object_get(m->cfg, "custom-sort")) {
 		qsort(workspaces->items, (size_t)workspaces->length,
-			sizeof(void *), workspace_bar_alpha_cmp);
+			sizeof(void *), workspace_bar_sort_cmp);
 	}
 	for (int i = 0; i < workspaces->length; ++i) {
 		struct workspace_bar_ref *ref = workspaces->items[i];
