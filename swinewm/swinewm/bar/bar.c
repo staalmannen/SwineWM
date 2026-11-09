@@ -917,6 +917,17 @@ static bool workspace_ignored(struct bar_module *m, const char *name) {
 	return false;
 }
 
+struct workspace_bar_ref {
+	struct swine_workspace *workspace;
+	struct swine_output *output;
+};
+
+static int workspace_bar_alpha_cmp(const void *a, const void *b) {
+	const struct workspace_bar_ref *left = *(void *const *)a;
+	const struct workspace_bar_ref *right = *(void *const *)b;
+	return strcmp(left->workspace->name, right->workspace->name);
+}
+
 static char *workspace_click_command(const char *name,
 		bool disable_auto_back_and_forth, bool no_switch_output) {
 	char *focus = disable_auto_back_and_forth ?
@@ -946,6 +957,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 		"disable-auto-back-and-forth", false);
 	bool no_switch_output = json_get_bool(m->cfg, "no-switch-output", false);
 	bool current_only = json_get_bool(m->cfg, "current-only", false);
+	bool alphabetical_sort = json_get_bool(m->cfg, "alphabetical_sort", false);
 	const char *format = json_get_string(m->cfg, "format", "{name}");
 	struct swine_workspace *focused_ws = seat_get_focused_workspace();
 
@@ -955,10 +967,24 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 	} else {
 		list_add(outputs, ctx->output);
 	}
+	list_t *workspaces = create_list();
 	for (int o = 0; o < outputs->length; ++o) {
 		struct swine_output *output = outputs->items[o];
 		for (int i = 0; i < output->workspaces->length; ++i) {
-			struct swine_workspace *ws = output->workspaces->items[i];
+			struct workspace_bar_ref *ref = calloc(1, sizeof(*ref));
+			ref->workspace = output->workspaces->items[i];
+			ref->output = output;
+			list_add(workspaces, ref);
+		}
+	}
+	if (alphabetical_sort) {
+		qsort(workspaces->items, (size_t)workspaces->length,
+			sizeof(void *), workspace_bar_alpha_cmp);
+	}
+	for (int i = 0; i < workspaces->length; ++i) {
+		struct workspace_bar_ref *ref = workspaces->items[i];
+		struct swine_workspace *ws = ref->workspace;
+		struct swine_output *output = ref->output;
 			bool focused = ws == focused_ws;
 			if ((current_only && !focused) ||
 					workspace_ignored(m, ws->name)) {
@@ -1001,8 +1027,8 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 					"workspace next" : "workspace next_on_output");
 			}
 			list_add(view->items, item);
-		}
 	}
+	list_free_items_and_destroy(workspaces);
 	// Waybar's persistent-workspaces are display-only placeholders: they do
 	// not create workspaces in Sway until clicked. Keep the same behavior by
 	// adding configured names to the bar model only.
