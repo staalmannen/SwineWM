@@ -252,6 +252,28 @@ static void raise_owned_popup(HWND owner) {
 	}
 }
 
+// Windows raises the activated window above every other ordinary window.
+// Reapply the workspace's floating order after that happens so floating
+// windows stay above tiled windows even when a tiled window gets focus.
+static void raise_workspace_floating(void) {
+	struct swine_workspace *ws = seat_get_focused_workspace();
+	if (!ws || !ws->floating) {
+		return;
+	}
+	// The list is ordered from lowest to highest, so raising in list order
+	// preserves the relative stacking of floating windows.
+	for (int i = 0; i < ws->floating->length; ++i) {
+		struct swine_container *con = ws->floating->items[i];
+		struct swine_view *view = con->view;
+		if (view && view->pending.visible && IsWindow(view->handle) &&
+				!IsIconic(view->handle)) {
+			SetWindowPos(view->handle, HWND_TOP, 0, 0, 0, 0,
+				SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE |
+				SWP_ASYNCWINDOWPOS);
+		}
+	}
+}
+
 static void map_view(struct swine_view *view) {
 	view->natural = visible_rect(view->handle);
 	view_map(view);
@@ -596,6 +618,7 @@ static void handle_event(DWORD event, HWND hwnd) {
 		if (view && view->container && view->pending.visible) {
 			transaction_note_activated(view);
 			seat_set_focus_container(view->container);
+			raise_workspace_floating();
 			raise_owned_popup(hwnd);
 		}
 		check_fullscreen(hwnd);
