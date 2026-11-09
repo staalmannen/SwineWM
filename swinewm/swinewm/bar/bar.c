@@ -918,6 +918,115 @@ static const char *workspace_icon(struct bar_module *m, const char *name,
 	return json_get_string(icons, "default", name);
 }
 
+static struct swine_regex *window_rewrite_regex(const char *rule,
+		const char *field, bool *present) {
+	char *token = format_str("%s<", field);
+	const char *start = strstr(rule, token);
+	free(token);
+	*present = start != NULL;
+	if (!start) {
+		return NULL;
+	}
+	start += strlen(field) + 1;
+	const char *end = strchr(start, '>');
+	if (!end) {
+		return NULL;
+	}
+	char *pattern = swine_strndup(start, (size_t)(end - start));
+	char *error = NULL;
+	struct swine_regex *regex = swine_regex_compile(pattern, false, &error);
+	free(pattern);
+	free(error);
+	return regex;
+}
+
+struct workspace_windows_ctx {
+	struct bar_module *module;
+	const struct tm *tm;
+	char *text;
+	const char *separator;
+};
+
+static bool window_rewrite_matches(const char *rule,
+		struct swine_view *view) {
+	bool class_present = false, title_present = false;
+	struct swine_regex *class_re = window_rewrite_regex(rule, "class",
+		&class_present);
+	struct swine_regex *title_re = window_rewrite_regex(rule, "title",
+		&title_present);
+	bool class_matches = !class_present || (class_re &&
+		((view->class_name && swine_regex_search(class_re, view->class_name)) ||
+		(view->app_id && swine_regex_search(class_re, view->app_id))));
+	bool title_matches = !title_present || (title_re && view->title &&
+		swine_regex_search(title_re, view->title));
+	bool matches = (class_present || title_present) && class_matches &&
+		title_matches;
+	swine_regex_free(class_re);
+	swine_regex_free(title_re);
+	return matches;
+}
+
+static void append_workspace_window(struct swine_container *con, void *data) {
+	struct workspace_windows_ctx *ctx = data;
+	if (!con->view || !con->view->title ||
+			(!con->view->class_name && !con->view->app_id)) {
+		return;
+	}
+	struct json_value *rules = json_object_get(ctx->module->cfg,
+		"window-rewrite");
+	if (!rules || rules->type != JSON_OBJECT) {
+		return;
+	}
+	const char *rewrite = NULL;
+	for (int i = 0; i < rules->keys->length; ++i) {
+		const char *rule = rules->keys->items[i];
+		struct json_value *value = rules->items->items[i];
+		if (value->type == JSON_STRING &&
+				window_rewrite_matches(rule, con->view)) {
+			rewrite = value->string;
+			break;
+		}
+	}
+	if (!rewrite) {
+		rewrite = json_get_string(ctx->module->cfg,
+			"window-rewrite-default", "?");
+	}
+	if (!*rewrite) {
+		return;
+	}
+	const char *class_name = con->view->class_name ? con->view->class_name :
+		con->view->app_id;
+	struct fmt_arg args[] = {
+		{"name", false, con->view->title, 0},
+		{"class", false, class_name, 0},
+	};
+	char *text = format_waybar(rewrite, args, 2, ctx->tm);
+	if (ctx->text[0]) {
+		char *joined = format_str("%s%s%s", ctx->text, ctx->separator, text);
+		free(ctx->text);
+		ctx->text = joined;
+	} else {
+		free(ctx->text);
+		ctx->text = text;
+		return;
+	}
+	free(text);
+}
+
+static char *workspace_windows(struct bar_module *m, struct swine_workspace *ws,
+		const struct tm *tm) {
+	struct workspace_windows_ctx ctx = {
+		.module = m,
+		.tm = tm,
+		.text = swine_strdup(""),
+		.separator = json_get_string(m->cfg, "format-window-separator", " "),
+	};
+	if (json_object_get(m->cfg, "window-rewrite")) {
+		workspace_for_each_container(ws, append_workspace_window, &ctx);
+	}
+	return ctx.text;
+}
+
 static bool workspace_ignored(struct bar_module *m, const char *name) {
 	struct json_value *patterns = json_object_get(m->cfg,
 		"ignore-workspaces");
@@ -1135,6 +1244,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			snprintf(num_text, sizeof(num_text), "%d", num);
 			const char *ws_format = num < 0 ? json_get_string(m->cfg,
 				"format-for-negative-index", format) : format;
+			char *windows = workspace_windows(m, ws, &ctx->tm);
 			struct fmt_arg args[] = {
 				{"name", false, ws->name, 0},
 				{"value", false, ws->name, 0},
@@ -1142,8 +1252,10 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 				{"icon", false, workspace_icon(m, ws->name, ws->urgent,
 					focused, visible, false), 0},
 				{"output", false, output->name, 0},
+				{"windows", false, windows, 0},
 			};
-			char *text = format_waybar(ws_format, args, 5, &ctx->tm);
+			char *text = format_waybar(ws_format, args, 6, &ctx->tm);
+			free(windows);
 			struct bar_item *item = calloc(1, sizeof(*item));
 			item->text = markup_strip(text);
 			free(text);
@@ -1211,6 +1323,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 				"format-for-negative-index", format) : format;
 			const char *icon = workspace_icon(m, name, false, false,
 				false, true);
+			const char *windows = "";
 			char index_class[32];
 			snprintf(index_class, sizeof(index_class), "workspace-index-%d", num);
 			const char *output_class = json_get_string(json_object_get(m->cfg,
@@ -1221,8 +1334,9 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 				{"index", false, num >= 0 ? num_text : "", 0},
 				{"icon", false, icon, 0},
 				{"output", false, ctx->output->name, 0},
+				{"windows", false, windows, 0},
 			};
-			char *text = format_waybar(ws_format, args, 5, &ctx->tm);
+			char *text = format_waybar(ws_format, args, 6, &ctx->tm);
 			struct bar_item *item = calloc(1, sizeof(*item));
 			item->text = markup_strip(text);
 			free(text);
