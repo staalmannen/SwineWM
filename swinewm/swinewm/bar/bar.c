@@ -1057,6 +1057,7 @@ struct workspace_bar_ref {
 	struct swine_workspace *workspace;
 	struct swine_output *output;
 	int custom_priority;
+	int number;
 	int original_order;
 	bool alphabetical;
 };
@@ -1109,6 +1110,13 @@ static int workspace_bar_sort_cmp(const void *a, const void *b) {
 	}
 	if (left->alphabetical && right->alphabetical) {
 		return strcmp(left->workspace->name, right->workspace->name);
+	}
+	if (left->number >= 0 || right->number >= 0) {
+		if (left->number < 0) return 1;
+		if (right->number < 0) return -1;
+		if (left->number != right->number) {
+			return left->number - right->number;
+		}
 	}
 	return left->original_order - right->original_order;
 }
@@ -1226,15 +1234,14 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			ref->output = output;
 			ref->custom_priority = workspace_custom_priority(m->cfg,
 				ref->workspace->name);
+			ref->number = workspace_number(ref->workspace->name);
 			ref->original_order = workspaces->length;
 			ref->alphabetical = alphabetical_sort;
 			list_add(workspaces, ref);
 		}
 	}
-	if (alphabetical_sort || json_object_get(m->cfg, "custom-sort")) {
-		qsort(workspaces->items, (size_t)workspaces->length,
-			sizeof(void *), workspace_bar_sort_cmp);
-	}
+	qsort(workspaces->items, (size_t)workspaces->length,
+		sizeof(void *), workspace_bar_sort_cmp);
 	for (int i = 0; i < workspaces->length; ++i) {
 		struct workspace_bar_ref *ref = workspaces->items[i];
 		struct swine_workspace *ws = ref->workspace;
