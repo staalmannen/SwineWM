@@ -1504,21 +1504,41 @@ static void build_tray(struct build_ctx *ctx, struct bar_module *m,
 }
 
 // Waybar's Custom::update.
+static void custom_set_image(struct bar_item *item, struct bar_module *m) {
+	const char *path = json_get_string(m->cfg, "image-path", NULL);
+	if (!path || !*path) {
+		return;
+	}
+	item->icon_path = platform_expand_path(path);
+	item->icon_size = (int)json_get_number(m->cfg, "icon-size", 16);
+	if (item->icon_size <= 0) {
+		item->icon_size = 16;
+	}
+}
+
 static void build_custom(struct build_ctx *ctx, struct bar_module *m,
 		int index) {
 	if (!m->script) {
 		if (!json_object_get(m->cfg, "exec") &&
 				!json_object_get(m->cfg, "exec-if")) {
 			struct fmt_arg args[] = {{NULL, false, "", 0}};
-			add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL,
-				"{}"), args, 1, &ctx->tm), NULL);
+			struct bar_item *item = add_label(ctx, m, index, format_waybar(
+				module_format(m, NULL, NULL, "{}"), args, 1, &ctx->tm), NULL);
+			custom_set_image(item, m);
 		}
 		return;
 	}
 	struct bar_script_result r;
 	bar_script_result(m->script, &r);
+	const char *image_path = json_get_string(m->cfg, "image-path", NULL);
+	if (r.hidden && image_path && *image_path) {
+		r.hidden = false;
+		r.text = swine_strdup("");
+		r.alt = swine_strdup("");
+		r.tooltip = swine_strdup("");
+	}
 	if (r.hidden || (json_get_bool(m->cfg, "hide-empty-text", false) &&
-			!r.text[0])) {
+			!r.text[0] && (!image_path || !*image_path))) {
 		bar_script_result_finish(&r);
 		return;
 	}
@@ -1552,6 +1572,7 @@ static void build_custom(struct build_ctx *ctx, struct bar_module *m,
 	};
 	set_tooltip(ctx, m, item, NULL, NULL, tip_args, 6,
 		strcmp(r.text, r.tooltip) == 0 ? label_copy : r.tooltip);
+	custom_set_image(item, m);
 	free(label_copy);
 	bar_script_result_finish(&r);
 }
