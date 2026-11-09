@@ -268,7 +268,7 @@ static void test_bar_model(void) {
 		struct bar_item *b2 = ws->items->items[1];
 		CHECK_STR(b1->text, "1");
 		CHECK_STR(b2->text, "2");
-		CHECK_STR(b1->on_click, "workspace --no-auto-back-and-forth \"1\"");
+		CHECK_STR(b1->on_click, "workspace \"1\"");
 		// default style: focused button has #64727D background
 		CHECK_INT(b2->style.background.r, 0x64);
 		CHECK_INT(b1->style.background.a, 0);

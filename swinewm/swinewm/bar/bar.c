@@ -2609,7 +2609,6 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		char *rewritten = rewrite_window_label(m, formatted);
 		free(formatted);
 		struct bar_item *item = add_label(ctx, m, index, rewritten, NULL);
-		free(rewritten);
 		// The whole title, which max-length may have cut.
 		set_tooltip(ctx, m, item, NULL, NULL, args, 4, view->title);
 		free(marks);
