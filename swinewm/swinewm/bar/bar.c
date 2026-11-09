@@ -1082,6 +1082,9 @@ static int workspace_custom_priority(struct json_value *cfg,
 		return -1;
 	}
 	const char *trimmed = workspace_trim_name(name);
+	int name_priority = -1;
+	int trimmed_priority = -1;
+	int priority = 0;
 	for (int i = 0; i < custom->items->length; ++i) {
 		struct json_value *entry = custom->items->items[i];
 		if (entry->type != JSON_STRING) {
@@ -1089,13 +1092,16 @@ static int workspace_custom_priority(struct json_value *cfg,
 		}
 		const char *entry_trimmed = workspace_trim_name(entry->string);
 		if (strcmp(name, entry->string) == 0 ||
-				strcmp(name, entry_trimmed) == 0 ||
-				strcmp(trimmed, entry->string) == 0 ||
-				strcmp(trimmed, entry_trimmed) == 0) {
-			return i;
+				strcmp(name, entry_trimmed) == 0) {
+			name_priority = priority;
 		}
+		if (strcmp(trimmed, entry->string) == 0 ||
+				strcmp(trimmed, entry_trimmed) == 0) {
+			trimmed_priority = priority;
+		}
+		priority++;
 	}
-	return -1;
+	return name_priority >= 0 ? name_priority : trimmed_priority;
 }
 
 static int workspace_display_sort_cmp(const void *a, const void *b) {
