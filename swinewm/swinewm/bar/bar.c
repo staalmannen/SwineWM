@@ -11,6 +11,7 @@
 #include <string.h>
 #include "json.h"
 #include "log.h"
+#include "regex.h"
 #include "stringop.h"
 #include "swinewm/bar/bar.h"
 #include "swinewm/bar/custom.h"
@@ -890,6 +891,32 @@ static const char *workspace_icon(struct bar_module *m,
 	return json_get_string(icons, "default", ws->name);
 }
 
+static bool workspace_ignored(struct bar_module *m, const char *name) {
+	struct json_value *patterns = json_object_get(m->cfg,
+		"ignore-workspaces");
+	if (!patterns || patterns->type != JSON_ARRAY) {
+		return false;
+	}
+	for (int i = 0; i < patterns->items->length; ++i) {
+		struct json_value *pattern = patterns->items->items[i];
+		if (pattern->type != JSON_STRING) {
+			continue;
+		}
+		char *error = NULL;
+		struct swine_regex *regex = swine_regex_compile(pattern->string,
+			false, &error);
+		free(error);
+		if (regex) {
+			bool matches = swine_regex_search(regex, name);
+			swine_regex_free(regex);
+			if (matches) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 		int index) {
 	struct bar_module_view *view = new_view(m, index);
@@ -902,6 +929,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 	bool all_outputs = json_get_bool(m->cfg, "all-outputs", false);
 	bool disable_scroll = json_get_bool(m->cfg, "disable-scroll", false);
 	bool disable_click = json_get_bool(m->cfg, "disable-click", false);
+	bool current_only = json_get_bool(m->cfg, "current-only", false);
 	const char *format = json_get_string(m->cfg, "format", "{name}");
 	struct swine_workspace *focused_ws = seat_get_focused_workspace();
 
@@ -916,6 +944,10 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 		for (int i = 0; i < output->workspaces->length; ++i) {
 			struct swine_workspace *ws = output->workspaces->items[i];
 			bool focused = ws == focused_ws;
+			if ((current_only && !focused) ||
+					workspace_ignored(m, ws->name)) {
+				continue;
+			}
 			bool visible = workspace_is_visible(ws);
 			const char *classes[5];
 			int n = 0;
@@ -944,6 +976,78 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			if (!disable_click) {
 				item->on_click = format_str(
 					"workspace --no-auto-back-and-forth \"%s\"", ws->name);
+			}
+			if (!disable_scroll) {
+				item->on_scroll_up = swine_strdup(all_outputs ?
+					"workspace prev" : "workspace prev_on_output");
+				item->on_scroll_down = swine_strdup(all_outputs ?
+					"workspace next" : "workspace next_on_output");
+			}
+			list_add(view->items, item);
+		}
+	}
+	// Waybar's persistent-workspaces are display-only placeholders: they do
+	// not create workspaces in Sway until clicked. Keep the same behavior by
+	// adding configured names to the bar model only.
+	struct json_value *persistent = json_object_get(m->cfg,
+		"persistent-workspaces");
+	if (persistent && persistent->type == JSON_OBJECT) {
+		for (int p = 0; p < persistent->keys->length; ++p) {
+			const char *name = persistent->keys->items[p];
+			if (current_only || workspace_ignored(m, name) ||
+					workspace_by_name(name)) {
+				continue;
+			}
+			struct json_value *targets = persistent->items->items[p];
+			bool applies = false;
+			if (!targets || targets->type != JSON_ARRAY ||
+					targets->items->length == 0) {
+				applies = !all_outputs || !outputs->length ||
+					outputs->items[0] == ctx->output;
+			} else {
+				for (int t = 0; t < targets->items->length; ++t) {
+					struct json_value *target = targets->items->items[t];
+					struct swine_output *out = target->type == JSON_STRING ?
+						output_by_name_or_id(target->string) : NULL;
+					if (!out) {
+						continue;
+					}
+					bool listed = false;
+					for (int o = 0; o < outputs->length; ++o) {
+						listed |= outputs->items[o] == out;
+					}
+					if (listed) {
+						applies = out == ctx->output;
+						break;
+					}
+				}
+			}
+			if (!applies) {
+				continue;
+			}
+			int num = workspace_number(name);
+			char num_text[16];
+			snprintf(num_text, sizeof(num_text), "%d", num);
+			struct json_value *icons = json_object_get(m->cfg, "format-icons");
+			const char *icon = json_get_string(icons, name,
+				json_get_string(icons, "default", name));
+			struct fmt_arg args[] = {
+				{"name", false, name, 0},
+				{"value", false, name, 0},
+				{"index", false, num >= 0 ? num_text : "", 0},
+				{"icon", false, icon, 0},
+				{"output", false, ctx->output->name, 0},
+			};
+			char *text = format_waybar(format, args, 5, &ctx->tm);
+			struct bar_item *item = calloc(1, sizeof(*item));
+			item->text = markup_strip(text);
+			free(text);
+			const char *classes[] = {"current_output", NULL};
+			struct css_element el = {"button", NULL, classes, &box_el};
+			compute_item_style(&el, &view->style, item);
+			if (!disable_click) {
+				item->on_click = format_str(
+					"workspace --no-auto-back-and-forth \"%s\"", name);
 			}
 			if (!disable_scroll) {
 				item->on_scroll_up = swine_strdup(all_outputs ?
