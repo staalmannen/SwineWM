@@ -2526,15 +2526,34 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		if (!view) {
 			return;
 		}
+		bool show_hidden_marks = json_get_bool(m->cfg,
+			"show-hidden-marks", false);
+		size_t marks_len = 0;
+		for (int i = 0; view->container->marks &&
+				i < view->container->marks->length; ++i) {
+			const char *mark = view->container->marks->items[i];
+			if (mark[0] == '_' && !show_hidden_marks) continue;
+			marks_len += strlen(mark) + (marks_len ? 1 : 0);
+		}
+		char *marks = calloc(marks_len + 1, 1);
+		for (int i = 0; view->container->marks &&
+				i < view->container->marks->length; ++i) {
+			const char *mark = view->container->marks->items[i];
+			if (mark[0] == '_' && !show_hidden_marks) continue;
+			if (*marks) strcat(marks, ",");
+			strcat(marks, mark);
+		}
 		struct fmt_arg args[] = {
 			{"title", false, view->title, 0},
 			{"app_id", false, view->app_id, 0},
 			{"shell", false, "native", 0},
+			{"marks", false, marks, 0},
 		};
 		struct bar_item *item = add_label(ctx, m, index, format_waybar(
-			module_format(m, NULL, NULL, "{}"), args, 3, &ctx->tm), NULL);
+			module_format(m, NULL, NULL, "{}"), args, 4, &ctx->tm), NULL);
 		// The whole title, which max-length may have cut.
-		set_tooltip(ctx, m, item, NULL, NULL, args, 3, view->title);
+		set_tooltip(ctx, m, item, NULL, NULL, args, 4, view->title);
+		free(marks);
 		return;
 	}
 	case MOD_SCRATCHPAD: {
