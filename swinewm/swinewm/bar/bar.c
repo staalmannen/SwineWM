@@ -1310,8 +1310,19 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 	if (persistent && persistent->type == JSON_OBJECT) {
 		for (int p = 0; p < persistent->keys->length; ++p) {
 			const char *name = persistent->keys->items[p];
+			bool exists_in_scope = false;
+			for (int o = 0; o < outputs->length && !exists_in_scope; ++o) {
+				struct swine_output *out = outputs->items[o];
+				for (int w = 0; w < out->workspaces->length; ++w) {
+					struct swine_workspace *ws = out->workspaces->items[w];
+					if (strcmp(ws->name, name) == 0) {
+						exists_in_scope = true;
+						break;
+					}
+				}
+			}
 			if (current_only || workspace_ignored(m, name) ||
-					workspace_by_name(name)) {
+					exists_in_scope) {
 				continue;
 			}
 			struct json_value *targets = persistent->items->items[p];
@@ -1326,15 +1337,8 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 					struct json_value *target = targets->items->items[t];
 					struct swine_output *out = target->type == JSON_STRING ?
 						output_by_name_or_id(target->string) : NULL;
-					if (!out) {
-						continue;
-					}
-					bool listed = false;
-					for (int o = 0; o < outputs->length; ++o) {
-						listed |= outputs->items[o] == out;
-					}
-					if (listed) {
-						applies = out == ctx->output;
+					if (out == ctx->output) {
+						applies = true;
 						break;
 					}
 				}
