@@ -2334,19 +2334,25 @@ static void build_language(struct build_ctx *ctx, struct bar_module *m,
 	free(label_copy);
 }
 
-// Waybar's {calendar}: the month of tm, weeks from Monday.
-static char *month_calendar(const struct tm *tm) {
+// Waybar's {calendar}: the month of tm with a configurable first weekday.
+static char *month_calendar(const struct tm *tm, int first_day) {
 	static const int days_in[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+	static const char *weekdays[] = {"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"};
 	int year = tm->tm_year + 1900;
 	int days = days_in[tm->tm_mon];
 	if (tm->tm_mon == 1 && ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0)) {
 		days = 29;
 	}
-	// Weekday of the 1st (Monday 0), from today's.
-	int first = ((tm->tm_wday + 6) % 7 - (tm->tm_mday - 1) % 7 + 7) % 7;
-	char *out = malloc(8 * 21 + 1);
+	if (first_day < 0 || first_day > 6) {
+		first_day = 1;
+	}
+	int weekday_of_first = (tm->tm_wday - (tm->tm_mday - 1) % 7 + 7) % 7;
+	int first = (weekday_of_first - first_day + 7) % 7;
+	char *out = malloc(256);
 	char *o = out;
-	o += sprintf(o, "Mo Tu We Th Fr Sa Su");
+	for (int i = 0; i < 7; ++i) {
+		o += sprintf(o, "%s%s", i ? " " : "", weekdays[(first_day + i) % 7]);
+	}
 	int column = 0;
 	for (int i = 0; i < first; ++i, ++column) {
 		o += sprintf(o, "%s  ", column == 0 ? "\n" : " ");
@@ -2450,7 +2456,11 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			module_format(m, NULL, NULL, "{:%H:%M}"), NULL, 0, &ctx->tm), NULL);
 		// Waybar's clock has a tooltip only with tooltip-format.
 		if (item && json_object_get(m->cfg, "tooltip-format")) {
-			char *calendar = month_calendar(&ctx->tm);
+			struct json_value *calendar_cfg = json_object_get(m->cfg,
+				"calendar");
+			int first_day = (int)json_get_number(calendar_cfg,
+				"first-day-of-week", 1);
+			char *calendar = month_calendar(&ctx->tm, first_day);
 			struct fmt_arg args[] = {{"calendar", false, calendar, 0}};
 			set_tooltip(ctx, m, item, NULL, NULL, args, 1, NULL);
 			free(calendar);
