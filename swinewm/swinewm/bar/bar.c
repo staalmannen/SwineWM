@@ -1046,9 +1046,11 @@ static bool workspace_ignored(struct bar_module *m, const char *name) {
 		if (pattern->type != JSON_STRING) {
 			continue;
 		}
+		char *full_match = format_str("^(?:%s)$", pattern->string);
 		char *error = NULL;
-		struct swine_regex *regex = swine_regex_compile(pattern->string,
-			false, &error);
+		struct swine_regex *regex = swine_regex_compile(full_match, true,
+			&error);
+		free(full_match);
 		free(error);
 		if (regex) {
 			bool matches = swine_regex_search(regex, name);
