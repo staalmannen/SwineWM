@@ -289,7 +289,7 @@ static void test_titlebars(void) {
 	bar = titlebars_get()->items[0];
 	CHECK_STR(((struct swine_tab *)bar->tabs->items[0])->title,
 		"test.exe: a win32 100%");
-	CHECK(!run("title_format"));
+	CHECK(!run_quiet("title_format"));
 	// Its children have title bars of their own (vertical split).
 	CHECK(b->current.deco.titlebar);
 	// Clicking a tab focuses its window, scrolling switches tabs.
