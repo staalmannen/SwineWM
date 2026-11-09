@@ -1509,11 +1509,14 @@ static bool tray_ignored(struct json_value *list, struct tray_item *item) {
 	if (!list || list->type != JSON_ARRAY) {
 		return false;
 	}
+	char id[32];
+	snprintf(id, sizeof(id), "%llu", (unsigned long long)item->id);
 	for (int i = 0; i < list->items->length; ++i) {
 		struct json_value *v = list->items->items[i];
 		if (v->type == JSON_STRING && *v->string &&
 				((item->app_id && strstr(item->app_id, v->string)) ||
-				(item->title && strstr(item->title, v->string)))) {
+				(item->title && strstr(item->title, v->string)) ||
+				strstr(id, v->string))) {
 			return true;
 		}
 	}
