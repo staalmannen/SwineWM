@@ -929,6 +929,8 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 	bool all_outputs = json_get_bool(m->cfg, "all-outputs", false);
 	bool disable_scroll = json_get_bool(m->cfg, "disable-scroll", false);
 	bool disable_click = json_get_bool(m->cfg, "disable-click", false);
+	bool disable_auto_back_and_forth = json_get_bool(m->cfg,
+		"disable-auto-back-and-forth", false);
 	bool current_only = json_get_bool(m->cfg, "current-only", false);
 	const char *format = json_get_string(m->cfg, "format", "{name}");
 	struct swine_workspace *focused_ws = seat_get_focused_workspace();
@@ -974,8 +976,10 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			struct css_element el = {"button", NULL, classes, &box_el};
 			compute_item_style(&el, &view->style, item);
 			if (!disable_click) {
-				item->on_click = format_str(
-					"workspace --no-auto-back-and-forth \"%s\"", ws->name);
+				item->on_click = disable_auto_back_and_forth ?
+					format_str("workspace --no-auto-back-and-forth \"%s\"",
+						ws->name) :
+					format_str("workspace \"%s\"", ws->name);
 			}
 			if (!disable_scroll) {
 				item->on_scroll_up = swine_strdup(all_outputs ?
@@ -1046,8 +1050,9 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			struct css_element el = {"button", NULL, classes, &box_el};
 			compute_item_style(&el, &view->style, item);
 			if (!disable_click) {
-				item->on_click = format_str(
-					"workspace --no-auto-back-and-forth \"%s\"", name);
+				item->on_click = disable_auto_back_and_forth ?
+					format_str("workspace --no-auto-back-and-forth \"%s\"",
+						name) : format_str("workspace \"%s\"", name);
 			}
 			if (!disable_scroll) {
 				item->on_scroll_up = swine_strdup(all_outputs ?
