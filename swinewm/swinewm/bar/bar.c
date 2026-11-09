@@ -1328,8 +1328,9 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			bool applies = false;
 			if (!targets || targets->type != JSON_ARRAY ||
 					targets->items->length == 0) {
-				applies = !all_outputs || !outputs->length ||
-					outputs->items[0] == ctx->output;
+				// An empty output list means every output, including when
+				// all-outputs makes this bar enumerate several outputs.
+				applies = true;
 			} else {
 				for (int t = 0; t < targets->items->length; ++t) {
 					struct json_value *target = targets->items->items[t];
