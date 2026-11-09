@@ -1095,6 +1095,8 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			int num = workspace_number(ws->name);
 			char num_text[16];
 			snprintf(num_text, sizeof(num_text), "%d", num);
+			const char *ws_format = num < 0 ? json_get_string(m->cfg,
+				"format-for-negative-index", format) : format;
 			struct fmt_arg args[] = {
 				{"name", false, ws->name, 0},
 				{"value", false, ws->name, 0},
@@ -1102,7 +1104,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 				{"icon", false, workspace_icon(m, ws, focused, visible), 0},
 				{"output", false, output->name, 0},
 			};
-			char *text = format_waybar(format, args, 5, &ctx->tm);
+			char *text = format_waybar(ws_format, args, 5, &ctx->tm);
 			struct bar_item *item = calloc(1, sizeof(*item));
 			item->text = markup_strip(text);
 			free(text);
@@ -1166,6 +1168,8 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			int num = workspace_number(name);
 			char num_text[16];
 			snprintf(num_text, sizeof(num_text), "%d", num);
+			const char *ws_format = num < 0 ? json_get_string(m->cfg,
+				"format-for-negative-index", format) : format;
 			struct json_value *icons = json_object_get(m->cfg, "format-icons");
 			const char *icon = json_get_string(icons, name,
 				json_get_string(icons, "default", name));
@@ -1176,7 +1180,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 				{"icon", false, icon, 0},
 				{"output", false, ctx->output->name, 0},
 			};
-			char *text = format_waybar(format, args, 5, &ctx->tm);
+			char *text = format_waybar(ws_format, args, 5, &ctx->tm);
 			struct bar_item *item = calloc(1, sizeof(*item));
 			item->text = markup_strip(text);
 			free(text);
