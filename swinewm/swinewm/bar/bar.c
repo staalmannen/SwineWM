@@ -1141,27 +1141,45 @@ static char *workspace_criteria_pattern(const char *name) {
 	return pattern;
 }
 
+static char *workspace_command_name(const char *name) {
+	size_t len = strlen(name);
+	char *escaped = calloc(len * 2 + 1, 1);
+	char *write = escaped;
+	for (const char *read = name; *read; ++read) {
+		if (*read == '$') {
+			*write++ = '$';
+		}
+		*write++ = *read;
+	}
+	return escaped;
+}
+
 static char *workspace_click_command(const char *name,
 		bool disable_auto_back_and_forth, bool no_switch_output) {
+	char *command_name = workspace_command_name(name);
 	char *focus = disable_auto_back_and_forth ?
-		format_str("workspace --no-auto-back-and-forth \"%s\"", name) :
-		format_str("workspace \"%s\"", name);
+		format_str("workspace --no-auto-back-and-forth \"%s\"",
+			command_name) :
+		format_str("workspace \"%s\"", command_name);
 	char *pattern = no_switch_output ? workspace_criteria_pattern(name) : NULL;
 	char *command = no_switch_output ? format_str(
 		"[workspace=\"^%s$\"] move workspace to output current; %s",
 		pattern, focus) : swine_strdup(focus);
 	free(pattern);
 	free(focus);
+	free(command_name);
 	return command;
 }
 
 static char *persistent_workspace_click_command(const char *name,
 		const char *output) {
+	char *command_name = workspace_command_name(name);
 	char *focus = format_str("workspace --no-auto-back-and-forth \"%s\"",
-		name);
+		command_name);
 	char *command = format_str("%s; move workspace to output \"%s\"; %s",
 		focus, output, focus);
 	free(focus);
+	free(command_name);
 	return command;
 }
 
