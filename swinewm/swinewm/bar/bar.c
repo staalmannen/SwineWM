@@ -2508,13 +2508,19 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		if (!sysinfo_battery(&bat)) {
 			return;
 		}
+		int capacity = bat.capacity;
+		int full_at = (int)json_get_number(m->cfg, "full-at", 100);
+		if (full_at > 0 && full_at < 100) {
+			capacity = (int)round(100.0 * capacity / full_at);
+			if (capacity > 100) capacity = 100;
+		}
 		bool full_at_plugged = json_get_bool(m->cfg,
 			"full-at-plugged", false);
 		const char *status = bat.charging ? "charging" :
-			bat.plugged ? (bat.capacity >= 100 && !full_at_plugged ?
+			bat.plugged ? (capacity >= 100 && !full_at_plugged ?
 				"full" : "plugged") :
 			"discharging";
-		const char *state = module_state(m, bat.capacity, true);
+		const char *state = module_state(m, capacity, true);
 		// Waybar's format-time, "{H} h {M} min"
 		char time_text[64] = "";
 		if (bat.seconds_left > 0) {
@@ -2544,8 +2550,8 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			time_to = empty_in;
 		}
 		struct fmt_arg args[] = {
-			{"capacity", true, NULL, bat.capacity},
-			{"icon", false, icon_for_percent(m, bat.capacity), 0},
+			{"capacity", true, NULL, capacity},
+			{"icon", false, icon_for_percent(m, capacity), 0},
 			{"time", false, time_text, 0},
 			{"timeTo", false, time_to, 0},
 		};
