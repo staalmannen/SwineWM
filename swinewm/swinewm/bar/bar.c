@@ -1174,6 +1174,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 	bool all_outputs = json_get_bool(m->cfg, "all-outputs", false);
 	bool disable_scroll = json_get_bool(m->cfg, "disable-scroll", false);
 	bool disable_click = json_get_bool(m->cfg, "disable-click", false);
+	bool disable_markup = json_get_bool(m->cfg, "disable-markup", false);
 	bool disable_auto_back_and_forth = json_get_bool(m->cfg,
 		"disable-auto-back-and-forth", false);
 	bool no_switch_output = json_get_bool(m->cfg, "no-switch-output", false);
@@ -1183,7 +1184,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 	bool reverse_scroll = json_get_bool(m->cfg, "reverse-scroll", false);
 	bool disable_scroll_wraparound = json_get_bool(m->cfg,
 		"disable-scroll-wraparound", false);
-	const char *format = json_get_string(m->cfg, "format", "{name}");
+	const char *format = json_get_string(m->cfg, "format", "{value}");
 	struct swine_workspace *focused_ws = seat_get_focused_workspace();
 
 	list_t *outputs = create_list();
@@ -1221,6 +1222,8 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			}
 			bool visible = workspace_is_visible(ws);
 			int num = workspace_number(ws->name);
+			const char *colon = strchr(ws->name, ':');
+			const char *name = colon ? colon + 1 : ws->name;
 			const char *classes[8];
 			int n = 0;
 			if (focused) classes[n++] = "focused";
@@ -1246,7 +1249,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 				"format-for-negative-index", format) : format;
 			char *windows = workspace_windows(m, ws, &ctx->tm);
 			struct fmt_arg args[] = {
-				{"name", false, ws->name, 0},
+				{"name", false, name, 0},
 				{"value", false, ws->name, 0},
 				{"index", false, num >= 0 ? num_text : "", 0},
 				{"icon", false, workspace_icon(m, ws->name, ws->urgent,
@@ -1257,7 +1260,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			char *text = format_waybar(ws_format, args, 6, &ctx->tm);
 			free(windows);
 			struct bar_item *item = calloc(1, sizeof(*item));
-			item->text = markup_strip(text);
+			item->text = disable_markup ? swine_strdup(text) : markup_strip(text);
 			free(text);
 			struct css_element el = {"button", NULL, classes, &box_el};
 			compute_item_style(&el, &view->style, item);
@@ -1321,6 +1324,8 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			snprintf(num_text, sizeof(num_text), "%d", num);
 			const char *ws_format = num < 0 ? json_get_string(m->cfg,
 				"format-for-negative-index", format) : format;
+			const char *colon = strchr(name, ':');
+			const char *trimmed_name = colon ? colon + 1 : name;
 			const char *icon = workspace_icon(m, name, false, false,
 				false, true);
 			const char *windows = "";
@@ -1329,7 +1334,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			const char *output_class = json_get_string(json_object_get(m->cfg,
 				"output-classes"), ctx->output->name, NULL);
 			struct fmt_arg args[] = {
-				{"name", false, name, 0},
+				{"name", false, trimmed_name, 0},
 				{"value", false, name, 0},
 				{"index", false, num >= 0 ? num_text : "", 0},
 				{"icon", false, icon, 0},
@@ -1338,7 +1343,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			};
 			char *text = format_waybar(ws_format, args, 6, &ctx->tm);
 			struct bar_item *item = calloc(1, sizeof(*item));
-			item->text = markup_strip(text);
+			item->text = disable_markup ? swine_strdup(text) : markup_strip(text);
 			free(text);
 			const char *classes[6];
 			int n = 0;
