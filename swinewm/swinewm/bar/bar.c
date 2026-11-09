@@ -1059,13 +1059,13 @@ struct workspace_bar_ref {
 	int custom_priority;
 	int number;
 	int original_order;
-	bool alphabetical;
 };
 
-struct persistent_bar_ref {
+struct workspace_display_ref {
 	const char *name;
 	struct bar_item *item;
 	int custom_priority;
+	int number;
 	int original_order;
 	bool alphabetical;
 };
@@ -1098,32 +1098,9 @@ static int workspace_custom_priority(struct json_value *cfg,
 	return -1;
 }
 
-static int workspace_bar_sort_cmp(const void *a, const void *b) {
-	const struct workspace_bar_ref *left = *(void *const *)a;
-	const struct workspace_bar_ref *right = *(void *const *)b;
-	if (left->custom_priority >= 0 || right->custom_priority >= 0) {
-		if (left->custom_priority < 0) return 1;
-		if (right->custom_priority < 0) return -1;
-		if (left->custom_priority != right->custom_priority) {
-			return left->custom_priority - right->custom_priority;
-		}
-	}
-	if (left->alphabetical && right->alphabetical) {
-		return strcmp(left->workspace->name, right->workspace->name);
-	}
-	if (left->number >= 0 || right->number >= 0) {
-		if (left->number < 0) return 1;
-		if (right->number < 0) return -1;
-		if (left->number != right->number) {
-			return left->number - right->number;
-		}
-	}
-	return left->original_order - right->original_order;
-}
-
-static int persistent_bar_sort_cmp(const void *a, const void *b) {
-	const struct persistent_bar_ref *left = *(void *const *)a;
-	const struct persistent_bar_ref *right = *(void *const *)b;
+static int workspace_display_sort_cmp(const void *a, const void *b) {
+	const struct workspace_display_ref *left = *(void *const *)a;
+	const struct workspace_display_ref *right = *(void *const *)b;
 	if (left->custom_priority >= 0 || right->custom_priority >= 0) {
 		if (left->custom_priority < 0) return 1;
 		if (right->custom_priority < 0) return -1;
@@ -1133,6 +1110,13 @@ static int persistent_bar_sort_cmp(const void *a, const void *b) {
 	}
 	if (left->alphabetical && right->alphabetical) {
 		return strcmp(left->name, right->name);
+	}
+	if (left->number >= 0 || right->number >= 0) {
+		if (left->number < 0) return 1;
+		if (right->number < 0) return -1;
+		if (left->number != right->number) {
+			return left->number - right->number;
+		}
 	}
 	return left->original_order - right->original_order;
 }
@@ -1218,6 +1202,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 		"disable-scroll-wraparound", false);
 	const char *format = json_get_string(m->cfg, "format", "{value}");
 	struct swine_workspace *focused_ws = seat_get_focused_workspace();
+	list_t *display_items = create_list();
 
 	list_t *outputs = create_list();
 	if (all_outputs) {
@@ -1236,12 +1221,10 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 				ref->workspace->name);
 			ref->number = workspace_number(ref->workspace->name);
 			ref->original_order = workspaces->length;
-			ref->alphabetical = alphabetical_sort;
 			list_add(workspaces, ref);
 		}
 	}
-	qsort(workspaces->items, (size_t)workspaces->length,
-		sizeof(void *), workspace_bar_sort_cmp);
+	int live_workspace_count = workspaces->length;
 	for (int i = 0; i < workspaces->length; ++i) {
 		struct workspace_bar_ref *ref = workspaces->items[i];
 		struct swine_workspace *ws = ref->workspace;
@@ -1308,7 +1291,15 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 					all_outputs, false, warp_on_scroll, reverse_scroll,
 					disable_scroll_wraparound);
 			}
-			list_add(view->items, item);
+			struct workspace_display_ref *display = calloc(1,
+				sizeof(*display));
+			display->name = ws->name;
+			display->item = item;
+			display->custom_priority = ref->custom_priority;
+			display->number = ref->number;
+			display->original_order = ref->original_order;
+			display->alphabetical = alphabetical_sort;
+			list_add(display_items, display);
 	}
 	list_free_items_and_destroy(workspaces);
 	// Waybar's persistent-workspaces are display-only placeholders: they do
@@ -1317,7 +1308,6 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 	struct json_value *persistent = json_object_get(m->cfg,
 		"persistent-workspaces");
 	if (persistent && persistent->type == JSON_OBJECT) {
-		list_t *placeholders = create_list();
 		for (int p = 0; p < persistent->keys->length; ++p) {
 			const char *name = persistent->keys->items[p];
 			if (current_only || workspace_ignored(m, name) ||
@@ -1401,25 +1391,26 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 					all_outputs, false, warp_on_scroll, reverse_scroll,
 					disable_scroll_wraparound);
 			}
-			struct persistent_bar_ref *ref = calloc(1, sizeof(*ref));
-			ref->name = name;
-			ref->item = item;
-			ref->custom_priority = workspace_custom_priority(m->cfg, name);
-			ref->original_order = placeholders->length;
-			ref->alphabetical = alphabetical_sort;
-			list_add(placeholders, ref);
+			struct workspace_display_ref *display = calloc(1,
+				sizeof(*display));
+			display->name = name;
+			display->item = item;
+			display->custom_priority = workspace_custom_priority(m->cfg,
+				name);
+			display->number = num;
+			display->original_order = live_workspace_count + p;
+			display->alphabetical = alphabetical_sort;
+			list_add(display_items, display);
 		}
-		if (alphabetical_sort || json_object_get(m->cfg, "custom-sort")) {
-			qsort(placeholders->items, (size_t)placeholders->length,
-				sizeof(void *), persistent_bar_sort_cmp);
-		}
-		for (int i = 0; i < placeholders->length; ++i) {
-			struct persistent_bar_ref *ref = placeholders->items[i];
-			list_add(view->items, ref->item);
-			free(ref);
-		}
-		list_free(placeholders);
 	}
+	qsort(display_items->items, (size_t)display_items->length,
+		sizeof(void *), workspace_display_sort_cmp);
+	for (int i = 0; i < display_items->length; ++i) {
+		struct workspace_display_ref *display = display_items->items[i];
+		list_add(view->items, display->item);
+		free(display);
+	}
+	list_free(display_items);
 	list_free(outputs);
 	list_add(ctx->model->modules, view);
 }
