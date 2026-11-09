@@ -1121,15 +1121,30 @@ static int workspace_display_sort_cmp(const void *a, const void *b) {
 	return left->original_order - right->original_order;
 }
 
+static char *workspace_criteria_pattern(const char *name) {
+	const char *regex_special = "\\.^$|?*+()[]{}\"";
+	size_t len = strlen(name);
+	char *pattern = calloc(len * 2 + 1, 1);
+	char *write = pattern;
+	for (const char *read = name; *read; ++read) {
+		if (strchr(regex_special, *read)) {
+			*write++ = '\\';
+		}
+		*write++ = *read;
+	}
+	return pattern;
+}
+
 static char *workspace_click_command(const char *name,
 		bool disable_auto_back_and_forth, bool no_switch_output) {
 	char *focus = disable_auto_back_and_forth ?
 		format_str("workspace --no-auto-back-and-forth \"%s\"", name) :
 		format_str("workspace \"%s\"", name);
+	char *pattern = no_switch_output ? workspace_criteria_pattern(name) : NULL;
 	char *command = no_switch_output ? format_str(
 		"[workspace=\"^%s$\"] move workspace to output current; %s",
-		name, focus) :
-		swine_strdup(focus);
+		pattern, focus) : swine_strdup(focus);
+	free(pattern);
 	free(focus);
 	return command;
 }
