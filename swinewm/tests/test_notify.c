@@ -40,8 +40,8 @@ static void test_notify_send(void) {
 			!((struct markup_span *)l1->spans->items[0])->bold);
 		notify_free_lines(lines);
 	}
-	CHECK(!run("notify-send"));
-	CHECK(!run("notify-send -u urgent x"));
+	CHECK(!run_quiet("notify-send"));
+	CHECK(!run_quiet("notify-send -u urgent x"));
 
 	// exec in a binding goes to the built-in implementation
 	CHECK(run("exec notify-send hello"));
@@ -52,7 +52,7 @@ static void test_notify_send(void) {
 	CHECK_INT(notify_history()->length, 2);
 	CHECK(run("makoctl restore"));
 	CHECK_INT(notify_active()->length, 1);
-	CHECK(!run("makoctl frobnicate"));
+	CHECK(!run_quiet("makoctl frobnicate"));
 	fake_teardown();
 }
 
@@ -188,8 +188,8 @@ static void test_notify_send_options(void) {
 	CHECK(n && n->progress == 100 && n->urgency == NOTIFY_URGENCY_CRITICAL);
 	CHECK(run("notify-send plain"));
 	CHECK(newest() && newest()->progress == -1);
-	CHECK(!run("notify-send -h value:3 x"));
-	CHECK(!run("notify-send -h float:value:3 x"));
+	CHECK(!run_quiet("notify-send -h value:3 x"));
+	CHECK(!run_quiet("notify-send -h float:value:3 x"));
 	// image-path wins over the icon
 	CHECK(run("notify-send -i a.png -h string:image-path:C:/b.png x"));
 	CHECK(newest() && strcmp(newest()->app_icon, "C:/b.png") == 0);
@@ -356,8 +356,8 @@ static void test_mako_grouping(void) {
 	CHECK(run("makoctl dismiss -g"));
 	CHECK_INT(notify_active()->length, 1);
 	CHECK(nth(0) && strcmp(nth(0)->summary, "hi") == 0);
-	CHECK(!run("makoctl dismiss -a -g"));
-	CHECK(!run("makoctl dismiss -g -n 3"));
+	CHECK(!run_quiet("makoctl dismiss -a -g"));
+	CHECK(!run_quiet("makoctl dismiss -g -n 3"));
 
 	// max-visible counts a group once.
 	CHECK(notify_parse_config("max-visible=2\ngroup-by=app-name\n"
@@ -420,7 +420,7 @@ static void test_mako_actions(void) {
 	CHECK(strstr(fake.ipc_changes, "action,close,") != NULL);
 	CHECK(notify_by_id(id) == NULL);
 	CHECK_INT(notify_history()->length, 1);
-	CHECK(!run("makoctl invoke"));   // nothing left
+	CHECK(!run_quiet("makoctl invoke"));   // nothing left
 
 	// A waiting notify-send.exe closes it itself.
 	uint32_t type;
@@ -434,7 +434,7 @@ static void test_mako_actions(void) {
 	CHECK(run("makoctl invoke -n 2 yes"));
 	CHECK(strstr(fake.ipc_last_event, "\"action\":\"yes\"") != NULL);
 	CHECK(notify_by_id(2) != NULL);
-	CHECK(!run("makoctl invoke -n 2 no"));
+	CHECK(!run_quiet("makoctl invoke -n 2 no"));
 
 	// Left click is invoke-default-action: it closes even without one.
 	notify_button(2, 1);
@@ -470,7 +470,7 @@ static void test_mako_actions(void) {
 	// actions=0 ignores them
 	CHECK(notify_parse_config("actions=0\n", "test"));
 	CHECK(run("notify-send -A default=Open x"));
-	CHECK(!run("makoctl invoke"));
+	CHECK(!run_quiet("makoctl invoke"));
 	fake_teardown();
 }
 

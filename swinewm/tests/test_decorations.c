@@ -69,7 +69,7 @@ static void test_border_defaults(void) {
 	CHECK_INT(d->container->border, B_NONE);
 	CHECK_INT(d->current.deco.border_color, 0);
 	CHECK(!d->current.deco.square_corners);
-	CHECK(!run("default_border thick"));
+	CHECK(!run_quiet("default_border thick"));
 
 	char *tree = ipc_json_get_tree();
 	CHECK(strstr(tree, "\"border\":\"pixel\",\"current_border_width\":3") != NULL);
@@ -96,11 +96,11 @@ static void test_border_command(void) {
 	CHECK(a->current.deco.titlebar);
 	CHECK(run("border toggle"));
 	CHECK_INT(a->container->border, B_NONE);
-	CHECK(!run("border csd"));
-	CHECK(!run("border wide"));
+	CHECK(!run_quiet("border csd"));
+	CHECK(!run_quiet("border wide"));
 	// Only views have borders.
 	CHECK(run("border normal; focus parent"));
-	CHECK(!run("border pixel"));
+	CHECK(!run_quiet("border pixel"));
 	// Fullscreen windows have no border.
 	CHECK(run("focus child; fullscreen enable"));
 	CHECK_INT(a->current.deco.border_color, 0);
@@ -122,8 +122,8 @@ static void test_client_colors(void) {
 	CHECK_INT(a->current.deco.border_color, 0xABCDEF80);
 	CHECK_INT(a->current.deco.title_color, 0x00FF00FF);
 	CHECK_INT(a->current.deco.title_text_color, 0x0000FFFF);
-	CHECK(!run("client.focused #ff0000 #00ff00"));
-	CHECK(!run("client.unfocused #ff0000 #00ff00 nocolor"));
+	CHECK(!run_quiet("client.focused #ff0000 #00ff00"));
+	CHECK(!run_quiet("client.unfocused #ff0000 #00ff00 nocolor"));
 	CHECK(run("client.focused_tab_title #111111 #222222 #333333"));
 	CHECK(config->has_focused_tab_title);
 	CHECK(run("client.placeholder #000000 #0c0c0c #ffffff"));
@@ -173,8 +173,8 @@ static void test_smart_borders(void) {
 	CHECK(run("hide_edge_borders --i3 both"));
 	CHECK_INT(config->hide_edge_borders, E_BOTH);
 	CHECK(config->hide_lone_tab);
-	CHECK(!run("hide_edge_borders --i3"));
-	CHECK(!run("hide_edge_borders sideways"));
+	CHECK(!run_quiet("hide_edge_borders --i3"));
+	CHECK(!run_quiet("hide_edge_borders sideways"));
 	fake_teardown();
 }
 
@@ -183,16 +183,16 @@ static void test_gap_bounds(void) {
 	struct swine_view *a = fake_map_view("a");
 	int max_gap = INT_MAX / 4;
 	char command[64];
-	CHECK(!run("gaps inner 2147483647"));
-	CHECK(!run("gaps inner 999999999999999999999999"));
+	CHECK(!run_quiet("gaps inner 2147483647"));
+	CHECK(!run_quiet("gaps inner 999999999999999999999999"));
 	snprintf(command, sizeof(command), "gaps inner current set %d", max_gap);
 	CHECK(run(command));
 	CHECK_INT(a->container->workspace->gaps_inner, max_gap);
-	CHECK(!run("gaps inner current plus 1"));
+	CHECK(!run_quiet("gaps inner current plus 1"));
 	CHECK_INT(a->container->workspace->gaps_inner, max_gap);
 	snprintf(command, sizeof(command), "gaps left current set %d", max_gap);
 	CHECK(run(command));
-	CHECK(!run("gaps left current plus 1"));
+	CHECK(!run_quiet("gaps left current plus 1"));
 	CHECK_INT(a->container->workspace->gaps_outer.left, max_gap);
 
 	struct swine_workspace *first = a->container->workspace;
@@ -201,7 +201,7 @@ static void test_gap_bounds(void) {
 	struct swine_workspace *second = b->container->workspace;
 	first->gaps_inner = max_gap - 1;
 	second->gaps_inner = max_gap;
-	CHECK(!run("gaps inner all plus 1"));
+	CHECK(!run_quiet("gaps inner all plus 1"));
 	CHECK_INT(first->gaps_inner, max_gap - 1);
 	CHECK_INT(second->gaps_inner, max_gap);
 	fake_teardown();
@@ -218,10 +218,10 @@ static void test_opacity(void) {
 	CHECK(a->container->alpha == 0.25f);
 	CHECK(run("opacity set 1"));
 	CHECK(a->current.deco.alpha == 1.0f);
-	CHECK(!run("opacity 1.5"));
-	CHECK(!run("opacity minus 2"));
-	CHECK(!run("opacity half"));
-	CHECK(!run("opacity times 0.5"));
+	CHECK(!run_quiet("opacity 1.5"));
+	CHECK(!run_quiet("opacity minus 2"));
+	CHECK(!run_quiet("opacity half"));
+	CHECK(!run_quiet("opacity times 0.5"));
 	CHECK(run("[title=\"^a$\"] opacity 0.9"));
 	CHECK(a->container->alpha == 0.9f);
 	fake_teardown();
@@ -238,10 +238,10 @@ static void test_font_and_titlebar(void) {
 	CHECK_INT(config->titlebar_v_padding, 8);
 	CHECK(run("titlebar_border_thickness 2"));
 	CHECK_INT(config->titlebar_border_thickness, 2);
-	CHECK(!run("titlebar_border_thickness 20"));   // more than the padding
+	CHECK(!run_quiet("titlebar_border_thickness 20"));   // more than the padding
 	CHECK(run("title_align center"));
 	CHECK_INT(config->title_align, 1);
-	CHECK(!run("title_align middle"));
+	CHECK(!run_quiet("title_align middle"));
 	fake_teardown();
 }
 

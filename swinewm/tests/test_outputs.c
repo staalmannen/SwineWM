@@ -88,7 +88,7 @@ static void test_move_workspace_to_output(void) {
 	fake_setup_two_outputs();
 	struct swine_view *a = fake_map_view("a");
 	struct swine_workspace *ws1 = a->container->workspace;
-	CHECK(!run("move workspace to output nowhere"));
+	CHECK(!run_quiet("move workspace to output nowhere"));
 	CHECK(run("move workspace to output right"));
 	CHECK_STR(ws1->output->name, "DISPLAY2");
 	CHECK(ws1->output->active_workspace == ws1);
@@ -186,7 +186,7 @@ static void test_output_display_config(void) {
 	CHECK_INT(fake.last_output_config.transform, 0);
 	CHECK(run("output DISPLAY2 transform 180 clockwise"));
 	CHECK_INT(fake.last_output_config.transform, 3);
-	CHECK(!run("output * transform 90 clockwise"));
+	CHECK(!run_quiet("output * transform 90 clockwise"));
 	fake.output_configure_calls = 0;
 	CHECK(run("output DISPLAY1 bg #112233 solid_color"));
 	CHECK_INT(fake.output_configure_calls, 0);

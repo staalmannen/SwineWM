@@ -60,9 +60,9 @@ static void test_variables_and_bindings(void) {
 	// Caps Lock does not prevent a match; extra modifiers do.
 	CHECK(keyboard_find_binding(SWINE_MOD_LOGO | SWINE_MOD_CAPS, 0x0D, false));
 	CHECK(!keyboard_find_binding(SWINE_MOD_LOGO | SWINE_MOD_CTRL, 0x0D, false));
-	CHECK(!run("bindcode Mod4+256 nop"));
-	CHECK(!run("bindcode Mod4+65x nop"));
-	CHECK(!run("bindcode --whole-window Mod4+65 nop"));
+	CHECK(!run_quiet("bindcode Mod4+256 nop"));
+	CHECK(!run_quiet("bindcode Mod4+65x nop"));
+	CHECK(!run_quiet("bindcode --whole-window Mod4+65 nop"));
 	CHECK(run("unbindcode Mod4+65"));
 	CHECK(!keyboard_find_binding(SWINE_MOD_LOGO, 65, false));
 	fake_teardown();
@@ -105,7 +105,7 @@ static void test_modes_and_blocks(void) {
 	}
 	CHECK(run("mode default"));
 	CHECK_STR(config->current_mode->name, "default");
-	CHECK(!run("mode nosuchmode"));
+	CHECK(!run_quiet("mode nosuchmode"));
 	fake_teardown();
 }
 
@@ -116,7 +116,7 @@ static void test_errors_and_defer(void) {
 	CHECK(!read_inactive("mode \"x\" {\nbindsym a nop\n"));   // unclosed block
 	CHECK(!read_inactive("}\n"));
 	CHECK(!read_inactive("focus left\n"));  // runtime-only
-	CHECK(!run("default_orientation vertical"));  // config-only
+	CHECK(!run_quiet("default_orientation vertical"));  // config-only
 
 	CHECK(read_inactive("exec notepad.exe\nexec_always calc.exe\nworkspace 3\n"));
 	CHECK_INT(config->cmd_queue->length, 3);
@@ -187,7 +187,7 @@ static void test_windows_theme(void) {
 	CHECK(load_main_config(SWINEWM_SOURCE_DIR "/tests/data/theme/light",
 		true, false));
 	CHECK_INT(fake.windows_theme, 0);
-	CHECK(!run("windows_theme dark"));   // config only
+	CHECK(!run_quiet("windows_theme dark"));   // config only
 	fake_teardown();
 }
 

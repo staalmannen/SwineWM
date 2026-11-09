@@ -86,7 +86,7 @@ static void test_runtime_criteria(void) {
 	// title and class are case-sensitive regexes
 	CHECK(run("[title=\"Mozilla Firefox$\" class=\"^Mozilla\"] move to workspace 3"));
 	CHECK_STR(firefox->container->workspace->name, "3");
-	CHECK(!run("[title=\"mozilla firefox\"] kill"));   // no matching node
+	CHECK(!run_quiet("[title=\"mozilla firefox\"] kill"));   // no matching node
 	CHECK(run("[instance=\"^alacritty$\"] kill"));
 	CHECK(fake.last_closed == term);
 	// floating / tiling / workspace tokens
@@ -129,7 +129,7 @@ static void test_urgent_criteria(void) {
 	CHECK(seat_get_focused_container() == b->container);
 	CHECK(run("[urgent=latest] focus"));
 	CHECK(seat_get_focused_container() == a->container);
-	CHECK(!run("[urgent=latest] focus"));   // focusing cleared the urgency
+	CHECK(!run_quiet("[urgent=latest] focus"));   // focusing cleared the urgency
 	fake_teardown();
 }
 
@@ -208,7 +208,7 @@ static void test_assign_and_no_focus(void) {
 
 	// for_window and assign are config state: errors are reported.
 	CHECK(!config_lines("assign [app_id=x]\n"));
-	CHECK(!run("assign [app_id=x] 4"));   // config only
+	CHECK(!run_quiet("assign [app_id=x] 4"));   // config only
 	fake_teardown();
 }
 

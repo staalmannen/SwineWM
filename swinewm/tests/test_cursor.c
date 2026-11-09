@@ -39,9 +39,9 @@ static void test_mouse_bindings_parse(void) {
 	CHECK(run("bindsym --whole-window Mod4+button4 workspace prev"));
 	CHECK(run("bindsym --border --exclude-titlebar BTN_SIDE nop back"));
 	CHECK(run("bindsym --release button3 nop release"));
-	CHECK(!run("bindsym button10 nop"));
-	CHECK(!run("bindsym BTN_NOSUCH nop"));
-	CHECK(!run("bindsym Mod4+button1+button2 nop"));
+	CHECK(!run_quiet("bindsym button10 nop"));
+	CHECK(!run_quiet("bindsym BTN_NOSUCH nop"));
+	CHECK(!run_quiet("bindsym Mod4+button1+button2 nop"));
 	CHECK_INT(config->current_mode->mouse_bindings->length, 4);
 	struct swine_binding *b = mouse_binding(0);
 	CHECK(b && b->keycode == SWINE_BTN_MIDDLE && b->flags == BINDING_TITLEBAR);
@@ -216,7 +216,7 @@ static void test_move_floating(void) {
 	CHECK(cursor_button(x - 10, y, HIT_CONTENTS, a->container, SWINE_BTN_RIGHT,
 		false, SWINE_MOD_LOGO));
 	CHECK_INT(a->container->floating_box.x, start.x + 990);
-	CHECK(!run("floating_modifier Mod4 sideways"));
+	CHECK(!run_quiet("floating_modifier Mod4 sideways"));
 	// The window going away ends the move.
 	CHECK(run("floating_modifier Mod4 normal"));
 	CHECK(cursor_button(x, y, HIT_CONTENTS, a->container, SWINE_BTN_LEFT,
@@ -367,7 +367,7 @@ static void test_move_tiling(void) {
 	CHECK(config->tiling_drag);
 	CHECK(run("tiling_drag_threshold 20"));
 	CHECK_INT(config->tiling_drag_threshold, 20);
-	CHECK(!run("tiling_drag_threshold -1"));
+	CHECK(!run_quiet("tiling_drag_threshold -1"));
 	fake_teardown();
 }
 
@@ -426,7 +426,7 @@ static void test_mouse_warping(void) {
 	CHECK_INT(fake.warp_calls, 3);
 	CHECK(run("workspace 1; mouse_warping none; focus left"));
 	CHECK_INT(fake.warp_calls, 3);
-	CHECK(!run("mouse_warping sometimes"));
+	CHECK(!run_quiet("mouse_warping sometimes"));
 	fake_teardown();
 }
 

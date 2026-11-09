@@ -918,6 +918,61 @@ static const char *workspace_icon(struct bar_module *m, const char *name,
 	return json_get_string(icons, "default", name);
 }
 
+static void rewrite_append(char **out, size_t *len, size_t *cap,
+		const char *text) {
+	size_t add = strlen(text);
+	if (*len + add + 1 > *cap) {
+		*cap = (*len + add + 1) * 2;
+		*out = realloc(*out, *cap);
+	}
+	memcpy(*out + *len, text, add + 1);
+	*len += add;
+}
+
+// Waybar's sway/window rewrite rules match the whole formatted label. The
+// Windows build supports regex matching and whole-match substitutions ($&,
+// $0), along with $$ for a literal dollar sign.
+static char *rewrite_window_label(struct bar_module *m, const char *label) {
+	struct json_value *rules = json_object_get(m->cfg, "rewrite");
+	if (!rules || rules->type != JSON_OBJECT) {
+		return swine_strdup(label);
+	}
+	char *result = swine_strdup(label);
+	for (int i = 0; i < rules->keys->length; ++i) {
+		struct json_value *replacement = rules->items->items[i];
+		if (replacement->type != JSON_STRING) continue;
+		char *anchored = format_str("^(?:%s)$", rules->keys->items[i]);
+		char *error = NULL;
+		struct swine_regex *regex = swine_regex_compile(anchored, true, &error);
+		free(anchored);
+		free(error);
+		if (!regex) continue;
+		bool matches = swine_regex_search(regex, result);
+		swine_regex_free(regex);
+		if (!matches) continue;
+
+		size_t cap = strlen(result) + strlen(replacement->string) + 1;
+		size_t len = 0;
+		char *rewritten = malloc(cap);
+		rewritten[0] = '\0';
+		for (const char *p = replacement->string; *p;) {
+			if (*p == '$' && p[1] == '$') {
+				rewrite_append(&rewritten, &len, &cap, "$");
+				p += 2;
+			} else if (*p == '$' && (p[1] == '&' || p[1] == '0')) {
+				rewrite_append(&rewritten, &len, &cap, result);
+				p += 2;
+			} else {
+				char one[2] = {*p++, '\0'};
+				rewrite_append(&rewritten, &len, &cap, one);
+			}
+		}
+		free(result);
+		result = rewritten;
+	}
+	return result;
+}
+
 static struct swine_regex *window_rewrite_regex(const char *rule,
 		const char *field, bool *present) {
 	char *token = format_str("%s<", field);
@@ -2549,8 +2604,12 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			{"shell", false, "native", 0},
 			{"marks", false, marks, 0},
 		};
-		struct bar_item *item = add_label(ctx, m, index, format_waybar(
-			module_format(m, NULL, NULL, "{}"), args, 4, &ctx->tm), NULL);
+		char *formatted = format_waybar(module_format(m, NULL, NULL, "{}"),
+			args, 4, &ctx->tm);
+		char *rewritten = rewrite_window_label(m, formatted);
+		free(formatted);
+		struct bar_item *item = add_label(ctx, m, index, rewritten, NULL);
+		free(rewritten);
 		// The whole title, which max-length may have cut.
 		set_tooltip(ctx, m, item, NULL, NULL, args, 4, view->title);
 		free(marks);
@@ -2562,12 +2621,9 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			return;
 		}
 		struct json_value *icons = json_object_get(m->cfg, "format-icons");
-		const char *icon = "";
-		if (icons && icons->type == JSON_ARRAY && icons->items->length) {
-			int i = count > 0 && icons->items->length > 1 ? 1 : 0;
-			struct json_value *v = icons->items->items[i];
-			icon = v->type == JSON_STRING ? v->string : "";
-		}
+		int icon_max = icons && (icons->type == JSON_ARRAY ||
+			icons->type == JSON_OBJECT) ? icons->items->length : 0;
+		const char *icon = module_icon(m, count, NULL, icon_max);
 		struct fmt_arg args[] = {
 			{"count", true, NULL, count},
 			{"icon", false, icon, 0},
