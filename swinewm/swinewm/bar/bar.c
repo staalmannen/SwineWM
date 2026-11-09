@@ -2508,8 +2508,11 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		if (!sysinfo_battery(&bat)) {
 			return;
 		}
+		bool full_at_plugged = json_get_bool(m->cfg,
+			"full-at-plugged", false);
 		const char *status = bat.charging ? "charging" :
-			bat.plugged ? (bat.capacity >= 100 ? "full" : "plugged") :
+			bat.plugged ? (bat.capacity >= 100 && !full_at_plugged ?
+				"full" : "plugged") :
 			"discharging";
 		const char *state = module_state(m, bat.capacity, true);
 		// Waybar's format-time, "{H} h {M} min"
