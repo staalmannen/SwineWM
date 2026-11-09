@@ -1976,6 +1976,21 @@ static double disk_divisor(const char *unit) {
 	return 1.0;
 }
 
+static double memory_unit_divisor(const char *unit) {
+	static const struct { const char *unit; double divisor; } units[] = {
+		{"B", 1.0}, {"kB", 1e3}, {"kiB", 1024.0},
+		{"MB", 1e6}, {"MiB", 1048576.0}, {"GB", 1e9},
+		{"GiB", 1073741824.0}, {"TB", 1e12},
+		{"TiB", 1099511627776.0},
+	};
+	for (size_t i = 0; unit && i < sizeof(units) / sizeof(units[0]); ++i) {
+		if (strcmp(unit, units[i].unit) == 0) {
+			return units[i].divisor;
+		}
+	}
+	return 1073741824.0;
+}
+
 // One path of Waybar's disk module. Returns NULL if it cannot be read.
 static char *disk_text(struct bar_module *m, const char *path,
 		const char *format, const char **state_out, struct tm *tm,
@@ -2488,11 +2503,17 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		if (!sysinfo_memory(&mem)) {
 			return;
 		}
+		const char *unit = json_get_string(m->cfg, "unit", "GiB");
+		double divisor = memory_unit_divisor(unit);
+		if (divisor == 1073741824.0 && strcmp(unit, "GiB") != 0) {
+			unit = "GiB";
+		}
+		double unit_scale = 1073741824.0 / divisor;
 		struct fmt_arg args[] = {
 			{"percentage", true, NULL, mem.percentage},
-			{"used", true, NULL, mem.used_gib},
-			{"total", true, NULL, mem.total_gib},
-			{"avail", true, NULL, mem.avail_gib},
+			{"used", true, NULL, mem.used_gib * unit_scale},
+			{"total", true, NULL, mem.total_gib * unit_scale},
+			{"avail", true, NULL, mem.avail_gib * unit_scale},
 			{"icon", false, icon_for_percent(m, mem.percentage), 0},
 		};
 		const char *state = module_state(m, mem.percentage, false);
@@ -2500,7 +2521,9 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		struct bar_item *item = add_label(ctx, m, index, format_waybar(
 			module_format(m, state, NULL, "{percentage}%"), args, 5, &ctx->tm),
 			classes);
-		set_tooltip(ctx, m, item, state, "{used:0.1f}GiB used", args, 5, NULL);
+		char *default_tooltip = format_str("{used:0.1f}%s used", unit);
+		set_tooltip(ctx, m, item, state, default_tooltip, args, 5, NULL);
+		free(default_tooltip);
 		return;
 	}
 	case MOD_BATTERY: {
