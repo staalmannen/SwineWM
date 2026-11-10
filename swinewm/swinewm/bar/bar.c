@@ -969,6 +969,7 @@ static char *rewrite_window_label(struct bar_module *m, const char *label) {
 		}
 		free(result);
 		result = rewritten;
+		break;
 	}
 	return result;
 }
@@ -2574,10 +2575,23 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		return;
 	}
 	case MOD_WINDOW: {
-		struct swine_workspace *ws = output_get_active_workspace(ctx->output);
-		struct swine_container *con = ws ?
-			seat_get_focus_inactive_view(&ws->node) : NULL;
-		struct swine_view *view = con ? con->view : NULL;
+		bool all_outputs = json_get_bool(m->cfg, "all-outputs", false);
+		struct swine_view *view = NULL;
+		if (all_outputs) {
+			struct swine_container *focused = seat_get_focused_container();
+			view = focused ? focused->view : NULL;
+			if (!view) {
+				struct swine_workspace *focused_ws = seat_get_focused_workspace();
+				struct swine_container *con = focused_ws ?
+					seat_get_focus_inactive_view(&focused_ws->node) : NULL;
+				view = con ? con->view : NULL;
+			}
+		} else {
+			struct swine_workspace *ws = output_get_active_workspace(ctx->output);
+			struct swine_container *con = ws ?
+				seat_get_focus_inactive_view(&ws->node) : NULL;
+			view = con ? con->view : NULL;
+		}
 		if (!view) {
 			return;
 		}
@@ -2608,7 +2622,9 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			args, 4, &ctx->tm);
 		char *rewritten = rewrite_window_label(m, formatted);
 		free(formatted);
-		struct bar_item *item = add_label(ctx, m, index, rewritten, NULL);
+		bool solo = view_ancestor_is_only_visible(view);
+		const char *classes[] = {solo ? "solo" : NULL, NULL};
+		struct bar_item *item = add_label(ctx, m, index, rewritten, classes);
 		// The whole title, which max-length may have cut.
 		set_tooltip(ctx, m, item, NULL, NULL, args, 4, view->title);
 		free(marks);
