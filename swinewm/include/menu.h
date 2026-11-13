@@ -4,14 +4,17 @@
 #include <stdbool.h>
 #include "list.h"
 
-// Matching and ranking for swinemenu, like rofi/wofi's default mode: the
-// query is split at spaces and every word must appear in the entry's name,
-// ignoring (ASCII) case.
+// Matching and ranking for swinemenu. By default the query is split at
+// spaces and every word must appear in the entry's name, ignoring (ASCII)
+// case, or the query is the initials of the name's words ("vsc" for
+// Visual Studio Code). wofi's matching= modes are there too.
 
 struct menu_entry {
 	char *name;       // what is shown and matched
 	char *command;    // what is run (swinewm "exec" argument), or NULL
 	char *icon;       // a file or shell item whose icon is shown, or NULL
+	char *keywords;   // also matched, not shown (the program's file name,
+	                  // the English name, a description), or NULL
 	int uses;         // how often it was chosen (history)
 };
 
@@ -22,10 +25,16 @@ void menu_entry_free(struct menu_entry *entry);
 // empty query matches everything with score 0.
 int menu_match_score(const char *name, const char *query);
 
+struct menu_options;
+
 // Indexes (into entries, as (size_t) pointers cast to void *) of the entries
-// that match query, best first: more uses, then higher score, then (for a
-// non-empty query) shorter names, then alphabetical. Caller frees the list.
-list_t *menu_filter(list_t *entries, const char *query);
+// that match query (their name, or else their keywords), best first: more
+// uses, then a match in the name, then a better match (for swinemenu's
+// matching: a higher score, then a shorter name), then alphabetical, or in
+// the given order for dmenu and window mode (wofi's sort_order).
+// options may be NULL (swinemenu's matching). Caller frees the list.
+list_t *menu_filter(list_t *entries, const char *query,
+		const struct menu_options *options);
 
 // History file: lines "<uses>\t<name>". Missing files are no error.
 void menu_history_load(list_t *entries, const char *path);
@@ -41,8 +50,19 @@ enum menu_mode {
 	MENU_MODE_OPENWITH,    // swinemenu's own
 };
 
+// wofi's matching=; DEFAULT is swinemenu's own (wofi's is contains).
+enum menu_matching {
+	MENU_MATCHING_DEFAULT,
+	MENU_MATCHING_CONTAINS,        // the query anywhere; at the start first
+	MENU_MATCHING_MULTI_CONTAINS,  // each word anywhere; earliest first
+	MENU_MATCHING_FUZZY,           // the letters in order; best first
+};
+
 struct menu_options {
 	enum menu_mode mode;
+	enum menu_matching matching;
+	bool insensitive;      // wofi's modes ignore case only with this
+	bool sort_alphabetical;   // sort_order=alphabetical
 	char *prompt;          // NULL: the mode's name
 	char *width;           // "600" (px) or "50%"; NULL: swinemenu's 40%
 	char *height;          // NULL: from lines

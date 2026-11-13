@@ -10,6 +10,13 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- swinemenu: Start menu entries under the names Explorer shows (translated
+  on non-English Windows); found also by their program's file name
+  (`code`, `winver`), English name and description, and by initials
+  (`vsc` for Visual Studio Code); programs registered under App Paths;
+  wofi's `matching=contains|multi-contains|fuzzy`, `insensitive` and
+  `sort_order`. Uninstallers are recognised by the program they start, in
+  any language, and a program with several shortcuts is listed once.
 - `grim -c` and `grimshot --cursor` include the visible pointer in screenshots;
   `grim -q` controls JPEG fidelity (0–100, default 80) and `-s` scales the
   output image.
@@ -25,7 +32,6 @@ the MSI and zip with the matching section below as release notes.
 - `include=` in the mako config.
 - A new kawaii pig default wallpaper, with lipstick and a matching
   SwineWM wordmark.
-
 - Next to Explorer, bars are registered as AppBars: maximized windows,
   dialogs and other windows swinewm does not manage keep clear of the bar,
   as they keep clear of the taskbar.
@@ -81,6 +87,8 @@ the MSI and zip with the matching section below as release notes.
 
 ### Fixed
 
+- `swinemenu --dmenu` lists its choices in the order given, as wofi and
+  dmenu do, instead of alphabetically.
 - `bindsym --release` bindings run when the modifier is let go before the
   key, as in sway (the binding is armed when its keys go down and runs at
   the next key release); the press no longer reaches Windows' own

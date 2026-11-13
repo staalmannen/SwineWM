@@ -337,7 +337,7 @@ static int font_height(HFONT font) {
 static void refilter(void) {
 	list_free(menu.shown);
 	char *query = swinemenu_utf16_to_utf8(menu.query);
-	menu.shown = menu_filter(menu.entries, query);
+	menu.shown = menu_filter(menu.entries, query, &menu.opt);
 	free(query);
 	menu.selected = 0;
 	menu.top = 0;
