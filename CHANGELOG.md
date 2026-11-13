@@ -10,6 +10,13 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- swinemenu: Start menu entries under the names Explorer shows (translated
+  on non-English Windows); found also by their program's file name
+  (`code`, `winver`), English name and description, and by initials
+  (`vsc` for Visual Studio Code); programs registered under App Paths;
+  wofi's `matching=contains|multi-contains|fuzzy`, `insensitive` and
+  `sort_order`. Uninstallers are recognised by the program they start, in
+  any language, and a program with several shortcuts is listed once.
 - Notifications: Pango markup anywhere in a line (`<b>`, `<i>`, `<u>`,
   `<s>`, `<span weight= style= underline= strikethrough=>`), wrapped
   as one text; before, a line could only be bold or italic as a whole.
@@ -73,6 +80,8 @@ the MSI and zip with the matching section below as release notes.
 
 ### Fixed
 
+- `swinemenu --dmenu` lists its choices in the order given, as wofi and
+  dmenu do, instead of alphabetically.
 - `bindsym --release` bindings run when the modifier is let go before the
   key, as in sway (the binding is armed when its keys go down and runs at
   the next key release); the press no longer reaches Windows' own

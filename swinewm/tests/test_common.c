@@ -232,7 +232,7 @@ static void test_menu(void) {
 	list_add(entries, menu_entry_create("Terminal Server Client", NULL));
 	list_add(entries, menu_entry_create("Notepad", "notepad.exe"));
 	list_add(entries, menu_entry_create("Terminal", "alacritty.exe"));
-	list_t *found = menu_filter(entries, "term");
+	list_t *found = menu_filter(entries, "term", NULL);
 	CHECK_INT(found->length, 3);
 	// prefix matches first, the shorter name first among them
 	CHECK((size_t)found->items[0] == 3);
@@ -249,15 +249,92 @@ static void test_menu(void) {
 	menu_history_load(entries, path);
 	CHECK_INT(((struct menu_entry *)entries->items[0])->uses, 2);
 	CHECK_INT(((struct menu_entry *)entries->items[2])->uses, 1);
-	found = menu_filter(entries, "term");
+	found = menu_filter(entries, "term", NULL);
 	CHECK((size_t)found->items[0] == 0);
 	list_free(found);
-	found = menu_filter(entries, "");
+	found = menu_filter(entries, "", NULL);
 	CHECK_INT(found->length, 4);
 	CHECK((size_t)found->items[0] == 0);
 	CHECK((size_t)found->items[1] == 2);
 	list_free(found);
 	remove(path);
+	for (int i = 0; i < entries->length; ++i) {
+		menu_entry_free(entries->items[i]);
+	}
+	list_free(entries);
+
+	// Initials: "vsc", "vs19", "ff" (a capital after a small letter).
+	CHECK(menu_match_score("Visual Studio Code", "vsc") > 0);
+	CHECK(menu_match_score("Visual Studio 2019", "vs19") > 0);
+	CHECK(menu_match_score("FireFox", "ff") > 0);
+	CHECK(menu_match_score("Visual Studio Code", "vsx") < 0);
+	CHECK(menu_match_score("Visual Studio Code", "vcs") < 0);   // in order
+
+	// Keywords (the program's file name, the English name) match too,
+	// after the entries whose name matches.
+	entries = create_list();
+	struct menu_entry *e = menu_entry_create("Utforskaren", "explorer.exe");
+	e->keywords = swine_strdup("explorer File Explorer");
+	list_add(entries, e);
+	list_add(entries, menu_entry_create("Explorer++", "explorer++.exe"));
+	found = menu_filter(entries, "explorer", NULL);
+	CHECK_INT(found->length, 2);
+	CHECK(found->length == 2 && (size_t)found->items[0] == 1 &&
+		(size_t)found->items[1] == 0);
+	list_free(found);
+	for (int i = 0; i < entries->length; ++i) {
+		menu_entry_free(entries->items[i]);
+	}
+	list_free(entries);
+
+	// wofi's matching= modes, insensitive= and sort_order=.
+	struct menu_options o;
+	menu_options_init(&o);
+	char *error = NULL;
+	CHECK(menu_options_parse_config(&o, "matching=contains\n", &error));
+	entries = create_list();
+	list_add(entries, menu_entry_create("Notepad", NULL));       // 0
+	list_add(entries, menu_entry_create("pad", NULL));           // 1
+	list_add(entries, menu_entry_create("Padding tool", NULL));  // 2
+	list_add(entries, menu_entry_create("Code Pad", NULL));      // 3
+	found = menu_filter(entries, "pad", &o);   // case matters
+	CHECK_INT(found->length, 2);
+	CHECK(found->length == 2 && (size_t)found->items[0] == 1);
+	list_free(found);
+	CHECK(menu_options_parse_config(&o, "insensitive=true\n", &error));
+	found = menu_filter(entries, "pad", &o);   // at the start first
+	CHECK_INT(found->length, 4);
+	CHECK(found->length == 4 && (size_t)found->items[0] == 1 &&
+		(size_t)found->items[1] == 2);
+	list_free(found);
+	CHECK(menu_options_parse_config(&o, "matching=multi-contains\n", &error));
+	found = menu_filter(entries, "pad co", &o);   // both words, any order
+	CHECK(found->length == 1 && (size_t)found->items[0] == 3);
+	list_free(found);
+	CHECK(menu_options_parse_config(&o, "matching=fuzzy\n", &error));
+	found = menu_filter(entries, "pt", &o);   // in order: only Padding tool
+	CHECK(found->length == 1 && (size_t)found->items[0] == 2);
+	list_free(found);
+	found = menu_filter(entries, "cp", &o);   // word starts rank first
+	CHECK(found->length == 1 && (size_t)found->items[0] == 3);
+	list_free(found);
+	found = menu_filter(entries, "pd", &o);
+	CHECK_INT(found->length, 4);
+	CHECK(found->length == 4 && (size_t)found->items[0] == 1);   // "pad"
+	list_free(found);
+	// dmenu keeps its input order unless sort_order=alphabetical.
+	o.mode = MENU_MODE_DMENU;
+	found = menu_filter(entries, "", &o);
+	CHECK(found->length == 4 && (size_t)found->items[0] == 0 &&
+		(size_t)found->items[3] == 3);
+	list_free(found);
+	CHECK(menu_options_parse_config(&o, "sort_order=alphabetical\n", &error));
+	found = menu_filter(entries, "", &o);
+	CHECK(found->length == 4 && (size_t)found->items[0] == 3);   // Code Pad
+	list_free(found);
+	CHECK(!menu_options_parse_config(&o, "matching=regex\n", &error));
+	free(error);
+	menu_options_finish(&o);
 	for (int i = 0; i < entries->length; ++i) {
 		menu_entry_free(entries->items[i]);
 	}

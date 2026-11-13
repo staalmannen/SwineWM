@@ -168,7 +168,7 @@ if(WIN32)
   target_compile_definitions(swinemenu PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN
     WINVER=0x0A00 _WIN32_WINNT=0x0A00)
   target_link_libraries(swinemenu PRIVATE swine_common user32 gdi32 shell32 ole32
-    shlwapi uuid)
+    shlwapi uuid advapi32 version)
   target_include_directories(swinemenu PRIVATE ${SWINEWM_GENERATED_DIR})
 
   add_executable(swinemsg swinemsg/main.c)

@@ -19,6 +19,7 @@ void menu_entry_free(struct menu_entry *entry) {
 		free(entry->name);
 		free(entry->command);
 		free(entry->icon);
+		free(entry->keywords);
 		free(entry);
 	}
 }
@@ -39,6 +40,37 @@ static int find_word(const char *name, const char *word, size_t len) {
 	return -1;
 }
 
+// The query as the initials of the name's words, in order: "vsc" for
+// "Visual Studio Code", "vs19" for "Visual Studio 2019" (a number counts
+// with all its digits), "ff" for "FireFox".
+static bool initials_match(const char *name, const char *query) {
+	if (strlen(query) < 2 || strchr(query, ' ')) {
+		return false;
+	}
+	char initials[256];
+	size_t n = 0;
+	for (size_t i = 0; name[i] && n < sizeof(initials) - 1; ++i) {
+		unsigned char c = (unsigned char)name[i];
+		unsigned char prev = i > 0 ? (unsigned char)name[i - 1] : ' ';
+		if (isdigit(c)) {
+			initials[n++] = (char)c;
+		} else if (isalpha(c) && (!isalnum(prev) ||
+				(isupper(c) && islower(prev)))) {
+			initials[n++] = (char)tolower(c);
+		}
+	}
+	initials[n] = '\0';
+	const char *at = initials;
+	for (const char *q = query; *q; ++q) {
+		at = strchr(at, tolower((unsigned char)*q));
+		if (!at) {
+			return false;
+		}
+		++at;
+	}
+	return true;
+}
+
 int menu_match_score(const char *name, const char *query) {
 	int score = 0;
 	const char *p = query;
@@ -52,7 +84,7 @@ int menu_match_score(const char *name, const char *query) {
 		}
 		int at = find_word(name, p, len);
 		if (at < 0) {
-			return -1;
+			return initials_match(name, query) ? 2 : -1;
 		}
 		if (at == 0) {
 			score += 3;   // the name starts with it
@@ -66,10 +98,111 @@ int menu_match_score(const char *name, const char *query) {
 	return score;
 }
 
+// Where needle is in text (first len bytes of needle), or -1.
+static int find(const char *text, const char *needle, size_t len,
+		bool insensitive) {
+	for (size_t i = 0; text[i]; ++i) {
+		size_t k = 0;
+		while (k < len && text[i + k] && (insensitive ?
+				tolower((unsigned char)text[i + k]) ==
+				tolower((unsigned char)needle[k]) :
+				text[i + k] == needle[k])) {
+			++k;
+		}
+		if (k == len) {
+			return (int)i;
+		}
+	}
+	return len == 0 ? 0 : -1;
+}
+
+static bool same_char(char a, char b, bool insensitive) {
+	return insensitive ? tolower((unsigned char)a) == tolower((unsigned char)b) :
+		a == b;
+}
+
+// wofi's fuzzy matching: the query's characters in order. The score
+// favours characters at the start, at word starts (after a space or
+// punctuation, or a capital after a small letter), and next to each other.
+static int fuzzy_score(const char *text, const char *query, bool insensitive) {
+	int score = 1000;
+	int prev = -2;
+	size_t i = 0;
+	for (const char *q = query; *q; ++q) {
+		while (text[i] && !same_char(text[i], *q, insensitive)) {
+			++i;
+		}
+		if (!text[i]) {
+			return -1;
+		}
+		unsigned char c = (unsigned char)text[i];
+		unsigned char before = i > 0 ? (unsigned char)text[i - 1] : 0;
+		if (i == 0) {
+			score += 8;
+		} else if (!isalnum(before) && before < 0x80) {
+			score += 6;
+		} else if (isupper(c) && islower(before)) {
+			score += 5;
+		}
+		if ((int)i == prev + 1) {
+			score += 4;
+		} else if (prev >= 0) {
+			int gap = (int)i - prev - 1;
+			score -= gap < 3 ? gap : 3;
+		}
+		prev = (int)i;
+		++i;
+	}
+	return score;
+}
+
+// Score of text for query (< 0: no match; higher is better) in a mode.
+static int match_text(const char *text, const char *query,
+		const struct menu_options *o) {
+	if (!text) {
+		return -1;
+	}
+	enum menu_matching matching = o ? o->matching : MENU_MATCHING_DEFAULT;
+	bool insensitive = o && o->insensitive;
+	switch (matching) {
+	case MENU_MATCHING_DEFAULT:
+		break;
+	case MENU_MATCHING_CONTAINS: {
+		int at = find(text, query, strlen(query), insensitive);
+		return at < 0 ? -1 : at == 0 && *query ? 1 : 0;
+	}
+	case MENU_MATCHING_MULTI_CONTAINS: {
+		long sum = 0;
+		for (const char *p = query; *p; ) {
+			while (*p == ' ') {
+				++p;
+			}
+			size_t len = strcspn(p, " ");
+			if (len == 0) {
+				break;
+			}
+			int at = find(text, p, len, insensitive);
+			if (at < 0) {
+				return -1;
+			}
+			sum += at;
+			p += len;
+		}
+		return sum > 1000000 ? 0 : (int)(1000000 - sum);
+	}
+	case MENU_MATCHING_FUZZY:
+		return *query ? fuzzy_score(text, query, insensitive) : 0;
+	}
+	return menu_match_score(text, query);
+}
+
 struct ranked {
 	struct menu_entry *entry;
 	size_t index;
 	int score;
+	bool in_name;
+	bool shorter_first;   // swinemenu's matching, a typed query
+	bool by_index;        // wofi's sort_order=default for dmenu, window
 };
 
 static int compare_ranked(const void *a, const void *b) {
@@ -77,30 +210,43 @@ static int compare_ranked(const void *a, const void *b) {
 	if (x->entry->uses != y->entry->uses) {
 		return x->entry->uses > y->entry->uses ? -1 : 1;
 	}
+	if (x->in_name != y->in_name) {
+		return x->in_name ? -1 : 1;
+	}
 	if (x->score != y->score) {
 		return x->score > y->score ? -1 : 1;
 	}
 	// For a typed query shorter names are closer matches; an empty query
 	// lists everything alphabetically.
 	size_t lx = strlen(x->entry->name), ly = strlen(y->entry->name);
-	if (x->score > 0 && lx != ly) {
+	if (x->shorter_first && x->score > 0 && lx != ly) {
 		return lx < ly ? -1 : 1;
 	}
-	int c = swine_strcasecmp(x->entry->name, y->entry->name);
+	int c = x->by_index ? 0 : swine_strcasecmp(x->entry->name, y->entry->name);
 	if (c != 0) {
 		return c;
 	}
 	return x->index < y->index ? -1 : 1;
 }
 
-list_t *menu_filter(list_t *entries, const char *query) {
+list_t *menu_filter(list_t *entries, const char *query,
+		const struct menu_options *o) {
 	struct ranked *ranked = calloc((size_t)entries->length + 1, sizeof(*ranked));
 	size_t n = 0;
+	const char *q = query ? query : "";
+	bool shorter_first = !o || o->matching == MENU_MATCHING_DEFAULT;
+	bool by_index = o && !o->sort_alphabetical &&
+		(o->mode == MENU_MODE_DMENU || o->mode == MENU_MODE_WINDOW);
 	for (int i = 0; i < entries->length; ++i) {
 		struct menu_entry *entry = entries->items[i];
-		int score = menu_match_score(entry->name, query ? query : "");
+		int score = match_text(entry->name, q, o);
+		bool in_name = score >= 0;
+		if (!in_name && *q) {
+			score = match_text(entry->keywords, q, o);
+		}
 		if (score >= 0) {
-			ranked[n++] = (struct ranked){entry, (size_t)i, score};
+			ranked[n++] = (struct ranked){entry, (size_t)i, score, in_name,
+				shorter_first, by_index};
 		}
 	}
 	qsort(ranked, n, sizeof(*ranked), compare_ranked);
@@ -261,8 +407,7 @@ static int parse_location(const char *value) {
 // Options that are accepted and change nothing (GTK, Wayland, keys, ...).
 static const char *ignored_options[] = {
 	"normal_window", "allow_markup", "cache_file", "term", "hide_scroll",
-	"matching", "insensitive", "parse_search", "no_actions", "columns",
-	"sort_order", "gtk_dark", "monitor", "orientation", "halign", "valign",
+	"parse_search", "no_actions", "columns", "gtk_dark", "monitor", "orientation", "halign", "valign",
 	"content_halign", "filter_rate", "line_wrap", "global_coords",
 	"dynamic_lines", "layer", "copy_exec", "single_click", "pre_display_cmd",
 	"pre_display_exec", "use_search_box", "color", "colors", "fork",
@@ -335,6 +480,28 @@ bool menu_option_set(struct menu_options *o, const char *raw_key,
 		o->password = true;
 		if (value && *value && strcmp(value, "true") != 0) {
 			snprintf(o->password_char, sizeof(o->password_char), "%s", value);
+		}
+	} else if (strcmp(key, "matching") == 0) {
+		if (!value) {
+			ok = false;
+		} else if (strcmp(value, "contains") == 0) {
+			o->matching = MENU_MATCHING_CONTAINS;
+		} else if (strcmp(value, "multi-contains") == 0) {
+			o->matching = MENU_MATCHING_MULTI_CONTAINS;
+		} else if (strcmp(value, "fuzzy") == 0) {
+			o->matching = MENU_MATCHING_FUZZY;
+		} else {
+			ok = false;
+		}
+	} else if (strcmp(key, "insensitive") == 0) {
+		ok = parse_flag(value, &o->insensitive);
+	} else if (strcmp(key, "sort_order") == 0) {
+		if (value && strcmp(value, "alphabetical") == 0) {
+			o->sort_alphabetical = true;
+		} else if (value && strcmp(value, "default") == 0) {
+			o->sort_alphabetical = false;
+		} else {
+			ok = false;
 		}
 	} else if (strcmp(key, "exec_search") == 0) {
 		ok = parse_flag(value, &o->exec_search);
