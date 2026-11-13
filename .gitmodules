@@ -7,3 +7,10 @@
 [submodule "waybar"]
 	path = waybar
 	url = https://github.com/alexays/waybar
+[submodule "wofi"]
+	path = wofi
+    url = https://github.com/SimplyCEO/wofi
+
+[submodule "grim"]
+	path = grim
+	url = git@ssh.gitlab.freedesktop.org:emersion/grim.git

@@ -1,6 +1,8 @@
 // Screenshots for the built-in grim: copy the screen with GDI and encode
 // it with the Windows Imaging Component.
 #define COBJMACROS
+#include <limits.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
@@ -10,6 +12,8 @@
 #include "swinewm/platform.h"
 #include "win32.h"
 #include <shlobj.h>
+
+#define MAX_SCREENSHOT_PIXELS 100000000.0
 
 // FOLDERID_Pictures, spelled out to avoid depending on knownfolders' GUID
 // definitions being linked in.
@@ -27,11 +31,13 @@ char *platform_pictures_dir(void) {
 }
 
 // Encodes bitmap as PNG or JPEG into stream (a file or memory).
-static HRESULT encode(HBITMAP bitmap, IStream *stream, bool jpeg) {
+static HRESULT encode(HBITMAP bitmap, IStream *stream, bool jpeg,
+		int jpeg_quality) {
 	IWICImagingFactory *factory = NULL;
 	IWICBitmap *source = NULL;
 	IWICBitmapEncoder *encoder = NULL;
 	IWICBitmapFrameEncode *frame = NULL;
+	IPropertyBag2 *options = NULL;
 	HRESULT hr = CoCreateInstance(&CLSID_WICImagingFactory, NULL,
 		CLSCTX_INPROC_SERVER, &IID_IWICImagingFactory, (void **)&factory);
 	if (SUCCEEDED(hr)) {
@@ -47,10 +53,24 @@ static HRESULT encode(HBITMAP bitmap, IStream *stream, bool jpeg) {
 			WICBitmapEncoderNoCache);
 	}
 	if (SUCCEEDED(hr)) {
-		hr = IWICBitmapEncoder_CreateNewFrame(encoder, &frame, NULL);
+		hr = IWICBitmapEncoder_CreateNewFrame(encoder, &frame, &options);
 	}
 	if (SUCCEEDED(hr)) {
-		hr = IWICBitmapFrameEncode_Initialize(frame, NULL);
+		if (jpeg) {
+			if (!options) {
+				hr = E_POINTER;
+			} else {
+				PROPBAG2 property = {0};
+				property.pstrName = L"ImageQuality";
+				VARIANT value = {0};
+				value.vt = VT_R4;
+				value.fltVal = jpeg_quality / 100.0f;
+				hr = IPropertyBag2_Write(options, 1, &property, &value);
+			}
+		}
+	}
+	if (SUCCEEDED(hr)) {
+		hr = IWICBitmapFrameEncode_Initialize(frame, options);
 	}
 	if (SUCCEEDED(hr)) {
 		hr = IWICBitmapFrameEncode_WriteSource(frame,
@@ -63,13 +83,15 @@ static HRESULT encode(HBITMAP bitmap, IStream *stream, bool jpeg) {
 		hr = IWICBitmapEncoder_Commit(encoder);
 	}
 	if (frame) IWICBitmapFrameEncode_Release(frame);
+	if (options) IPropertyBag2_Release(options);
 	if (encoder) IWICBitmapEncoder_Release(encoder);
 	if (source) IWICBitmap_Release(source);
 	if (factory) IWICImagingFactory_Release(factory);
 	return hr;
 }
 
-static HRESULT save_file(HBITMAP bitmap, const char *path, bool jpeg) {
+static HRESULT save_file(HBITMAP bitmap, const char *path, bool jpeg,
+		int jpeg_quality) {
 	IWICImagingFactory *factory = NULL;
 	IWICStream *stream = NULL;
 	HRESULT hr = CoCreateInstance(&CLSID_WICImagingFactory, NULL,
@@ -83,7 +105,7 @@ static HRESULT save_file(HBITMAP bitmap, const char *path, bool jpeg) {
 		free(wpath);
 	}
 	if (SUCCEEDED(hr)) {
-		hr = encode(bitmap, (IStream *)stream, jpeg);
+		hr = encode(bitmap, (IStream *)stream, jpeg, jpeg_quality);
 	}
 	if (stream) IWICStream_Release(stream);
 	if (factory) IWICImagingFactory_Release(factory);
@@ -140,7 +162,7 @@ static HGLOBAL png_global(HBITMAP bitmap) {
 		return NULL;
 	}
 	HGLOBAL mem = NULL;
-	if (SUCCEEDED(encode(bitmap, stream, false))) {
+	if (SUCCEEDED(encode(bitmap, stream, false, 80))) {
 		GetHGlobalFromStream(stream, &mem);
 	} else if (SUCCEEDED(GetHGlobalFromStream(stream, &mem))) {
 		GlobalFree(mem);
@@ -199,31 +221,114 @@ bool platform_clipboard_set_text(const char *text) {
 }
 
 bool platform_screenshot(const struct swine_box *box, const char *path,
-		bool jpeg, bool clipboard, char **error) {
+		bool jpeg, int jpeg_quality, double scale, bool clipboard, bool cursor,
+		char **error) {
+	double scaled_width = box->width * scale;
+	double scaled_height = box->height * scale;
+	if (!isfinite(scale) || scale <= 0.0 || scaled_width < 1.0 ||
+			scaled_height < 1.0 || scaled_width > INT_MAX ||
+			scaled_height > INT_MAX ||
+			scaled_width * scaled_height > MAX_SCREENSHOT_PIXELS) {
+		*error = swine_strdup("invalid screenshot scale or dimensions");
+		return false;
+	}
+	int width = (int)scaled_width;
+	int height = (int)scaled_height;
 	HDC screen = GetDC(NULL);
+	if (!screen) {
+		*error = win32_error_string(GetLastError());
+		return false;
+	}
 	HDC dc = CreateCompatibleDC(screen);
 	HBITMAP bitmap = CreateCompatibleBitmap(screen, box->width, box->height);
+	if (!dc || !bitmap) {
+		*error = win32_error_string(GetLastError());
+		if (bitmap) DeleteObject(bitmap);
+		if (dc) DeleteDC(dc);
+		ReleaseDC(NULL, screen);
+		return false;
+	}
 	HGDIOBJ old = SelectObject(dc, bitmap);
+	if (!old || old == HGDI_ERROR) {
+		*error = win32_error_string(GetLastError());
+		DeleteObject(bitmap);
+		DeleteDC(dc);
+		ReleaseDC(NULL, screen);
+		return false;
+	}
 	// CAPTUREBLT includes layered windows (notification popups).
 	bool ok = BitBlt(dc, 0, 0, box->width, box->height, screen, box->x,
 		box->y, SRCCOPY | CAPTUREBLT) != FALSE;
+	if (ok && cursor) {
+		CURSORINFO ci = {.cbSize = sizeof(ci)};
+		if (GetCursorInfo(&ci) && (ci.flags & CURSOR_SHOWING) && ci.hCursor) {
+			ICONINFO ii;
+			if (GetIconInfo(ci.hCursor, &ii)) {
+				int x = ci.ptScreenPos.x - box->x - (int)ii.xHotspot;
+				int y = ci.ptScreenPos.y - box->y - (int)ii.yHotspot;
+				if (!DrawIconEx(dc, x, y, ci.hCursor, 0, 0, 0, NULL,
+						DI_NORMAL)) {
+					ok = false;
+				}
+				if (ii.hbmColor) DeleteObject(ii.hbmColor);
+				if (ii.hbmMask) DeleteObject(ii.hbmMask);
+			}
+		}
+	}
 	SelectObject(dc, old);
-	DeleteDC(dc);
-	ReleaseDC(NULL, screen);
 	if (!ok) {
 		*error = win32_error_string(GetLastError());
+		DeleteDC(dc);
+		ReleaseDC(NULL, screen);
 		DeleteObject(bitmap);
 		return false;
 	}
+	if (scale != 1.0) {
+		HDC scaled_dc = CreateCompatibleDC(screen);
+		HBITMAP scaled_bitmap = CreateCompatibleBitmap(screen, width, height);
+		if (!scaled_dc || !scaled_bitmap) {
+			*error = win32_error_string(GetLastError());
+			if (scaled_bitmap) DeleteObject(scaled_bitmap);
+			if (scaled_dc) DeleteDC(scaled_dc);
+			DeleteDC(dc);
+			ReleaseDC(NULL, screen);
+			DeleteObject(bitmap);
+			return false;
+		}
+		HGDIOBJ scaled_old = SelectObject(scaled_dc, scaled_bitmap);
+		HGDIOBJ source_old = SelectObject(dc, bitmap);
+		SetStretchBltMode(scaled_dc, HALFTONE);
+		SetBrushOrgEx(scaled_dc, 0, 0, NULL);
+		ok = scaled_old && scaled_old != HGDI_ERROR && source_old &&
+			source_old != HGDI_ERROR && StretchBlt(scaled_dc, 0, 0, width,
+				height, dc, 0, 0, box->width, box->height, SRCCOPY) != FALSE;
+		if (source_old && source_old != HGDI_ERROR) SelectObject(dc, source_old);
+		if (scaled_old && scaled_old != HGDI_ERROR) {
+			SelectObject(scaled_dc, scaled_old);
+		}
+		DeleteDC(scaled_dc);
+		DeleteDC(dc);
+		ReleaseDC(NULL, screen);
+		DeleteObject(bitmap);
+		if (!ok) {
+			*error = win32_error_string(GetLastError());
+			DeleteObject(scaled_bitmap);
+			return false;
+		}
+		bitmap = scaled_bitmap;
+	} else {
+		DeleteDC(dc);
+		ReleaseDC(NULL, screen);
+	}
 	if (path) {
-		HRESULT hr = save_file(bitmap, path, jpeg);
+		HRESULT hr = save_file(bitmap, path, jpeg, jpeg_quality);
 		if (FAILED(hr)) {
 			*error = win32_error_string((DWORD)hr);
 			ok = false;
 		}
 	}
 	if (ok && clipboard) {
-		ok = copy_to_clipboard(bitmap, box->width, box->height, error);
+		ok = copy_to_clipboard(bitmap, width, height, error);
 	}
 	DeleteObject(bitmap);
 	return ok;

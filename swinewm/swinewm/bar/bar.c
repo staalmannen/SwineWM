@@ -11,6 +11,7 @@
 #include <string.h>
 #include "json.h"
 #include "log.h"
+#include "regex.h"
 #include "stringop.h"
 #include "swinewm/bar/bar.h"
 #include "swinewm/bar/custom.h"
@@ -406,14 +407,18 @@ enum bar_position bar_position_n(int index) {
 	return instance_position(bar.bars->items[index]);
 }
 
-int bar_height(void) {
+int bar_height_n(int index) {
 	ensure_loaded();
-	if (!bar.bars->length) {
+	if (index < 0 || index >= bar.bars->length) {
 		return 0;
 	}
-	struct bar_instance *b = bar.bars->items[0];
+	struct bar_instance *b = bar.bars->items[index];
 	enum bar_position pos = instance_position(b);
 	return pos == BAR_LEFT || pos == BAR_RIGHT ? b->width : b->height;
+}
+
+int bar_height(void) {
+	return bar_height_n(0);
 }
 
 bool bar_at_top(void) {
@@ -864,32 +869,434 @@ static const char *module_format(struct bar_module *m, const char *state,
 	return json_get_string(m->cfg, "format", fallback);
 }
 
-static const char *workspace_icon(struct bar_module *m,
-		struct swine_workspace *ws, bool focused, bool visible) {
+static const char *workspace_icon(struct bar_module *m, const char *name,
+		bool urgent, bool focused, bool visible, bool persistent) {
 	struct json_value *icons = json_object_get(m->cfg, "format-icons");
 	if (!icons || icons->type != JSON_OBJECT) {
-		return ws->name;
+		return name;
 	}
 	const char *icon;
-	if (ws->urgent && (icon = json_get_string(icons, "urgent", NULL))) {
+	struct json_value *high_priority = json_object_get(icons,
+		"high-priority-named");
+	const char *colon = strchr(name, ':');
+	const char *trimmed = colon ? colon + 1 : name;
+	if (high_priority && high_priority->type == JSON_ARRAY) {
+		for (int i = 0; i < high_priority->items->length; ++i) {
+			struct json_value *entry = high_priority->items->items[i];
+			const char *entry_colon = entry->type == JSON_STRING ?
+				strchr(entry->string, ':') : NULL;
+			const char *entry_trimmed = entry_colon ? entry_colon + 1 :
+				entry->type == JSON_STRING ? entry->string : "";
+			if (entry->type == JSON_STRING &&
+					(strcmp(entry->string, name) == 0 ||
+					strcmp(entry->string, trimmed) == 0 ||
+					strcmp(entry_trimmed, trimmed) == 0)) {
+				icon = json_get_string(icons, name, NULL);
+				if (!icon) icon = json_get_string(icons, trimmed, NULL);
+				if (icon) return icon;
+			}
+		}
+	}
+	if (urgent && (icon = json_get_string(icons, "urgent", NULL))) {
 		return icon;
 	}
 	if (focused && (icon = json_get_string(icons, "focused", NULL))) {
 		return icon;
 	}
-	if ((icon = json_get_string(icons, ws->name, NULL))) {
+	if (persistent && (icon = json_get_string(icons, "persistent", NULL))) {
+		return icon;
+	}
+	if ((icon = json_get_string(icons, name, NULL))) {
+		return icon;
+	}
+	if ((icon = json_get_string(icons, trimmed, NULL))) {
 		return icon;
 	}
 	if (visible && (icon = json_get_string(icons, "visible", NULL))) {
 		return icon;
 	}
-	return json_get_string(icons, "default", ws->name);
+	return json_get_string(icons, "default", name);
+}
+
+static void rewrite_append(char **out, size_t *len, size_t *cap,
+		const char *text) {
+	size_t add = strlen(text);
+	if (*len + add + 1 > *cap) {
+		*cap = (*len + add + 1) * 2;
+		*out = realloc(*out, *cap);
+	}
+	memcpy(*out + *len, text, add + 1);
+	*len += add;
+}
+
+// Waybar's sway/window rewrite rules match the whole formatted label. The
+// Windows build supports regex matching and whole-match substitutions ($&,
+// $0), along with $$ for a literal dollar sign.
+static char *rewrite_window_label(struct bar_module *m, const char *label) {
+	struct json_value *rules = json_object_get(m->cfg, "rewrite");
+	if (!rules || rules->type != JSON_OBJECT) {
+		return swine_strdup(label);
+	}
+	char *result = swine_strdup(label);
+	for (int i = 0; i < rules->keys->length; ++i) {
+		struct json_value *replacement = rules->items->items[i];
+		if (replacement->type != JSON_STRING) continue;
+		char *anchored = format_str("^(?:%s)$", rules->keys->items[i]);
+		char *error = NULL;
+		struct swine_regex *regex = swine_regex_compile(anchored, true, &error);
+		free(anchored);
+		free(error);
+		if (!regex) continue;
+		bool matches = swine_regex_search(regex, result);
+		swine_regex_free(regex);
+		if (!matches) continue;
+
+		size_t cap = strlen(result) + strlen(replacement->string) + 1;
+		size_t len = 0;
+		char *rewritten = malloc(cap);
+		rewritten[0] = '\0';
+		for (const char *p = replacement->string; *p;) {
+			if (*p == '$' && p[1] == '$') {
+				rewrite_append(&rewritten, &len, &cap, "$");
+				p += 2;
+			} else if (*p == '$' && (p[1] == '&' || p[1] == '0')) {
+				rewrite_append(&rewritten, &len, &cap, result);
+				p += 2;
+			} else {
+				char one[2] = {*p++, '\0'};
+				rewrite_append(&rewritten, &len, &cap, one);
+			}
+		}
+		free(result);
+		result = rewritten;
+		break;
+	}
+	return result;
+}
+
+static struct swine_regex *window_rewrite_regex(const char *rule,
+		const char *field, bool *present) {
+	char *token = format_str("%s<", field);
+	const char *start = strstr(rule, token);
+	free(token);
+	*present = start != NULL;
+	if (!start) {
+		return NULL;
+	}
+	start += strlen(field) + 1;
+	const char *end = strchr(start, '>');
+	if (!end) {
+		return NULL;
+	}
+	char *pattern = swine_strndup(start, (size_t)(end - start));
+	char *error = NULL;
+	struct swine_regex *regex = swine_regex_compile(pattern, true, &error);
+	free(pattern);
+	free(error);
+	return regex;
+}
+
+struct workspace_windows_ctx {
+	struct bar_module *module;
+	const struct tm *tm;
+	char *text;
+	const char *separator;
+};
+
+static bool window_rewrite_matches(const char *rule,
+		struct swine_view *view) {
+	bool class_present = false, title_present = false;
+	struct swine_regex *class_re = window_rewrite_regex(rule, "class",
+		&class_present);
+	struct swine_regex *title_re = window_rewrite_regex(rule, "title",
+		&title_present);
+	bool class_matches = !class_present || (class_re &&
+		((view->class_name && swine_regex_search(class_re, view->class_name)) ||
+		(view->app_id && swine_regex_search(class_re, view->app_id))));
+	bool title_matches = !title_present || (title_re && view->title &&
+		swine_regex_search(title_re, view->title));
+	bool matches = (class_present || title_present) && class_matches &&
+		title_matches;
+	swine_regex_free(class_re);
+	swine_regex_free(title_re);
+	return matches;
+}
+
+static int window_rewrite_priority(const char *rule) {
+	bool has_class = strstr(rule, "class<") != NULL;
+	bool has_title = strstr(rule, "title<") != NULL;
+	return has_class && has_title ? 3 : has_title ? 2 : has_class ? 1 : 0;
+}
+
+static void append_workspace_window(struct swine_container *con, void *data) {
+	struct workspace_windows_ctx *ctx = data;
+	if (!con->view || !con->view->title ||
+			(!con->view->class_name && !con->view->app_id)) {
+		return;
+	}
+	struct json_value *rules = json_object_get(ctx->module->cfg,
+		"window-rewrite");
+	if (!rules || rules->type != JSON_OBJECT) {
+		return;
+	}
+	const char *rewrite = NULL;
+	int best_priority = -1;
+	for (int i = 0; i < rules->keys->length; ++i) {
+		const char *rule = rules->keys->items[i];
+		struct json_value *value = rules->items->items[i];
+		int priority = window_rewrite_priority(rule);
+		if (value->type == JSON_STRING && priority > best_priority &&
+				window_rewrite_matches(rule, con->view)) {
+			rewrite = value->string;
+			best_priority = priority;
+		}
+	}
+	if (!rewrite) {
+		rewrite = json_get_string(ctx->module->cfg,
+			"window-rewrite-default", "?");
+	}
+	if (!*rewrite) {
+		return;
+	}
+	const char *class_name = con->view->class_name ? con->view->class_name :
+		con->view->app_id;
+	struct fmt_arg args[] = {
+		{"name", false, con->view->title, 0},
+		{"class", false, class_name, 0},
+	};
+	char *text = format_waybar(rewrite, args, 2, ctx->tm);
+	if (ctx->text[0]) {
+		char *joined = format_str("%s%s%s", ctx->text, ctx->separator, text);
+		free(ctx->text);
+		ctx->text = joined;
+	} else {
+		free(ctx->text);
+		ctx->text = text;
+		return;
+	}
+	free(text);
+}
+
+static char *workspace_windows(struct bar_module *m, struct swine_workspace *ws,
+		const struct tm *tm) {
+	struct workspace_windows_ctx ctx = {
+		.module = m,
+		.tm = tm,
+		.text = swine_strdup(""),
+		.separator = json_get_string(m->cfg, "format-window-separator", " "),
+	};
+	if (json_object_get(m->cfg, "window-rewrite")) {
+		workspace_for_each_container(ws, append_workspace_window, &ctx);
+	}
+	return ctx.text;
+}
+
+static bool workspace_ignored(struct bar_module *m, const char *name) {
+	struct json_value *patterns = json_object_get(m->cfg,
+		"ignore-workspaces");
+	if (!patterns || patterns->type != JSON_ARRAY) {
+		return false;
+	}
+	for (int i = 0; i < patterns->items->length; ++i) {
+		struct json_value *pattern = patterns->items->items[i];
+		if (pattern->type != JSON_STRING) {
+			continue;
+		}
+		char *full_match = format_str("^(?:%s)$", pattern->string);
+		char *error = NULL;
+		struct swine_regex *regex = swine_regex_compile(full_match, true,
+			&error);
+		free(full_match);
+		free(error);
+		if (regex) {
+			bool matches = swine_regex_search(regex, name);
+			swine_regex_free(regex);
+			if (matches) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+struct workspace_bar_ref {
+	struct swine_workspace *workspace;
+	struct swine_output *output;
+	int custom_priority;
+	int number;
+	int original_order;
+};
+
+struct workspace_display_ref {
+	const char *name;
+	struct bar_item *item;
+	int custom_priority;
+	int number;
+	int original_order;
+	bool alphabetical;
+};
+
+static const char *workspace_trim_name(const char *name) {
+	const char *colon = strchr(name, ':');
+	return colon ? colon + 1 : name;
+}
+
+static int workspace_custom_priority(struct json_value *cfg,
+		const char *name) {
+	struct json_value *custom = json_object_get(cfg, "custom-sort");
+	if (!custom || custom->type != JSON_ARRAY) {
+		return -1;
+	}
+	const char *trimmed = workspace_trim_name(name);
+	int name_priority = -1;
+	int trimmed_priority = -1;
+	int priority = 0;
+	for (int i = 0; i < custom->items->length; ++i) {
+		struct json_value *entry = custom->items->items[i];
+		if (entry->type != JSON_STRING) {
+			continue;
+		}
+		const char *entry_trimmed = workspace_trim_name(entry->string);
+		if (strcmp(name, entry->string) == 0 ||
+				strcmp(name, entry_trimmed) == 0) {
+			name_priority = priority;
+		}
+		if (strcmp(trimmed, entry->string) == 0 ||
+				strcmp(trimmed, entry_trimmed) == 0) {
+			trimmed_priority = priority;
+		}
+		priority++;
+	}
+	return name_priority >= 0 ? name_priority : trimmed_priority;
+}
+
+static int workspace_display_sort_cmp(const void *a, const void *b) {
+	const struct workspace_display_ref *left = *(void *const *)a;
+	const struct workspace_display_ref *right = *(void *const *)b;
+	if (left->custom_priority >= 0 || right->custom_priority >= 0) {
+		if (left->custom_priority < 0) return 1;
+		if (right->custom_priority < 0) return -1;
+		if (left->custom_priority != right->custom_priority) {
+			return left->custom_priority - right->custom_priority;
+		}
+	}
+	if (left->alphabetical && right->alphabetical) {
+		return strcmp(left->name, right->name);
+	}
+	if (left->number >= 0 || right->number >= 0) {
+		if (left->number < 0) return 1;
+		if (right->number < 0) return -1;
+		if (left->number != right->number) {
+			return left->number - right->number;
+		}
+	}
+	return left->original_order - right->original_order;
+}
+
+static char *workspace_criteria_pattern(const char *name) {
+	const char *regex_special = "\\.^$|?*+()[]{}\"";
+	size_t len = strlen(name);
+	char *pattern = calloc(len * 2 + 1, 1);
+	char *write = pattern;
+	for (const char *read = name; *read; ++read) {
+		if (strchr(regex_special, *read)) {
+			*write++ = '\\';
+		}
+		*write++ = *read;
+	}
+	return pattern;
+}
+
+static char *workspace_command_name(const char *name) {
+	size_t len = strlen(name);
+	char *escaped = calloc(len * 2 + 1, 1);
+	char *write = escaped;
+	for (const char *read = name; *read; ++read) {
+		if (*read == '$') {
+			*write++ = '$';
+		}
+		*write++ = *read;
+	}
+	return escaped;
+}
+
+static char *workspace_click_command(const char *name,
+		bool disable_auto_back_and_forth, bool no_switch_output) {
+	char *command_name = workspace_command_name(name);
+	char *focus = disable_auto_back_and_forth ?
+		format_str("workspace --no-auto-back-and-forth \"%s\"",
+			command_name) :
+		format_str("workspace \"%s\"", command_name);
+	char *pattern = no_switch_output ? workspace_criteria_pattern(name) : NULL;
+	char *command = no_switch_output ? format_str(
+		"[workspace=\"^%s$\"] move workspace to output current; %s",
+		pattern, focus) : swine_strdup(focus);
+	free(pattern);
+	free(focus);
+	free(command_name);
+	return command;
+}
+
+static char *persistent_workspace_click_command(const char *name,
+		const char *output) {
+	char *command_name = workspace_command_name(name);
+	char *focus = format_str("workspace --no-auto-back-and-forth \"%s\"",
+		command_name);
+	char *command = format_str("%s; move workspace to output \"%s\"; %s",
+		focus, output, focus);
+	free(focus);
+	free(command_name);
+	return command;
+}
+
+static bool workspace_scroll_at_edge(struct swine_workspace *current,
+		bool all_outputs, bool up) {
+	if (!current) {
+		return true;
+	}
+	list_t *workspaces = create_list();
+	if (all_outputs) {
+		for (int i = 0; i < root->outputs->length; ++i) {
+			struct swine_output *output = root->outputs->items[i];
+			list_cat(workspaces, output->workspaces);
+		}
+	} else if (current->output) {
+		list_cat(workspaces, current->output->workspaces);
+	}
+	int index = list_find(workspaces, current);
+	bool at_edge = index == -1 || (up ? index == 0 :
+		index == workspaces->length - 1);
+	list_free(workspaces);
+	return at_edge;
+}
+
+static char *workspace_scroll_command(struct swine_workspace *current,
+		bool all_outputs, bool up, bool warp_on_scroll,
+		bool reverse_scroll, bool disable_wraparound) {
+	if (reverse_scroll) {
+		up = !up;
+	}
+	if (disable_wraparound && workspace_scroll_at_edge(current,
+			all_outputs, up)) {
+		return NULL;
+	}
+	char *workspace = swine_strdup(all_outputs ?
+		(up ? "workspace prev" : "workspace next") :
+		(up ? "workspace prev_on_output" : "workspace next_on_output"));
+	if (warp_on_scroll) {
+		return workspace;
+	}
+	char *command = format_str("mouse_warping none; %s; mouse_warping container",
+		workspace);
+	free(workspace);
+	return command;
 }
 
 static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 		int index) {
 	struct bar_module_view *view = new_view(m, index);
 	view->is_box = true;
+	view->scroll_entire_bar = json_get_bool(m->cfg, "enable-bar-scroll", false);
 	const char *box_classes[2] = {m->css_class, NULL};
 	struct css_element box_el = {"box", "workspaces",
 		m->css_class ? box_classes : NULL, &ctx->window_el};
@@ -898,8 +1305,19 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 	bool all_outputs = json_get_bool(m->cfg, "all-outputs", false);
 	bool disable_scroll = json_get_bool(m->cfg, "disable-scroll", false);
 	bool disable_click = json_get_bool(m->cfg, "disable-click", false);
-	const char *format = json_get_string(m->cfg, "format", "{name}");
+	bool disable_markup = json_get_bool(m->cfg, "disable-markup", false);
+	bool disable_auto_back_and_forth = json_get_bool(m->cfg,
+		"disable-auto-back-and-forth", false);
+	bool no_switch_output = json_get_bool(m->cfg, "no-switch-output", false);
+	bool current_only = json_get_bool(m->cfg, "current-only", false);
+	bool alphabetical_sort = json_get_bool(m->cfg, "alphabetical_sort", false);
+	bool warp_on_scroll = json_get_bool(m->cfg, "warp-on-scroll", true);
+	bool reverse_scroll = json_get_bool(m->cfg, "reverse-scroll", false);
+	bool disable_scroll_wraparound = json_get_bool(m->cfg,
+		"disable-scroll-wraparound", false);
+	const char *format = json_get_string(m->cfg, "format", "{value}");
 	struct swine_workspace *focused_ws = seat_get_focused_workspace();
+	list_t *display_items = create_list();
 
 	list_t *outputs = create_list();
 	if (all_outputs) {
@@ -907,49 +1325,210 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 	} else {
 		list_add(outputs, ctx->output);
 	}
+	list_t *workspaces = create_list();
 	for (int o = 0; o < outputs->length; ++o) {
 		struct swine_output *output = outputs->items[o];
 		for (int i = 0; i < output->workspaces->length; ++i) {
-			struct swine_workspace *ws = output->workspaces->items[i];
+			struct workspace_bar_ref *ref = calloc(1, sizeof(*ref));
+			ref->workspace = output->workspaces->items[i];
+			ref->output = output;
+			ref->custom_priority = workspace_custom_priority(m->cfg,
+				ref->workspace->name);
+			ref->number = workspace_number(ref->workspace->name);
+			ref->original_order = workspaces->length;
+			list_add(workspaces, ref);
+		}
+	}
+	int live_workspace_count = workspaces->length;
+	for (int i = 0; i < workspaces->length; ++i) {
+		struct workspace_bar_ref *ref = workspaces->items[i];
+		struct swine_workspace *ws = ref->workspace;
+		struct swine_output *output = ref->output;
 			bool focused = ws == focused_ws;
+			if ((current_only && !focused) ||
+					workspace_ignored(m, ws->name)) {
+				continue;
+			}
 			bool visible = workspace_is_visible(ws);
-			const char *classes[5];
+			int num = workspace_number(ws->name);
+			const char *colon = strchr(ws->name, ':');
+			const char *name = colon ? colon + 1 : ws->name;
+			const char *classes[8];
 			int n = 0;
 			if (focused) classes[n++] = "focused";
 			if (visible) classes[n++] = "visible";
 			if (ws->urgent) classes[n++] = "urgent";
 			if (output == ctx->output) classes[n++] = "current_output";
+			if (!ws->tiling->length && !ws->floating->length) {
+				classes[n++] = "empty";
+			}
+			char index_class[32];
+			snprintf(index_class, sizeof(index_class), "workspace-index-%d", num);
+			classes[n++] = index_class;
+			const char *output_class = json_get_string(json_object_get(m->cfg,
+				"output-classes"), output->name, NULL);
+			if (output_class && *output_class) {
+				classes[n++] = output_class;
+			}
 			classes[n] = NULL;
 
-			int num = workspace_number(ws->name);
 			char num_text[16];
 			snprintf(num_text, sizeof(num_text), "%d", num);
+			const char *ws_format = num < 0 ? json_get_string(m->cfg,
+				"format-for-negative-index", format) : format;
+			char *windows = workspace_windows(m, ws, &ctx->tm);
 			struct fmt_arg args[] = {
-				{"name", false, ws->name, 0},
+				{"name", false, name, 0},
 				{"value", false, ws->name, 0},
 				{"index", false, num >= 0 ? num_text : "", 0},
-				{"icon", false, workspace_icon(m, ws, focused, visible), 0},
+				{"icon", false, workspace_icon(m, ws->name, ws->urgent,
+					focused, visible, false), 0},
 				{"output", false, output->name, 0},
+				{"windows", false, windows, 0},
 			};
-			char *text = format_waybar(format, args, 5, &ctx->tm);
+			char *text = format_waybar(ws_format, args, 6, &ctx->tm);
+			free(windows);
 			struct bar_item *item = calloc(1, sizeof(*item));
-			item->text = markup_strip(text);
+			item->text = disable_markup ? swine_strdup(text) : markup_strip(text);
 			free(text);
 			struct css_element el = {"button", NULL, classes, &box_el};
 			compute_item_style(&el, &view->style, item);
 			if (!disable_click) {
-				item->on_click = format_str(
-					"workspace --no-auto-back-and-forth \"%s\"", ws->name);
+				item->on_click = workspace_click_command(ws->name,
+					disable_auto_back_and_forth,
+					no_switch_output);
 			}
 			if (!disable_scroll) {
-				item->on_scroll_up = swine_strdup(all_outputs ?
-					"workspace prev" : "workspace prev_on_output");
-				item->on_scroll_down = swine_strdup(all_outputs ?
-					"workspace next" : "workspace next_on_output");
+				item->on_scroll_up = workspace_scroll_command(focused_ws,
+					all_outputs, true, warp_on_scroll, reverse_scroll,
+					disable_scroll_wraparound);
+				item->on_scroll_down = workspace_scroll_command(focused_ws,
+					all_outputs, false, warp_on_scroll, reverse_scroll,
+					disable_scroll_wraparound);
 			}
-			list_add(view->items, item);
+			struct workspace_display_ref *display = calloc(1,
+				sizeof(*display));
+			display->name = ws->name;
+			display->item = item;
+			display->custom_priority = ref->custom_priority;
+			display->number = ref->number;
+			display->original_order = ref->original_order;
+			display->alphabetical = alphabetical_sort;
+			list_add(display_items, display);
+	}
+	list_free_items_and_destroy(workspaces);
+	// Waybar's persistent-workspaces are display-only placeholders: they do
+	// not create workspaces in Sway until clicked. Keep the same behavior by
+	// adding configured names to the bar model only.
+	struct json_value *persistent = json_object_get(m->cfg,
+		"persistent-workspaces");
+	if (persistent && persistent->type == JSON_OBJECT) {
+		for (int p = 0; p < persistent->keys->length; ++p) {
+			const char *name = persistent->keys->items[p];
+			bool exists_in_scope = false;
+			for (int o = 0; o < outputs->length && !exists_in_scope; ++o) {
+				struct swine_output *out = outputs->items[o];
+				for (int w = 0; w < out->workspaces->length; ++w) {
+					struct swine_workspace *ws = out->workspaces->items[w];
+					if (strcmp(ws->name, name) == 0) {
+						exists_in_scope = true;
+						break;
+					}
+				}
+			}
+			if (current_only || workspace_ignored(m, name) ||
+					exists_in_scope) {
+				continue;
+			}
+			struct json_value *targets = persistent->items->items[p];
+			bool applies = false;
+			if (!targets || targets->type != JSON_ARRAY ||
+					targets->items->length == 0) {
+				// An empty output list means every output, including when
+				// all-outputs makes this bar enumerate several outputs.
+				applies = true;
+			} else {
+				for (int t = 0; t < targets->items->length; ++t) {
+					struct json_value *target = targets->items->items[t];
+					struct swine_output *out = target->type == JSON_STRING ?
+						output_by_name_or_id(target->string) : NULL;
+					if (out == ctx->output) {
+						applies = true;
+						break;
+					}
+				}
+			}
+			if (!applies) {
+				continue;
+			}
+			int num = workspace_number(name);
+			char num_text[16];
+			snprintf(num_text, sizeof(num_text), "%d", num);
+			const char *ws_format = num < 0 ? json_get_string(m->cfg,
+				"format-for-negative-index", format) : format;
+			const char *colon = strchr(name, ':');
+			const char *trimmed_name = colon ? colon + 1 : name;
+			const char *icon = workspace_icon(m, name, false, false,
+				false, true);
+			const char *windows = "";
+			char index_class[32];
+			snprintf(index_class, sizeof(index_class), "workspace-index-%d", num);
+			const char *output_class = json_get_string(json_object_get(m->cfg,
+				"output-classes"), ctx->output->name, NULL);
+			struct fmt_arg args[] = {
+				{"name", false, trimmed_name, 0},
+				{"value", false, name, 0},
+				{"index", false, num >= 0 ? num_text : "", 0},
+				{"icon", false, icon, 0},
+				{"output", false, ctx->output->name, 0},
+				{"windows", false, windows, 0},
+			};
+			char *text = format_waybar(ws_format, args, 6, &ctx->tm);
+			struct bar_item *item = calloc(1, sizeof(*item));
+			item->text = disable_markup ? swine_strdup(text) : markup_strip(text);
+			free(text);
+			const char *classes[6];
+			int n = 0;
+			classes[n++] = "persistent";
+			classes[n++] = "empty";
+			classes[n++] = "current_output";
+			classes[n++] = index_class;
+			if (output_class && *output_class) classes[n++] = output_class;
+			classes[n] = NULL;
+			struct css_element el = {"button", NULL, classes, &box_el};
+			compute_item_style(&el, &view->style, item);
+			if (!disable_click) {
+				item->on_click = persistent_workspace_click_command(name,
+					ctx->output->name);
+			}
+			if (!disable_scroll) {
+				item->on_scroll_up = workspace_scroll_command(focused_ws,
+					all_outputs, true, warp_on_scroll, reverse_scroll,
+					disable_scroll_wraparound);
+				item->on_scroll_down = workspace_scroll_command(focused_ws,
+					all_outputs, false, warp_on_scroll, reverse_scroll,
+					disable_scroll_wraparound);
+			}
+			struct workspace_display_ref *display = calloc(1,
+				sizeof(*display));
+			display->name = name;
+			display->item = item;
+			display->custom_priority = workspace_custom_priority(m->cfg,
+				name);
+			display->number = num;
+			display->original_order = live_workspace_count + p;
+			display->alphabetical = alphabetical_sort;
+			list_add(display_items, display);
 		}
 	}
+	qsort(display_items->items, (size_t)display_items->length,
+		sizeof(void *), workspace_display_sort_cmp);
+	for (int i = 0; i < display_items->length; ++i) {
+		struct workspace_display_ref *display = display_items->items[i];
+		list_add(view->items, display->item);
+		free(display);
+	}
+	list_free(display_items);
 	list_free(outputs);
 	list_add(ctx->model->modules, view);
 }
@@ -986,11 +1565,14 @@ static bool tray_ignored(struct json_value *list, struct tray_item *item) {
 	if (!list || list->type != JSON_ARRAY) {
 		return false;
 	}
+	char id[32];
+	snprintf(id, sizeof(id), "%llu", (unsigned long long)item->id);
 	for (int i = 0; i < list->items->length; ++i) {
 		struct json_value *v = list->items->items[i];
 		if (v->type == JSON_STRING && *v->string &&
 				((item->app_id && strstr(item->app_id, v->string)) ||
-				(item->title && strstr(item->title, v->string)))) {
+				(item->title && strstr(item->title, v->string)) ||
+				strstr(id, v->string))) {
 			return true;
 		}
 	}
@@ -1083,21 +1665,41 @@ static void build_tray(struct build_ctx *ctx, struct bar_module *m,
 }
 
 // Waybar's Custom::update.
+static void custom_set_image(struct bar_item *item, struct bar_module *m) {
+	const char *path = json_get_string(m->cfg, "image-path", NULL);
+	if (!path || !*path) {
+		return;
+	}
+	item->icon_path = platform_expand_path(path);
+	item->icon_size = (int)json_get_number(m->cfg, "icon-size", 16);
+	if (item->icon_size <= 0) {
+		item->icon_size = 16;
+	}
+}
+
 static void build_custom(struct build_ctx *ctx, struct bar_module *m,
 		int index) {
 	if (!m->script) {
 		if (!json_object_get(m->cfg, "exec") &&
 				!json_object_get(m->cfg, "exec-if")) {
 			struct fmt_arg args[] = {{NULL, false, "", 0}};
-			add_label(ctx, m, index, format_waybar(module_format(m, NULL, NULL,
-				"{}"), args, 1, &ctx->tm), NULL);
+			struct bar_item *item = add_label(ctx, m, index, format_waybar(
+				module_format(m, NULL, NULL, "{}"), args, 1, &ctx->tm), NULL);
+			custom_set_image(item, m);
 		}
 		return;
 	}
 	struct bar_script_result r;
 	bar_script_result(m->script, &r);
+	const char *image_path = json_get_string(m->cfg, "image-path", NULL);
+	if (r.hidden && image_path && *image_path) {
+		r.hidden = false;
+		r.text = swine_strdup("");
+		r.alt = swine_strdup("");
+		r.tooltip = swine_strdup("");
+	}
 	if (r.hidden || (json_get_bool(m->cfg, "hide-empty-text", false) &&
-			!r.text[0])) {
+			!r.text[0] && (!image_path || !*image_path))) {
 		bar_script_result_finish(&r);
 		return;
 	}
@@ -1131,6 +1733,7 @@ static void build_custom(struct build_ctx *ctx, struct bar_module *m,
 	};
 	set_tooltip(ctx, m, item, NULL, NULL, tip_args, 6,
 		strcmp(r.text, r.tooltip) == 0 ? label_copy : r.tooltip);
+	custom_set_image(item, m);
 	free(label_copy);
 	bar_script_result_finish(&r);
 }
@@ -1430,6 +2033,21 @@ static double disk_divisor(const char *unit) {
 		}
 	}
 	return 1.0;
+}
+
+static double memory_unit_divisor(const char *unit) {
+	static const struct { const char *unit; double divisor; } units[] = {
+		{"B", 1.0}, {"kB", 1e3}, {"kiB", 1024.0},
+		{"MB", 1e6}, {"MiB", 1048576.0}, {"GB", 1e9},
+		{"GiB", 1073741824.0}, {"TB", 1e12},
+		{"TiB", 1099511627776.0},
+	};
+	for (size_t i = 0; unit && i < sizeof(units) / sizeof(units[0]); ++i) {
+		if (strcmp(unit, units[i].unit) == 0) {
+			return units[i].divisor;
+		}
+	}
+	return 1073741824.0;
 }
 
 // One path of Waybar's disk module. Returns NULL if it cannot be read.
@@ -1790,19 +2408,84 @@ static void build_language(struct build_ctx *ctx, struct bar_module *m,
 	free(label_copy);
 }
 
-// Waybar's {calendar}: the month of tm, weeks from Monday.
-static char *month_calendar(const struct tm *tm) {
+static int calendar_week_number(const struct tm *tm,
+		const char *numbering) {
+	if (strcmp(numbering, "iso") == 0) {
+		struct tm thursday = *tm;
+		int monday_day = (thursday.tm_wday + 6) % 7;
+		thursday.tm_mday += 3 - monday_day;
+		thursday.tm_isdst = -1;
+		mktime(&thursday);
+		return thursday.tm_yday / 7 + 1;
+	}
+	if (strcmp(numbering, "monday") == 0) {
+		int monday_day = (tm->tm_wday + 6) % 7;
+		return (tm->tm_yday + 7 - monday_day) / 7;
+	}
+	return (tm->tm_yday + 7 - tm->tm_wday) / 7;
+}
+
+// Waybar's {calendar}: the month of tm with configurable week layout.
+static char *month_calendar(const struct tm *tm, int first_day,
+		const char *weeks_pos, const char *week_numbering) {
 	static const int days_in[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+	static const char *weekdays[] = {"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"};
 	int year = tm->tm_year + 1900;
 	int days = days_in[tm->tm_mon];
 	if (tm->tm_mon == 1 && ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0)) {
 		days = 29;
 	}
-	// Weekday of the 1st (Monday 0), from today's.
-	int first = ((tm->tm_wday + 6) % 7 - (tm->tm_mday - 1) % 7 + 7) % 7;
-	char *out = malloc(8 * 21 + 1);
+	if (first_day < 0 || first_day > 6) {
+		first_day = 1;
+	}
+	int weekday_of_first = (tm->tm_wday - (tm->tm_mday - 1) % 7 + 7) % 7;
+	int first = (weekday_of_first - first_day + 7) % 7;
+	if (strcmp(weeks_pos, "left") == 0 || strcmp(weeks_pos, "right") == 0) {
+		char *out = malloc(512);
+		char *o = out;
+		if (strcmp(weeks_pos, "left") == 0) {
+			o += sprintf(o, "Wk ");
+		}
+		for (int i = 0; i < 7; ++i) {
+			o += sprintf(o, "%s%s", i ? " " : "",
+				weekdays[(first_day + i) % 7]);
+		}
+		if (strcmp(weeks_pos, "right") == 0) {
+			o += sprintf(o, " Wk");
+		}
+		int weeks = (first + days + 6) / 7;
+		for (int row = 0; row < weeks; ++row) {
+			struct tm week_tm = *tm;
+			week_tm.tm_mday = 1 - first + row * 7;
+			week_tm.tm_hour = 12;
+			week_tm.tm_isdst = -1;
+			mktime(&week_tm);
+			if (strcmp(weeks_pos, "left") == 0) {
+				o += sprintf(o, "\n%02d ", calendar_week_number(&week_tm,
+					week_numbering));
+			} else {
+				o += sprintf(o, "\n");
+			}
+			for (int col = 0; col < 7; ++col) {
+				int day = row * 7 + col - first + 1;
+				if (day >= 1 && day <= days) {
+					o += sprintf(o, "%s%2d", col ? " " : "", day);
+				} else {
+					o += sprintf(o, "%s  ", col ? " " : "");
+				}
+			}
+			if (strcmp(weeks_pos, "right") == 0) {
+				o += sprintf(o, " %02d", calendar_week_number(&week_tm,
+					week_numbering));
+			}
+		}
+		return out;
+	}
+	char *out = malloc(256);
 	char *o = out;
-	o += sprintf(o, "Mo Tu We Th Fr Sa Su");
+	for (int i = 0; i < 7; ++i) {
+		o += sprintf(o, "%s%s", i ? " " : "", weekdays[(first_day + i) % 7]);
+	}
 	int column = 0;
 	for (int i = 0; i < first; ++i, ++column) {
 		o += sprintf(o, "%s  ", column == 0 ? "\n" : " ");
@@ -1813,6 +2496,64 @@ static char *month_calendar(const struct tm *tm) {
 		}
 		o += sprintf(o, "%s%2d", column == 0 ? "\n" : " ", day);
 	}
+	return out;
+}
+
+static char *year_calendar(const struct tm *tm, int first_day, int columns,
+		const char *weeks_pos, const char *week_numbering) {
+	if (columns != 1 && columns != 2 && columns != 3 && columns != 4 &&
+			columns != 6 && columns != 12) {
+		columns = 3;
+	}
+	char cells[12][8][32] = {{{0}}};
+	for (int month = 0; month < 12; ++month) {
+		struct tm month_tm = *tm;
+		month_tm.tm_mon = month;
+		month_tm.tm_mday = 1;
+		month_tm.tm_hour = 12;
+		month_tm.tm_min = 0;
+		month_tm.tm_sec = 0;
+		month_tm.tm_isdst = -1;
+		mktime(&month_tm);
+		strftime(cells[month][0], sizeof(cells[month][0]), "%B", &month_tm);
+		char *calendar = month_calendar(&month_tm, first_day, weeks_pos,
+			week_numbering);
+		char *line = calendar;
+		for (int row = 1; row < 8 && line; ++row) {
+			char *end = strchr(line, '\n');
+			if (end) {
+				*end = '\0';
+			}
+			snprintf(cells[month][row], sizeof(cells[month][row]), "%s", line);
+			line = end ? end + 1 : NULL;
+		}
+		free(calendar);
+	}
+	char *out = calloc(4096, 1);
+	char *write = out;
+	int cell_width = strcmp(weeks_pos, "left") == 0 ? 24 :
+		strcmp(weeks_pos, "right") == 0 ? 25 : 21;
+	for (int group = 0; group < 12; group += columns) {
+		for (int row = 0; row < 8; ++row) {
+			for (int col = 0; col < columns; ++col) {
+				int month = group + col;
+				const char *cell = month < 12 ? cells[month][row] : "";
+				size_t len = strlen(cell);
+				memcpy(write, cell, len);
+				write += len;
+				size_t padding = len < (size_t)cell_width ?
+					(size_t)cell_width - len : 0;
+				memset(write, ' ', padding);
+				write += padding;
+				if (col + 1 < columns) {
+					*write++ = ' ';
+					*write++ = ' ';
+				}
+			}
+			*write++ = '\n';
+		}
+	}
+	*write = '\0';
 	return out;
 }
 
@@ -1834,22 +2575,59 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		return;
 	}
 	case MOD_WINDOW: {
-		struct swine_workspace *ws = output_get_active_workspace(ctx->output);
-		struct swine_container *con = ws ?
-			seat_get_focus_inactive_view(&ws->node) : NULL;
-		struct swine_view *view = con ? con->view : NULL;
+		bool all_outputs = json_get_bool(m->cfg, "all-outputs", false);
+		struct swine_view *view = NULL;
+		if (all_outputs) {
+			struct swine_container *focused = seat_get_focused_container();
+			view = focused ? focused->view : NULL;
+			if (!view) {
+				struct swine_workspace *focused_ws = seat_get_focused_workspace();
+				struct swine_container *con = focused_ws ?
+					seat_get_focus_inactive_view(&focused_ws->node) : NULL;
+				view = con ? con->view : NULL;
+			}
+		} else {
+			struct swine_workspace *ws = output_get_active_workspace(ctx->output);
+			struct swine_container *con = ws ?
+				seat_get_focus_inactive_view(&ws->node) : NULL;
+			view = con ? con->view : NULL;
+		}
 		if (!view) {
 			return;
+		}
+		bool show_hidden_marks = json_get_bool(m->cfg,
+			"show-hidden-marks", false);
+		size_t marks_len = 0;
+		for (int i = 0; view->container->marks &&
+				i < view->container->marks->length; ++i) {
+			const char *mark = view->container->marks->items[i];
+			if (mark[0] == '_' && !show_hidden_marks) continue;
+			marks_len += strlen(mark) + (marks_len ? 1 : 0);
+		}
+		char *marks = calloc(marks_len + 1, 1);
+		for (int i = 0; view->container->marks &&
+				i < view->container->marks->length; ++i) {
+			const char *mark = view->container->marks->items[i];
+			if (mark[0] == '_' && !show_hidden_marks) continue;
+			if (*marks) strcat(marks, ",");
+			strcat(marks, mark);
 		}
 		struct fmt_arg args[] = {
 			{"title", false, view->title, 0},
 			{"app_id", false, view->app_id, 0},
 			{"shell", false, "native", 0},
+			{"marks", false, marks, 0},
 		};
-		struct bar_item *item = add_label(ctx, m, index, format_waybar(
-			module_format(m, NULL, NULL, "{}"), args, 3, &ctx->tm), NULL);
+		char *formatted = format_waybar(module_format(m, NULL, NULL, "{}"),
+			args, 4, &ctx->tm);
+		char *rewritten = rewrite_window_label(m, formatted);
+		free(formatted);
+		bool solo = view_ancestor_is_only_visible(view);
+		const char *classes[] = {solo ? "solo" : NULL, NULL};
+		struct bar_item *item = add_label(ctx, m, index, rewritten, classes);
 		// The whole title, which max-length may have cut.
-		set_tooltip(ctx, m, item, NULL, NULL, args, 3, view->title);
+		set_tooltip(ctx, m, item, NULL, NULL, args, 4, view->title);
+		free(marks);
 		return;
 	}
 	case MOD_SCRATCHPAD: {
@@ -1858,12 +2636,9 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			return;
 		}
 		struct json_value *icons = json_object_get(m->cfg, "format-icons");
-		const char *icon = "";
-		if (icons && icons->type == JSON_ARRAY && icons->items->length) {
-			int i = count > 0 && icons->items->length > 1 ? 1 : 0;
-			struct json_value *v = icons->items->items[i];
-			icon = v->type == JSON_STRING ? v->string : "";
-		}
+		int icon_max = icons && (icons->type == JSON_ARRAY ||
+			icons->type == JSON_OBJECT) ? icons->items->length : 0;
+		const char *icon = module_icon(m, count, NULL, icon_max);
 		struct fmt_arg args[] = {
 			{"count", true, NULL, count},
 			{"icon", false, icon, 0},
@@ -1906,7 +2681,27 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			module_format(m, NULL, NULL, "{:%H:%M}"), NULL, 0, &ctx->tm), NULL);
 		// Waybar's clock has a tooltip only with tooltip-format.
 		if (item && json_object_get(m->cfg, "tooltip-format")) {
-			char *calendar = month_calendar(&ctx->tm);
+			struct json_value *calendar_cfg = json_object_get(m->cfg,
+				"calendar");
+			int first_day = (int)json_get_number(calendar_cfg,
+				"first-day-of-week", 1);
+			if (first_day < 0 || first_day > 6) first_day = 1;
+			const char *weeks_pos = json_get_string(calendar_cfg,
+				"weeks-pos", "");
+			const char *week_numbering = json_get_string(calendar_cfg,
+				"weeks-numbering", NULL);
+			if (!week_numbering || (strcmp(week_numbering, "iso") != 0 &&
+					strcmp(week_numbering, "monday") != 0 &&
+					strcmp(week_numbering, "sunday") != 0)) {
+				week_numbering = json_get_bool(calendar_cfg, "iso8601", false) ?
+					"iso" : first_day == 1 ? "monday" : "sunday";
+			}
+			const char *mode = json_get_string(calendar_cfg, "mode", "month");
+			char *calendar = strcmp(mode, "year") == 0 ? year_calendar(
+				&ctx->tm, first_day, (int)json_get_number(calendar_cfg,
+					"mode-mon-col", 1), weeks_pos, week_numbering) :
+				month_calendar(&ctx->tm, first_day, weeks_pos,
+					week_numbering);
 			struct fmt_arg args[] = {{"calendar", false, calendar, 0}};
 			set_tooltip(ctx, m, item, NULL, NULL, args, 1, NULL);
 			free(calendar);
@@ -1934,11 +2729,17 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		if (!sysinfo_memory(&mem)) {
 			return;
 		}
+		const char *unit = json_get_string(m->cfg, "unit", "GiB");
+		double divisor = memory_unit_divisor(unit);
+		if (divisor == 1073741824.0 && strcmp(unit, "GiB") != 0) {
+			unit = "GiB";
+		}
+		double unit_scale = 1073741824.0 / divisor;
 		struct fmt_arg args[] = {
 			{"percentage", true, NULL, mem.percentage},
-			{"used", true, NULL, mem.used_gib},
-			{"total", true, NULL, mem.total_gib},
-			{"avail", true, NULL, mem.avail_gib},
+			{"used", true, NULL, mem.used_gib * unit_scale},
+			{"total", true, NULL, mem.total_gib * unit_scale},
+			{"avail", true, NULL, mem.avail_gib * unit_scale},
 			{"icon", false, icon_for_percent(m, mem.percentage), 0},
 		};
 		const char *state = module_state(m, mem.percentage, false);
@@ -1946,7 +2747,9 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		struct bar_item *item = add_label(ctx, m, index, format_waybar(
 			module_format(m, state, NULL, "{percentage}%"), args, 5, &ctx->tm),
 			classes);
-		set_tooltip(ctx, m, item, state, "{used:0.1f}GiB used", args, 5, NULL);
+		char *default_tooltip = format_str("{used:0.1f}%s used", unit);
+		set_tooltip(ctx, m, item, state, default_tooltip, args, 5, NULL);
+		free(default_tooltip);
 		return;
 	}
 	case MOD_BATTERY: {
@@ -1954,10 +2757,19 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 		if (!sysinfo_battery(&bat)) {
 			return;
 		}
+		int capacity = bat.capacity;
+		int full_at = (int)json_get_number(m->cfg, "full-at", 100);
+		if (full_at > 0 && full_at < 100) {
+			capacity = (int)round(100.0 * capacity / full_at);
+			if (capacity > 100) capacity = 100;
+		}
+		bool full_at_plugged = json_get_bool(m->cfg,
+			"full-at-plugged", false);
 		const char *status = bat.charging ? "charging" :
-			bat.plugged ? (bat.capacity >= 100 ? "full" : "plugged") :
+			bat.plugged ? (capacity >= 100 && !full_at_plugged ?
+				"full" : "plugged") :
 			"discharging";
-		const char *state = module_state(m, bat.capacity, true);
+		const char *state = module_state(m, capacity, true);
 		// Waybar's format-time, "{H} h {M} min"
 		char time_text[64] = "";
 		if (bat.seconds_left > 0) {
@@ -1987,8 +2799,8 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 			time_to = empty_in;
 		}
 		struct fmt_arg args[] = {
-			{"capacity", true, NULL, bat.capacity},
-			{"icon", false, icon_for_percent(m, bat.capacity), 0},
+			{"capacity", true, NULL, capacity},
+			{"icon", false, icon_for_percent(m, capacity), 0},
 			{"time", false, time_text, 0},
 			{"timeTo", false, time_to, 0},
 		};

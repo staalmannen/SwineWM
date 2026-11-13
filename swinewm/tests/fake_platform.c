@@ -215,8 +215,12 @@ bool platform_output_configure(struct swine_output *output,
 }
 
 bool platform_screenshot(const struct swine_box *box, const char *path,
-		bool jpeg, bool clipboard, char **error) {
+		bool jpeg, int jpeg_quality, double scale, bool clipboard, bool cursor,
+		char **error) {
 	(void)jpeg;
+	(void)jpeg_quality;
+	(void)scale;
+	(void)cursor;
 	(void)error;
 	fake.screenshot_calls++;
 	fake.last_screenshot = *box;
@@ -415,7 +419,7 @@ struct swine_view *fake_map_view(const char *title) {
 	return view;
 }
 
-bool run(const char *command) {
+static bool run_impl(const char *command, bool report_errors) {
 	char *copy = swine_strdup(command);
 	list_t *res_list = execute_command(copy, NULL);
 	free(copy);
@@ -423,12 +427,22 @@ bool run(const char *command) {
 	for (int i = 0; i < res_list->length; ++i) {
 		struct cmd_results *res = res_list->items[i];
 		if (res->status != CMD_SUCCESS) {
-			fprintf(stderr, "  command '%s' failed: %s\n", command,
-				res->error ? res->error : "");
+			if (report_errors) {
+				fprintf(stderr, "  command '%s' failed: %s\n", command,
+					res->error ? res->error : "");
+			}
 			ok = false;
 		}
 	}
 	free_cmd_results_list(res_list);
 	transaction_commit_dirty();
 	return ok;
+}
+
+bool run(const char *command) {
+	return run_impl(command, true);
+}
+
+bool run_quiet(const char *command) {
+	return run_impl(command, false);
 }

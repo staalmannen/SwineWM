@@ -17,6 +17,11 @@ the MSI and zip with the matching section below as release notes.
   wofi's `matching=contains|multi-contains|fuzzy`, `insensitive` and
   `sort_order`. Uninstallers are recognised by the program they start, in
   any language, and a program with several shortcuts is listed once.
+- `grim -c` and `grimshot --cursor` include the visible pointer in screenshots;
+  `grim -q` controls JPEG fidelity (0–100, default 80) and `-s` scales the
+  output image.
+- IPC `GET_BAR_CONFIG` lists each configured Waybar bar as `bar-N` and returns
+  its position and height.
 - Notifications: Pango markup anywhere in a line (`<b>`, `<i>`, `<u>`,
   `<s>`, `<span weight= style= underline= strikethrough=>`), wrapped
   as one text; before, a line could only be bold or italic as a whole.
@@ -214,6 +219,8 @@ the MSI and zip with the matching section below as release notes.
   `-m`/`--monitor`, as `swaymsg` does.
 - Newly mapped floating windows are raised above their parent without
   activating them, so owned dialogs do not remain obscured.
+- When an owner window is activated, its last active visible owned popup is
+  kept directly above it without taking focus or becoming desktop-wide topmost.
 - Focus-follows-mouse keeps a visible owned dialog focused rather than
   activating its owner and dropping the dialog behind it.
 - Gap values are range-checked and cannot overflow layout geometry.

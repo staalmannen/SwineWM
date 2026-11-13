@@ -856,9 +856,8 @@ char *ipc_json_get_marks(void) {
 	return json_finish(&w);
 }
 
-// get_bar_config, as in sway-ipc(7). swinewm has one bar, "bar-0", drawn
-// from the Waybar config; its colours and font come from style.css so that
-// tools that theme themselves after the bar (swinemenu) match it.
+// get_bar_config, as in sway-ipc(7). Each Waybar config instance is exposed
+// as bar-N; colours and font come from style.css so swinemenu matches them.
 static void write_color(struct json_writer *w, const char *key,
 		struct swine_color c) {
 	char text[16];
@@ -890,11 +889,27 @@ char *ipc_json_get_bar_config(const char *id) {
 	json_init(&w);
 	if (!id || !*id) {
 		json_begin_array(&w);
-		json_string(&w, "bar-0");
+		for (int i = 0; i < bar_count(); ++i) {
+			char name[32];
+			snprintf(name, sizeof(name), "bar-%d", i);
+			json_string(&w, name);
+		}
 		json_end_array(&w);
 		return json_finish(&w);
 	}
-	if (strcmp(id, "bar-0") != 0) {
+	int index = -1;
+	if (strncmp(id, "bar-", 4) == 0 && id[4]) {
+		char *end = NULL;
+		long parsed = strtol(id + 4, &end, 10);
+		char expected[32];
+		if (!*end && parsed >= 0 && parsed < bar_count()) {
+			snprintf(expected, sizeof(expected), "bar-%ld", parsed);
+			if (strcmp(id, expected) == 0) {
+				index = (int)parsed;
+			}
+		}
+	}
+	if (index < 0) {
 		json_begin_object(&w);
 		json_key(&w, "success");
 		json_bool(&w, false);
@@ -905,19 +920,23 @@ char *ipc_json_get_bar_config(const char *id) {
 	}
 	struct bar_theme theme;
 	bar_get_theme(&theme);
+	char bar_id[32];
+	snprintf(bar_id, sizeof(bar_id), "bar-%d", index);
+	static const char *const positions[] = {"top", "bottom", "left", "right"};
+	enum bar_position position = bar_position_n(index);
 	struct swine_color window_bg = theme.window.background;
 	window_bg.a = window_bg.a ? window_bg.a : 255;
 	theme.window.background = window_bg;
 
 	json_begin_object(&w);
 	json_key(&w, "id");
-	json_string(&w, "bar-0");
+	json_string(&w, bar_id);
 	json_key(&w, "mode");
 	json_string(&w, !bar_enabled() ? "invisible" : "dock");
 	json_key(&w, "hidden_state");
 	json_string(&w, "hide");
 	json_key(&w, "position");
-	json_string(&w, bar_at_top() ? "top" : "bottom");
+	json_string(&w, positions[position]);
 	json_key(&w, "status_command");
 	json_null(&w);
 	// sway gives Pango font descriptions: family and size in points.
@@ -927,7 +946,7 @@ char *ipc_json_get_bar_config(const char *id) {
 	json_key(&w, "font");
 	json_string(&w, font);
 	json_key(&w, "bar_height");
-	json_int(&w, bar_height());
+	json_int(&w, bar_height_n(index));
 	json_key(&w, "workspace_buttons");
 	json_bool(&w, true);
 	json_key(&w, "binding_mode_indicator");

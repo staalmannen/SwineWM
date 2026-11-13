@@ -36,8 +36,8 @@ static void test_mark_unmark(void) {
 	CHECK_INT(a->container->marks->length, 0);
 	CHECK(run("mark --add --toggle three"));
 	CHECK(container_has_mark(a->container, "three"));
-	CHECK(!run("mark --frobnicate x"));
-	CHECK(!run("mark --add"));
+	CHECK(!run_quiet("mark --frobnicate x"));
+	CHECK(!run_quiet("mark --add"));
 
 	// Criteria and commands find containers by mark.
 	CHECK(run("[con_mark=\"^thr\"] focus"));
@@ -84,7 +84,7 @@ static void test_move_to_mark(void) {
 	CHECK(run("move container to mark target"));
 	CHECK_STR(b->container->workspace->name, "1");
 	CHECK(b->container->parent == a->container->parent);
-	CHECK(!run("move to mark nowhere"));
+	CHECK(!run_quiet("move to mark nowhere"));
 	fake_teardown();
 }
 
@@ -119,12 +119,12 @@ static void test_swap(void) {
 	CHECK(focused_view() == a);
 	CHECK_STR(seat_get_focused_workspace()->name, "2");
 
-	CHECK(!run("swap container with mark nowhere"));
-	CHECK(!run("swap container with con_id 999999"));
+	CHECK(!run_quiet("swap container with mark nowhere"));
+	CHECK(!run_quiet("swap container with con_id 999999"));
 	snprintf(line, sizeof(line), "swap container with con_id %u",
 		(unsigned)a->container->node.id);
-	CHECK(!run(line));   // itself
-	CHECK(!run("swap window with mark left"));
+	CHECK(!run_quiet(line));   // itself
+	CHECK(!run_quiet("swap window with mark left"));
 	fake_teardown();
 }
 
@@ -141,8 +141,8 @@ static void test_sticky(void) {
 	// A workspace holding only sticky windows counts as empty.
 	CHECK(run("workspace 3"));
 	CHECK(workspace_by_name("2") == NULL);
-	CHECK(!run("move container to workspace 4"));
-	CHECK(!run("sticky toggle"));   // the empty workspace has the focus
+	CHECK(!run_quiet("move container to workspace 4"));
+	CHECK(!run_quiet("sticky toggle"));   // the empty workspace has the focus
 	CHECK(run("[title=\"^b$\"] sticky toggle"));
 	CHECK(!container_is_sticky(b->container));
 	CHECK(run("workspace 1"));
@@ -168,12 +168,12 @@ static void test_rename(void) {
 		"1: web");
 	CHECK(run("rename workspace 2 to code"));
 	CHECK_STR(seat_get_focused_workspace()->name, "code");
-	CHECK(!run("rename workspace code to 1: web"));   // exists
+	CHECK(!run_quiet("rename workspace code to 1: web"));   // exists
 	CHECK(run("rename workspace code to code"));
-	CHECK(!run("rename workspace code to next"));
-	CHECK(!run("rename workspace nothing to x"));
-	CHECK(!run("rename workspace code"));
-	CHECK(!run("rename output x to y"));
+	CHECK(!run_quiet("rename workspace code to next"));
+	CHECK(!run_quiet("rename workspace nothing to x"));
+	CHECK(!run_quiet("rename workspace code"));
+	CHECK(!run_quiet("rename output x to y"));
 	fake_teardown();
 }
 
@@ -195,7 +195,7 @@ static void test_focus_next_prev(void) {
 	CHECK(run("focus left; focus next sibling"));
 	struct swine_container *focused = seat_get_focused_container();
 	CHECK(focused && focused->view == NULL);
-	CHECK(!run("focus sideways"));
+	CHECK(!run_quiet("focus sideways"));
 	fake_teardown();
 }
 

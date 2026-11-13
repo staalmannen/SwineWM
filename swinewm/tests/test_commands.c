@@ -32,7 +32,7 @@ static void test_chains_and_errors(void) {
 	free(json);
 	free_cmd_results_list(res);
 	CHECK_INT(fake.close_calls, 0);
-	CHECK(!run("[app_id=foo] kill"));
+	CHECK(!run_quiet("[app_id=foo] kill"));
 	CHECK(run("kill"));
 	CHECK_INT(fake.close_calls, 1);
 	CHECK(run("exit"));
@@ -155,9 +155,9 @@ static void test_keyboard_layouts(void) {
 	CHECK(run("input * xkb_switch_layout 7"));   // no such layout
 	CHECK(run("input type:touchpad xkb_switch_layout next"));
 	CHECK_INT(fake.kb_set_calls, calls);
-	CHECK(!run("input * xkb_switch_layout sideways"));
-	CHECK(!run("input * xkb_switch_layout -1"));
-	CHECK(!run("input * xkb_switch_layout"));
+	CHECK(!run_quiet("input * xkb_switch_layout sideways"));
+	CHECK(!run_quiet("input * xkb_switch_layout -1"));
+	CHECK(!run_quiet("input * xkb_switch_layout"));
 	// Everything else Windows owns: accepted and ignored.
 	CHECK(run("input type:keyboard xkb_layout us"));
 	CHECK_INT(fake.kb_set_calls, calls);
@@ -402,7 +402,7 @@ static void test_every_command_is_found(void) {
 
 static void test_restart(void) {
 	fake_setup();
-	CHECK(!run("restart now"));
+	CHECK(!run_quiet("restart now"));
 	CHECK(!fake.restart);
 	CHECK(run("restart"));
 	CHECK(fake.restart);
@@ -427,10 +427,10 @@ static void test_grim(void) {
 	CHECK_INT(fake.last_screenshot.y, 20);
 	CHECK_INT(fake.last_screenshot.width, 300);
 	CHECK_STR(fake.last_screenshot_path, "C:/shot.png");
-	CHECK(!run("grim -g nonsense"));
-	CHECK(!run("grim -o NOSUCH"));
-	CHECK(!run("grim -t gif"));
-	CHECK(!run("grim -"));
+	CHECK(!run_quiet("grim -g nonsense"));
+	CHECK(!run_quiet("grim -o NOSUCH"));
+	CHECK(!run_quiet("grim -t gif"));
+	CHECK(!run_quiet("grim -"));
 	CHECK_INT(fake.screenshot_calls, 2);
 
 	// exec, and sh-style chains of built-ins, as in sway configs
@@ -438,7 +438,7 @@ static void test_grim(void) {
 	CHECK_INT(fake.screenshot_calls, 3);
 	CHECK_INT(fake.spawn_calls, 0);
 	CHECK_INT(notify_active()->length, 1);
-	CHECK(!run("exec grim -t gif && notify-send never"));
+	CHECK(!run_quiet("exec grim -t gif && notify-send never"));
 	CHECK_INT(notify_active()->length, 1);
 	// A chain with a real program is started as a whole.
 	CHECK(run("exec grim && notepad.exe"));
@@ -465,7 +465,7 @@ static void test_grim_slurp(void) {
 	CHECK_INT(fake.last_slurp.background.a, 0x40);
 	CHECK(grim_slurp_active());
 	// one selection at a time
-	CHECK(!run("exec grim -g \"$(slurp)\""));
+	CHECK(!run_quiet("exec grim -g \"$(slurp)\""));
 	CHECK_INT(notify_active()->length, 0);
 	grim_slurp_done(true, &area, NULL);
 	CHECK(!grim_slurp_active());
@@ -514,11 +514,11 @@ static void test_grim_slurp(void) {
 	CHECK(run("exec wl-copy --clear"));
 	CHECK_STR(fake.clipboard_text, "");
 
-	CHECK(!run("exec grim -g \"$(date)\" x.png"));
-	CHECK(!run("exec slurp -p -r | grim -g - x.png"));
-	CHECK(!run("exec slurp -b nocolor | grim -g - x.png"));
-	CHECK(!run("exec grim x.png | wl-copy"));
-	CHECK(!run("exec grim -g - x.png"));
+	CHECK(!run_quiet("exec grim -g \"$(date)\" x.png"));
+	CHECK(!run_quiet("exec slurp -p -r | grim -g - x.png"));
+	CHECK(!run_quiet("exec slurp -b nocolor | grim -g - x.png"));
+	CHECK(!run_quiet("exec grim x.png | wl-copy"));
+	CHECK(!run_quiet("exec grim -g - x.png"));
 	CHECK(!grim_slurp_active());
 	// Other pipes are left to run as programs.
 	fake.spawn_calls = 0;
@@ -592,9 +592,9 @@ static void test_grimshot(void) {
 	CHECK(strchr(path + 2, ':') == NULL);
 
 	CHECK(run("exec grimshot check"));
-	CHECK(!run("exec grimshot save nothing"));
-	CHECK(!run("exec grimshot frobnicate"));
-	CHECK(!run("exec grimshot save screen -"));
+	CHECK(!run_quiet("exec grimshot save nothing"));
+	CHECK(!run_quiet("exec grimshot frobnicate"));
+	CHECK(!run_quiet("exec grimshot save screen -"));
 	fake_teardown();
 }
 

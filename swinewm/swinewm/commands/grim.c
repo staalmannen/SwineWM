@@ -16,6 +16,8 @@
 // when the user has made it; what was to happen next waits until then.
 // grimshot's logic follows sway-contrib's grimshot script (MIT).
 #include <ctype.h>
+#include <errno.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -267,7 +269,11 @@ struct capture {
 	char *slurp_format;       // -f, for geometry text
 	char *path;               // NULL: none (clipboard only)
 	bool jpeg;
+	int jpeg_quality;
+	bool jpeg_quality_set;
+	double scale;
 	bool clipboard;           // | wl-copy
+	bool cursor;               // grim -c / grimshot --cursor
 	bool copy_geometry;       // slurp | wl-copy: the text, not an image
 	// grimshot --notify: what to say afterwards
 	bool notify;
@@ -296,6 +302,8 @@ static void capture_free(struct capture *c) {
 static struct capture *capture_create(void) {
 	struct capture *c = calloc(1, sizeof(*c));
 	c->box = desktop_box();
+	c->jpeg_quality = 80;
+	c->scale = 1.0;
 	slurp_defaults(&c->slurp);
 	return c;
 }
@@ -337,7 +345,8 @@ static struct cmd_results *run_capture(struct capture *c) {
 		return cmd_results_new(CMD_FAILURE, "Nothing to capture");
 	}
 	char *error = NULL;
-	if (!platform_screenshot(&c->box, c->path, c->jpeg, c->clipboard, &error)) {
+	if (!platform_screenshot(&c->box, c->path, c->jpeg, c->jpeg_quality,
+			c->scale, c->clipboard, c->cursor, &error)) {
 		struct cmd_results *res = cmd_results_new(CMD_FAILURE,
 			"Unable to %s screenshot%s%s: %s", c->path ? "save" : "copy",
 			c->path ? " " : "", c->path ? c->path : "", error ? error : "");
@@ -508,14 +517,35 @@ static struct cmd_results *parse_grim(int argc, char **argv, struct capture *c,
 				return cmd_results_new(CMD_INVALID,
 					"Unsupported image type '%s' (png or jpeg)", argv[i]);
 			}
-		} else if ((strcmp(arg, "-q") == 0 || strcmp(arg, "-l") == 0 ||
-				strcmp(arg, "-s") == 0) && has_value) {
-			++i;   // quality, compression level, scale: defaults are used
+		} else if (strcmp(arg, "-q") == 0 && has_value) {
+			const char *value = argv[++i];
+			char *end = NULL;
+			errno = 0;
+			long quality = strtol(value, &end, 10);
+			if (errno || !*value || *end || quality < 0 || quality > 100) {
+				return cmd_results_new(CMD_INVALID,
+					"grim: JPEG quality must be an integer from 0 to 100");
+			}
+			c->jpeg_quality = (int)quality;
+			c->jpeg_quality_set = true;
+		} else if (strcmp(arg, "-s") == 0 && has_value) {
+			const char *value = argv[++i];
+			char *end = NULL;
+			errno = 0;
+			c->scale = strtod(value, &end);
+			if (errno || !*value || *end || !isfinite(c->scale) ||
+					c->scale <= 0.0) {
+				return cmd_results_new(CMD_INVALID,
+					"grim: scale must be a finite number greater than zero");
+			}
+		} else if (strcmp(arg, "-l") == 0 && has_value) {
+			++i;	   // PNG compression level uses the default
 		} else if (strcmp(arg, "-c") == 0) {
-			// The cursor is never part of the capture.
+			c->cursor = true;
 		} else if (strcmp(arg, "-h") == 0) {
 			return cmd_results_new(CMD_SUCCESS,
-				"Usage: grim [-t png|jpeg] [-g \"x,y wxh\"] [-o output] "
+				"Usage: grim [-t png|jpeg] [-q 0-100] [-s factor] "
+				"[-g \"x,y wxh\"] [-o output] "
 				"[output-file]");
 		} else if (arg[0] == '-' && arg[1] != '\0') {
 			return cmd_results_new(CMD_INVALID, "Unsupported grim option '%s'",
@@ -538,6 +568,10 @@ static struct cmd_results *parse_grim(int argc, char **argv, struct capture *c,
 	} else {
 		c->path = file ? platform_expand_path(file) : default_path(c->jpeg);
 		c->jpeg = c->jpeg || (file && is_jpeg_path(c->path));
+	}
+	if (c->jpeg_quality_set && !c->jpeg) {
+		return cmd_results_new(CMD_INVALID,
+			"grim: -q quality is only valid for JPEG output");
 	}
 	return NULL;
 }
@@ -583,9 +617,10 @@ static struct cmd_results *grimshot(int argc, char **argv, const char *rest,
 		const char *a = argv[i];
 		if (strcmp(a, "-n") == 0 || strcmp(a, "--notify") == 0) {
 			c->notify = true;
-		} else if (strcmp(a, "-c") == 0 || strcmp(a, "--cursor") == 0 ||
-				strcmp(a, "-f") == 0 || strcmp(a, "--freeze") == 0) {
-			// The cursor is never captured; nothing to freeze.
+		} else if (strcmp(a, "-c") == 0 || strcmp(a, "--cursor") == 0) {
+			c->cursor = true;
+		} else if (strcmp(a, "-f") == 0 || strcmp(a, "--freeze") == 0) {
+			// There is no separate frame to freeze on Windows.
 		} else if (strcmp(a, "-w") == 0 || strcmp(a, "--wait") == 0) {
 			if (i + 1 < argc && isdigit((unsigned char)argv[i + 1][0])) {
 				i++;

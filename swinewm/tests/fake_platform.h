@@ -107,5 +107,7 @@ struct swine_view *fake_map_view(const char *title);
 struct swine_output *fake_add_output(const char *name, int x, int y, int w, int h);
 // Runs a command line, commits, and returns true if every command succeeded.
 bool run(const char *command);
+// Same as run(), but doesn't print diagnostics for expected command failures.
+bool run_quiet(const char *command);
 
 #endif

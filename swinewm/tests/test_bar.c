@@ -268,7 +268,7 @@ static void test_bar_model(void) {
 		struct bar_item *b2 = ws->items->items[1];
 		CHECK_STR(b1->text, "1");
 		CHECK_STR(b2->text, "2");
-		CHECK_STR(b1->on_click, "workspace --no-auto-back-and-forth \"1\"");
+		CHECK_STR(b1->on_click, "workspace \"1\"");
 		// default style: focused button has #64727D background
 		CHECK_INT(b2->style.background.r, 0x64);
 		CHECK_INT(b1->style.background.a, 0);
@@ -997,6 +997,151 @@ static void test_multiple_bars(void) {
 	fake_teardown();
 }
 
+static void test_sway_window_and_scratchpad(void) {
+	fake_setup();
+	config->bar_enabled = true;
+
+	// 1. Format tokens: {title}, {app_id}, {shell}, {marks} and show-hidden-marks
+	bar_load_from_strings(
+		"{\n"
+		"  \"modules-left\": [\"sway/window\"],\n"
+		"  \"sway/window\": {\n"
+		"    \"format\": \"{title}|{app_id}|{shell}|{marks}\",\n"
+		"    \"show-hidden-marks\": false\n"
+		"  }\n"
+		"}\n", NULL);
+	fake_map_view("doc");
+	CHECK(run("mark mymark; mark --add _hidden"));
+	struct swine_output *output = root->outputs->items[0];
+	struct bar_model *model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "doc|test.exe|native|mymark");
+	bar_model_free(model);
+
+	// With show-hidden-marks: true
+	bar_load_from_strings(
+		"{\n"
+		"  \"modules-left\": [\"sway/window\"],\n"
+		"  \"sway/window\": {\n"
+		"    \"format\": \"{title}|{marks}\",\n"
+		"    \"show-hidden-marks\": true\n"
+		"  }\n"
+		"}\n", NULL);
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "doc|mymark,_hidden");
+	bar_model_free(model);
+
+	// 2. Window rewrite rules: regex match, $0 and $& whole match, $$ literal $, and first-match break
+	bar_load_from_strings(
+		"{\n"
+		"  \"modules-left\": [\"sway/window\"],\n"
+		"  \"sway/window\": {\n"
+		"    \"format\": \"{title}\",\n"
+		"    \"rewrite\": {\n"
+		"      \"doc\": \"File: $0 ($&) $$100\",\n"
+		"      \"File: (.*)\": \"Should not match because first rule matched\"\n"
+		"    }\n"
+		"  }\n"
+		"}\n", NULL);
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "File: doc (doc) $100");
+	bar_model_free(model);
+
+	// 3. #window.solo CSS styling
+	bar_load_from_strings(
+		"{\n"
+		"  \"modules-left\": [\"sway/window\"]\n"
+		"}\n",
+		"#window.solo { color: #ff0000; }\n"
+		"#window { color: #00ff00; }\n");
+	model = bar_build(output, 0);
+	struct bar_item *item = first_item(model, 0);
+	CHECK(item != NULL);
+	if (item) {
+		CHECK_INT(item->style.color.r, 255);
+		CHECK_INT(item->style.color.g, 0);
+	}
+	bar_model_free(model);
+
+	// Adding a second window makes solo false
+	fake_map_view("doc2");
+	model = bar_build(output, 0);
+	item = first_item(model, 0);
+	CHECK(item != NULL);
+	if (item) {
+		CHECK_INT(item->style.color.r, 0);
+		CHECK_INT(item->style.color.g, 255);
+	}
+	bar_model_free(model);
+	fake_teardown();
+
+	// 4. all-outputs on sway/window
+	fake_setup_two_outputs();
+	config->bar_enabled = true;
+	struct swine_output *out2 = root->outputs->items[1];
+	fake_map_view("main-win");
+	// Focus workspace 2 on out2 without windows
+	CHECK(run("workspace 2; move workspace to output DISPLAY2"));
+	// When all-outputs is false, out2's bar shows no window
+	bar_load_from_strings(
+		"{\n"
+		"  \"modules-left\": [\"sway/window\"],\n"
+		"  \"sway/window\": { \"all-outputs\": false }\n"
+		"}\n", NULL);
+	model = bar_build(out2, 0);
+	CHECK(first_item(model, 0) == NULL);
+	bar_model_free(model);
+
+	// When all-outputs is true, out2's bar shows the active window from out1
+	CHECK(run("[title=\"^main-win$\"] focus"));
+	bar_load_from_strings(
+		"{\n"
+		"  \"modules-left\": [\"sway/window\"],\n"
+		"  \"sway/window\": { \"all-outputs\": true }\n"
+		"}\n", NULL);
+	model = bar_build(out2, 0);
+	CHECK_STR(item_text(model, 0), "main-win");
+	bar_model_free(model);
+	fake_teardown();
+
+	// 5. sway/scratchpad format-icons (array and object)
+	fake_setup();
+	config->bar_enabled = true;
+	output = root->outputs->items[0];
+	bar_load_from_strings(
+		"{\n"
+		"  \"modules-left\": [\"sway/scratchpad\"],\n"
+		"  \"sway/scratchpad\": {\n"
+		"    \"show-empty\": true,\n"
+		"    \"format\": \"{icon}{count}\",\n"
+		"    \"format-icons\": [\"-\", \"+\"]\n"
+		"  }\n"
+		"}\n", NULL);
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "-0");
+	bar_model_free(model);
+
+	fake_map_view("scratch1");
+	CHECK(run("move scratchpad"));
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "+1");
+	bar_model_free(model);
+
+	// format-icons object with default array
+	bar_load_from_strings(
+		"{\n"
+		"  \"modules-left\": [\"sway/scratchpad\"],\n"
+		"  \"sway/scratchpad\": {\n"
+		"    \"show-empty\": true,\n"
+		"    \"format\": \"{icon}{count}\",\n"
+		"    \"format-icons\": { \"default\": [\"E\", \"F\"] }\n"
+		"  }\n"
+		"}\n", NULL);
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "F1");
+	bar_model_free(model);
+	fake_teardown();
+}
+
 void test_bar_all(void) {
 	test_bar_config_ipc();
 	test_json_parse();
@@ -1013,4 +1158,5 @@ void test_bar_all(void) {
 	test_tooltips();
 	test_power_profiles();
 	test_multiple_bars();
+	test_sway_window_and_scratchpad();
 }

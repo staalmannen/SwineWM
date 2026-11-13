@@ -225,6 +225,55 @@ static struct swine_view *create_view(HWND hwnd) {
 	return view;
 }
 
+// Keep an application's active owned popup immediately above its owner.
+// Do not make it topmost across the whole desktop or activate it; its owner
+// and the popup should keep their normal place relative to other apps.
+static void raise_owned_popup(HWND owner) {
+	if (!IsWindow(owner)) {
+		return;
+	}
+	HWND popup = GetLastActivePopup(owner);
+	if (!popup || popup == owner || !IsWindow(popup) ||
+			!IsWindowVisible(popup) || IsIconic(popup)) {
+		return;
+	}
+	HWND above_owner = GetWindow(owner, GW_HWNDPREV);
+	if (above_owner == popup) {
+		return;
+	}
+	if (!above_owner) {
+		above_owner = HWND_TOP;
+	}
+	if (!SetWindowPos(popup, above_owner, 0, 0, 0, 0, SWP_NOMOVE |
+			SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER |
+			SWP_ASYNCWINDOWPOS)) {
+		swine_log(SWINE_DEBUG, "Unable to raise owned popup for window %p",
+			(void *)owner);
+	}
+}
+
+// Windows raises the activated window above every other ordinary window.
+// Reapply the workspace's floating order after that happens so floating
+// windows stay above tiled windows even when a tiled window gets focus.
+static void raise_workspace_floating(void) {
+	struct swine_workspace *ws = seat_get_focused_workspace();
+	if (!ws || !ws->floating) {
+		return;
+	}
+	// The list is ordered from lowest to highest, so raising in list order
+	// preserves the relative stacking of floating windows.
+	for (int i = 0; i < ws->floating->length; ++i) {
+		struct swine_container *con = ws->floating->items[i];
+		struct swine_view *view = con->view;
+		if (view && view->pending.visible && IsWindow(view->handle) &&
+				!IsIconic(view->handle)) {
+			SetWindowPos(view->handle, HWND_TOP, 0, 0, 0, 0,
+				SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE |
+				SWP_ASYNCWINDOWPOS);
+		}
+	}
+}
+
 static void map_view(struct swine_view *view) {
 	view->natural = visible_rect(view->handle);
 	view_map(view);
@@ -569,6 +618,8 @@ static void handle_event(DWORD event, HWND hwnd) {
 		if (view && view->container && view->pending.visible) {
 			transaction_note_activated(view);
 			seat_set_focus_container(view->container);
+			raise_workspace_floating();
+			raise_owned_popup(hwnd);
 		}
 		check_fullscreen(hwnd);
 		// Each application can have its own layout (a Windows setting).
@@ -777,6 +828,7 @@ bool platform_view_activate(struct swine_view *view) {
 		return true;
 	}
 	if (SetForegroundWindow(hwnd)) {
+		raise_owned_popup(hwnd);
 		return true;
 	}
 	// Windows only lets the process that received the last input event take
@@ -785,7 +837,11 @@ bool platform_view_activate(struct swine_view *view) {
 	INPUT input = { .type = INPUT_MOUSE };
 	input.mi.dwFlags = MOUSEEVENTF_MOVE;
 	SendInput(1, &input, sizeof(input));
-	return SetForegroundWindow(hwnd) != FALSE;
+	bool activated = SetForegroundWindow(hwnd) != FALSE;
+	if (activated) {
+		raise_owned_popup(hwnd);
+	}
+	return activated;
 }
 
 bool platform_view_has_visible_owned_window(struct swine_view *view) {

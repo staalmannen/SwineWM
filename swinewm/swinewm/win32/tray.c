@@ -762,6 +762,13 @@ void win32_tray_draw(HDC dc, uint64_t id, const char *icon_path,
 		const RECT *rect, HWND bar) {
 	int size = rect->right - rect->left;
 	HICON file_icon = icon_path ? icon_from_file(icon_path, size) : NULL;
+	if (!id) {
+		if (file_icon) {
+			DrawIconEx(dc, rect->left, rect->top, file_icon, size, size, 0,
+				NULL, DI_NORMAL);
+		}
+		return;
+	}
 	if (!thread) {
 		return;
 	}

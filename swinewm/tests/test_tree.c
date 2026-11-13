@@ -308,7 +308,7 @@ static void test_resize(void) {
 	CHECK_INT(a->pending.box.width, 400);
 	CHECK(run("resize shrink width 10 ppt"));
 	CHECK_INT(b->pending.box.width, 500);
-	CHECK(!run("resize grow height 10px"));
+	CHECK(!run_quiet("resize grow height 10px"));
 	fake_teardown();
 
 	// An edge resizes only the neighbour on that side.
@@ -328,8 +328,8 @@ static void test_resize(void) {
 	CHECK(run("resize set width 50 ppt"));
 	CHECK_INT(b->pending.box.width, 500);
 	CHECK_INT(a->pending.box.width + c->pending.box.width, 500);
-	CHECK(!run("resize grow sideways 10px"));
-	CHECK(!run("resize set width 10 parsecs"));
+	CHECK(!run_quiet("resize grow sideways 10px"));
+	CHECK(!run_quiet("resize set width 10 parsecs"));
 
 	// Floating windows: px, or ppt of the output; clamped to the minimum.
 	c->natural = (struct swine_box){0, 0, 400, 300};
@@ -370,7 +370,7 @@ static void test_urgency(void) {
 	CHECK(!ws1->urgent);
 	CHECK(run("workspace 2"));
 	view_set_urgent(a, true);
-	CHECK(!run("[app_id=nothing_matches] nop"));   // no matching node
+	CHECK(!run_quiet("[app_id=nothing_matches] nop"));   // no matching node
 	CHECK(run("urgent disable") && !b->urgent);
 	CHECK(run("urgent deny"));
 	view_set_urgent(a, false);

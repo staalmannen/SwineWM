@@ -104,6 +104,17 @@ static SIZE content_size(struct bar_window *bw, HDC dc,
 	wchar_t *text = utf8_to_utf16(item->text);
 	SIZE size = text_size(dc, style_font(bw, &item->style, 0), text);
 	free(text);
+	if (item->icon_path) {
+		int icon = px(bw, item->icon_size ? item->icon_size : 16);
+		int gap = px(bw, 4);
+		if (bw->model->vertical) {
+			size.cx = size.cx > icon ? size.cx : icon;
+			size.cy += icon + gap;
+		} else {
+			size.cx += icon + gap;
+			size.cy = size.cy > icon ? size.cy : icon;
+		}
+	}
 	if (item->rotate == 90 || item->rotate == 270) {
 		return (SIZE){size.cy, size.cx};
 	}
@@ -279,12 +290,34 @@ static int draw_item(struct bar_window *bw, struct canvas *c, int pos,
 		box.right - px(bw, s->padding.right + s->border_right.width),
 		box.bottom - px(bw, s->padding.bottom + s->border_bottom.width),
 	};
-	if (item->tray_id) {
+	if (item->tray_id || item->icon_path) {
 		int size = px(bw, item->icon_size);
 		int ix = content.left + (content.right - content.left - size) / 2;
 		int iy = content.top + (content.bottom - content.top - size) / 2;
 		RECT icon = {ix, iy, ix + size, iy + size};
-		canvas_tray_icon(bw, c, &icon, item);
+		if (item->tray_id) {
+			canvas_tray_icon(bw, c, &icon, item);
+		} else {
+			int gap = px(bw, 4);
+			RECT text_rect = content;
+			if (bw->model->vertical) {
+				icon.left = content.left + (content.right - content.left - size) / 2;
+				icon.top = content.top;
+				icon.right = icon.left + size;
+				icon.bottom = icon.top + size;
+				text_rect.top = icon.bottom + gap;
+			} else {
+				icon.left = content.left;
+				icon.top = content.top + (content.bottom - content.top - size) / 2;
+				icon.right = icon.left + size;
+				icon.bottom = icon.top + size;
+				text_rect.left = icon.right + gap;
+			}
+			canvas_tray_icon(bw, c, &icon, item);
+			wchar_t *text = utf8_to_utf16(item->text);
+			canvas_text(bw, c, &text_rect, text, s, item->rotate, s->color);
+			free(text);
+		}
 	} else {
 		wchar_t *text = utf8_to_utf16(item->text);
 		canvas_text(bw, c, &content, text, s, item->rotate, s->color);
@@ -435,6 +468,29 @@ static struct hit *hit_test(struct bar_window *bw, int x, int y) {
 		struct hit *h = bw->hits->items[i];
 		if (PtInRect(&h->rect, p)) {
 			return h;
+		}
+	}
+	return NULL;
+}
+
+static const char *workspace_bar_scroll(struct bar_window *bw, bool up,
+		int *module_index) {
+	if (!bw || !bw->model) {
+		return NULL;
+	}
+	for (int i = 0; i < bw->model->modules->length; ++i) {
+		struct bar_module_view *module = bw->model->modules->items[i];
+		if (!module->scroll_entire_bar) {
+			continue;
+		}
+		for (int j = 0; j < module->items->length; ++j) {
+			struct bar_item *item = module->items->items[j];
+			const char *command = up ? item->on_scroll_up :
+				item->on_scroll_down;
+			if (command) {
+				*module_index = module->module_index;
+				return command;
+			}
 		}
 	}
 	return NULL;
@@ -746,6 +802,14 @@ static LRESULT CALLBACK bar_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 			bar_module_event(index);
 		} else if (index >= 0 && bar_module_scroll(index, delta > 0)) {
 			win32_bar_refresh();
+		} else {
+			command = workspace_bar_scroll(bw, delta > 0, &index);
+			if (command) {
+				char *copy = swine_strdup(command);
+				win32_run_command(copy);
+				free(copy);
+				bar_module_event(index);
+			}
 		}
 		return 0;
 	}
