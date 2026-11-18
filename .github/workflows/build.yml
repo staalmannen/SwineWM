@@ -2,6 +2,10 @@
 # portable zip as downloadable artifacts (see doc/packaging.md). Pushing a
 # version tag ("0.1.0") also publishes them as a GitHub Release, with the
 # matching CHANGELOG.md section as release notes and SHA-256 checksums.
+#
+# The Linux runners are pinned to an Ubuntu release, so that a new
+# "ubuntu-latest" (a new compiler) does not change the build unannounced;
+# move them on by hand.
 name: build
 
 on:
@@ -12,9 +16,9 @@ on:
 jobs:
   linux:
     name: Linux (core + unit tests)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # tags, for the version (git describe)
       - name: Configure
@@ -30,7 +34,7 @@ jobs:
     name: Windows (MSVC, tests, MSI)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # tags, for the version (git describe)
       - name: Configure
@@ -48,7 +52,7 @@ jobs:
         working-directory: build
         run: cpack -C Release
       - name: Upload installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SwineWM-windows
           path: |
@@ -60,12 +64,12 @@ jobs:
     name: GitHub Release
     if: startsWith(github.ref, 'refs/tags/')
     needs: [linux, windows]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: SwineWM-windows
           path: dist

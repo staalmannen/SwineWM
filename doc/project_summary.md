@@ -190,22 +190,40 @@ What an existing sway config needs to load and behave.
   `grim -` once `exec` supports pipes. Done: slurp, `| wl-copy`,
   `$(slurp)` and grimshot as built-ins.
 - Store apps as the shell: done for `exec shell:AppsFolder\<AUMID>`
-  (`IApplicationActivationManager`) and swinemenu; still open for launchers
-  such as Flow Launcher, which start them their own way.
+  (`IApplicationActivationManager`) and swinemenu. Launchers such as Flow
+  Launcher start them their own way; a patch for Flow Launcher is
+  prepared (see 0.7.0).
 - swinemenu: icons, wofi's `config` and `style.css`, more modes (windows,
-  like `rofi -show window`). Done.
+  like `rofi -show window`), translated names, App Paths, wofi's matching
+  modes. Done.
 - Next to Explorer (`--set-autostart`, experimental): register the bar as an
-  AppBar so that Explorer reserves its space for every window (done), and
-  find out which keys Explorer still takes.
+  AppBar so that Explorer reserves its space for every window. Done; which
+  keys Explorer still takes is a 0.7.0 test.
+
+### 0.7.0 — tested on more machines
+
+What needs hardware or setups the developers do not have; mostly fixes
+for what the tests find. Help is welcome (GitHub issues #47, #48, #50;
+the steps are in #50).
+
+- Mixed DPI: windows moved between monitors with different scaling fit
+  their tiles (invisible-border insets measured per monitor; a second
+  placement after a DPI change if apps resize themselves).
+- Windows versions: Windows 10 22H2 and Windows 11 (current and previous
+  feature update), as the shell and next to Explorer.
+- Which key combinations Explorer and the shell hosts keep
+  (`tools/key-test.conf`), and what can be done about each.
+- Sleep/resume, fast user switching, monitor hot-plug, elevated windows,
+  RDP.
+- The Flow Launcher patch (Store apps without Explorer) proposed upstream
+  once it has been tried on Windows.
 
 ### 1.0.0 — long-term release
 
 Feature work stops; reliability and documentation.
 
-- Tested matrix: Windows 10 22H2 and Windows 11 (current and previous
-  feature update), single and multiple monitors, mixed DPI, as the shell
-  and next to Explorer, sleep/resume, fast user switching, elevated
-  windows (documented behaviour), RDP.
+- The 0.7.0 test matrix passed again on the release candidate, with the
+  results documented (elevated windows: documented behaviour).
 - Compatibility promise: config and IPC behaviour of 1.0 stay supported
   through 1.x; `compatibility.md` is the contract.
 - Man pages / reference docs (`swinewm(5)`, `swinemsg(1)`, built-in
