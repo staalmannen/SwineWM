@@ -107,8 +107,14 @@ post or send messages to the shell's hidden top-level window:
 - **WinEvent hooks** (out of context) only queue events and post
   `WM_SWINE_EVENTS`; the queue is drained on the main thread.
 - **The low-level keyboard hook** must return quickly or Windows removes it,
-  so it only looks the key up and posts `WM_SWINE_BINDING` with a copy of
-  the command.
+  so it runs on a thread of its own (the main thread can be busy, for
+  example rearranging everything after a game changed the display mode),
+  only looks the key up and posts `WM_SWINE_BINDING` with a copy of the
+  command and the binding event. The bindings it reads are guarded by a
+  lock the main thread holds while it runs commands or loads the config
+  (`platform_config_write_begin`); the hook only tries to take it, and
+  lets the key through if it cannot in time. It is installed again every
+  minute and after display changes, in case Windows removed it anyway.
 - **IPC client threads** pass each request to the main thread and write the
   reply back. Subscribed event frames use a per-client writer queue.
 - **The tray thread** owns swinewm's `Shell_TrayWnd` (see the tray section

@@ -87,6 +87,10 @@ the MSI and zip with the matching section below as release notes.
 
 ### Fixed
 
+- Key bindings could stop working after a game changed the display mode:
+  Windows removes a keyboard hook that answers too slowly, and the hook
+  shared its thread with everything else. It now has a thread of its own
+  and is installed again after display changes and every minute.
 - `swinemenu --dmenu` lists its choices in the order given, as wofi and
   dmenu do, instead of alphabetically.
 - `bindsym --release` bindings run when the modifier is let go before the

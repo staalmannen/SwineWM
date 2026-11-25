@@ -88,6 +88,7 @@ struct fake_platform_state {
 	int kb_set_calls;
 	uint32_t last_closed_notification;
 	int last_close_reason;
+	int config_write_depth;     // platform_config_write_begin/end
 	uint32_t last_action_notification;
 	char last_action[64];
 	int swaynag_show_calls;

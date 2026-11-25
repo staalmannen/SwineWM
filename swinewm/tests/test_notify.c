@@ -235,6 +235,8 @@ static void test_mako_criteria(void) {
 		"padding=1\n", "test"));
 	CHECK(run("notify-send \"Build passed\" \"no error here\""));
 	struct swine_notification *n = newest();
+	// Commands hold the config lock for the keyboard hook, and let it go.
+	CHECK_INT(fake.config_write_depth, 0);
 	CHECK(n && n->style.background.g == 0xff && n->style.border.r == 0xff);
 	CHECK(n && n->style.height == 60);
 	CHECK(run("notify-send \"Build failed\""));
