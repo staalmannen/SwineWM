@@ -1205,11 +1205,17 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev, LPSTR cmd, int show) {
 	menu.images = menu.opt.allow_images >= 0 ? menu.opt.allow_images != 0 :
 		(menu.opt.mode == MENU_MODE_DRUN || menu.opt.mode == MENU_MODE_WINDOW);
 
-	// A second "swinemenu" closes the open one, so the key toggles it.
+	// A second "swinemenu" closes the open one, so the key toggles it. A
+	// menu that never got the keyboard (a game had it, or the display
+	// changed under it) is not seen, and clicking elsewhere cannot close
+	// it: it is closed and this one opens, so the key is not lost on it.
 	HWND open = FindWindowW(window_class, NULL);
 	if (open) {
+		bool seen = GetForegroundWindow() == open && IsWindowVisible(open);
 		PostMessageW(open, WM_CLOSE, 0, 0);
-		return 1;
+		if (seen) {
+			return 1;
+		}
 	}
 
 	switch (menu.opt.mode) {
