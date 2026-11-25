@@ -10,6 +10,8 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- swinemenu: Ctrl+Shift+Enter (or Ctrl+Shift+click) starts the entry as
+  administrator, as in the Start menu.
 - Pango markup in Waybar formats is drawn instead of stripped: colours
   (`<span color=…>`), backgrounds, sizes (`size=`, `<big>`, `<small>`),
   fonts (`font=`, `face=`, `<tt>`), bold, italic, underline and
