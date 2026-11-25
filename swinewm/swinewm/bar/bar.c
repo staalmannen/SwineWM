@@ -51,6 +51,8 @@ enum module_kind {
 	MOD_IDLE_INHIBITOR,
 	MOD_KEYBOARD_STATE,
 	MOD_POWER_PROFILES,
+	MOD_BACKLIGHT,
+	MOD_MPRIS,
 	MOD_CUSTOM,
 };
 
@@ -137,6 +139,7 @@ static bool module_kind_from_name(const char *name, enum module_kind *kind) {
 		{"idle_inhibitor", MOD_IDLE_INHIBITOR},
 		{"keyboard-state", MOD_KEYBOARD_STATE},
 		{"power-profiles-daemon", MOD_POWER_PROFILES},
+		{"backlight", MOD_BACKLIGHT}, {"mpris", MOD_MPRIS},
 	};
 	if (has_prefix(name, "custom/")) {
 		*kind = MOD_CUSTOM;
@@ -666,6 +669,28 @@ static char *truncate_utf8(char *text, int max_chars) {
 	return text;
 }
 
+// Sets an item's text from a module's output: Pango markup unless markup
+// is off, cut to max_length characters (0: all).
+static void item_set_text(struct bar_item *item, const char *text,
+		bool markup, int max_length) {
+	if (!markup) {
+		item->text = truncate_utf8(swine_strdup(text), max_length);
+		return;
+	}
+	list_t *spans = markup_spans(text);
+	markup_spans_truncate(spans, max_length);
+	item->text = markup_spans_text(spans);
+	bool plain = true;
+	for (int i = 0; i < spans->length && plain; ++i) {
+		plain = markup_span_is_plain(spans->items[i]);
+	}
+	if (plain) {
+		markup_spans_free(spans);
+	} else {
+		item->spans = spans;
+	}
+}
+
 // Adds a single-label module. Takes ownership of text; NULL or empty text
 // hides the module (as an empty format does in Waybar).
 static struct bar_item *add_label(struct build_ctx *ctx, struct bar_module *m,
@@ -674,9 +699,10 @@ static struct bar_item *add_label(struct build_ctx *ctx, struct bar_module *m,
 		free(text);
 		return NULL;
 	}
-	char *plain = markup_strip(text);
+	struct bar_item *item = calloc(1, sizeof(*item));
+	item_set_text(item, text, true,
+		(int)json_get_number(m->cfg, "max-length", 0));
 	free(text);
-	plain = truncate_utf8(plain, (int)json_get_number(m->cfg, "max-length", 0));
 
 	const char *all[MAX_CLASSES + 2];
 	int n = 0;
@@ -690,8 +716,6 @@ static struct bar_item *add_label(struct build_ctx *ctx, struct bar_module *m,
 
 	struct bar_module_view *view = new_view(m, index);
 	struct css_element el = {"label", m->css_id, all, &ctx->window_el};
-	struct bar_item *item = calloc(1, sizeof(*item));
-	item->text = plain;
 	item->rotate = ((int)json_get_number(m->cfg, "rotate", 0) % 360 + 360) % 360;
 	compute_item_style(&el, &ctx->model->window, item);
 	view->style = item->style;
@@ -1389,7 +1413,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			char *text = format_waybar(ws_format, args, 6, &ctx->tm);
 			free(windows);
 			struct bar_item *item = calloc(1, sizeof(*item));
-			item->text = disable_markup ? swine_strdup(text) : markup_strip(text);
+			item_set_text(item, text, !disable_markup, 0);
 			free(text);
 			struct css_element el = {"button", NULL, classes, &box_el};
 			compute_item_style(&el, &view->style, item);
@@ -1485,7 +1509,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			};
 			char *text = format_waybar(ws_format, args, 6, &ctx->tm);
 			struct bar_item *item = calloc(1, sizeof(*item));
-			item->text = disable_markup ? swine_strdup(text) : markup_strip(text);
+			item_set_text(item, text, !disable_markup, 0);
 			free(text);
 			const char *classes[6];
 			int n = 0;
@@ -1992,6 +2016,482 @@ static void build_pulseaudio(struct build_ctx *ctx, struct bar_module *m,
 	free(format_source);
 }
 
+// Waybar's backlight module: the display's brightness ("device": an
+// output's name for a monitor's, through DDC/CI; else the built-in
+// panel's).
+static void build_backlight(struct build_ctx *ctx, struct bar_module *m,
+		int index) {
+	struct sysinfo_backlight b;
+	if (!sysinfo_backlight(json_get_string(m->cfg, "device", NULL), &b)) {
+		return;   // no display whose brightness Windows can read
+	}
+	int percent = b.percent;
+	int percent_exp = (int)(pow(percent / 100.0, 1 / 2.718) * 100 + 0.5);
+	const char *state = module_state(m, percent, false);
+	const char *format = NULL;
+	if (m->alt) {
+		format = json_get_string(m->cfg, "format-alt", NULL);
+	}
+	if (!format && state) {
+		char key[96];
+		snprintf(key, sizeof(key), "format-%s", state);
+		format = json_get_string(m->cfg, key, NULL);
+	}
+	if (!format) {
+		format = json_get_string(m->cfg, "format", "{percent}%");
+	}
+	struct fmt_arg args[] = {
+		{"percent", FMT_NUMBER, NULL, percent},
+		{"percent_exp", FMT_NUMBER, NULL, percent_exp},
+		{"icon", FMT_STRING, module_icon(m, percent, NULL, 0), 0},
+		{"icon_exp", FMT_STRING, module_icon(m, percent_exp, NULL, 0), 0},
+	};
+	const char *classes[] = {state, NULL};
+	int nargs = (int)(sizeof(args) / sizeof(args[0]));
+	struct bar_item *item = add_label(ctx, m, index,
+		format_waybar(format, args, nargs, &ctx->tm), classes);
+	// The tooltip shows the same, unless tooltip-format says otherwise.
+	set_tooltip(ctx, m, item, NULL, format, args, nargs, NULL);
+}
+
+// Changes the brightness on a scroll, as Waybar's backlight module does:
+// scroll-step percentage points (at least 1), not below min-brightness.
+static void backlight_scroll(struct bar_module *m, bool up) {
+	const char *device = json_get_string(m->cfg, "device", NULL);
+	struct sysinfo_backlight b;
+	if (!sysinfo_backlight(device, &b)) {
+		return;
+	}
+	if (json_get_bool(m->cfg, "reverse-mouse-scrolling", false)) {
+		up = !up;
+	}
+	double step = json_get_number(m->cfg, "scroll-step", 1.0);
+	double min = json_get_number(m->cfg, "min-brightness", 0.0);
+	if (!(step > 0) || !isfinite(step) || !isfinite(min)) {
+		return;   // zero, negative or non-finite: no scroll adjustment
+	}
+	min = min < 0 ? 0 : min > 100 ? 100 : min;
+	int units = (int)(step + 0.5);
+	units = units < 1 ? 1 : units > 100 ? 100 : units;
+	int target = b.percent + (up ? units : -units);
+	if (!up) {
+		int floor = (int)ceil(min);
+		if (b.percent < floor) {
+			return;   // already below the minimum: left as it is
+		}
+		if (target < floor) {
+			target = floor;
+		}
+	}
+	target = target < 0 ? 0 : target > 100 ? 100 : target;
+	if (target != b.percent) {
+		sysinfo_backlight_set(device, target);
+	}
+}
+
+// --- mpris ----------------------------------------------------------------
+// Ported from Waybar's src/modules/mpris/mpris.cpp (Copyright (c) 2018
+// Alexis Rouillard, MIT): the player, status, track fields, {dynamic} and
+// its length limits. The players are Windows' media sessions.
+
+// Characters of UTF-8 text (Waybar counts wide characters twice; here every
+// character counts once).
+static size_t utf8_chars(const char *s) {
+	size_t n = 0;
+	for (; *s; ++s) {
+		if (((unsigned char)*s & 0xC0) != 0x80) {
+			n++;
+		}
+	}
+	return n;
+}
+
+// Waybar's utf8_truncate: at most len characters, the ellipsis replacing
+// the end if anything was cut. Returns a new string.
+static char *utf8_truncate_copy(const char *s, const char *ellipsis, int len) {
+	if (len < 0 || utf8_chars(s) <= (size_t)len) {
+		return swine_strdup(s);
+	}
+	int keep = len - (int)utf8_chars(ellipsis);
+	if (keep < 0) {
+		keep = 0;
+	}
+	const char *p = s;
+	for (int chars = 0; *p; ++p) {
+		if (((unsigned char)*p & 0xC0) != 0x80) {
+			if (chars == keep) {
+				break;
+			}
+			chars++;
+		}
+	}
+	return format_str("%.*s%s", (int)(p - s), s, ellipsis);
+}
+
+static char *media_time(long long ms, bool truncated) {
+	if (ms < 0) {
+		return swine_strdup("");
+	}
+	long long s = ms / 1000;
+	char *t = format_str("%02lld:%02lld:%02lld", s / 3600, s / 60 % 60, s % 60);
+	if (truncated && has_prefix(t, "00:")) {
+		char *short_form = swine_strdup(t + 3);
+		free(t);
+		return short_form;
+	}
+	return t;
+}
+
+struct mpris_opts {
+	int artist_len, album_len, title_len, dynamic_len;
+	const char *separator;
+	const char *ellipsis;
+	bool truncate_hours;
+	bool prefer_album_artist;
+	struct json_value *order;     // dynamic-order, or NULL for the default
+	struct json_value *priority;  // dynamic-importance-order
+};
+
+static const char *const mpris_default_order[] = {
+	"title", "artist", "album", "position", "length", NULL,
+};
+
+static int config_len(struct bar_module *m, const char *key) {
+	struct json_value *v = json_object_get(m->cfg, key);
+	return v && v->type == JSON_NUMBER && v->number >= 0 ? (int)v->number : -1;
+}
+
+static void mpris_options(struct bar_module *m, struct mpris_opts *o) {
+	o->artist_len = config_len(m, "artist-len");
+	o->album_len = config_len(m, "album-len");
+	o->title_len = config_len(m, "title-len");
+	o->dynamic_len = config_len(m, "dynamic-len");
+	o->separator = json_get_string(m->cfg, "dynamic-separator", " - ");
+	o->ellipsis = json_get_string(m->cfg, "ellipsis", "\xE2\x80\xA6");
+	o->truncate_hours = json_get_bool(m->cfg, "truncate-hours", true);
+	o->prefer_album_artist = json_get_bool(m->cfg, "prefer-album-artist", false);
+	o->order = json_object_get(m->cfg, "dynamic-order");
+	if (o->order && o->order->type != JSON_ARRAY) {
+		o->order = NULL;
+	}
+	o->priority = json_object_get(m->cfg, "dynamic-importance-order");
+	if (!o->priority || o->priority->type != JSON_ARRAY) {
+		o->priority = json_object_get(m->cfg, "dynamic-priority");
+	}
+	if (o->priority && o->priority->type != JSON_ARRAY) {
+		o->priority = NULL;
+	}
+}
+
+// The n-th name of an order (an array from the config, or the default);
+// NULL after the last.
+static const char *order_item(struct json_value *list, int n) {
+	if (!list) {
+		return mpris_default_order[n < 5 ? n : 5];
+	}
+	if (n >= list->items->length) {
+		return NULL;
+	}
+	struct json_value *v = list->items->items[n];
+	return v->type == JSON_STRING ? v->string : "";
+}
+
+static bool order_has(struct json_value *list, const char *name) {
+	for (int i = 0; order_item(list, i); ++i) {
+		if (strcmp(order_item(list, i), name) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static char *mpris_artist(const struct sysinfo_media *p,
+		const struct mpris_opts *o, bool truncated) {
+	const char *artist = o->prefer_album_artist && p->album_artist[0] ?
+		p->album_artist : p->artist;
+	return utf8_truncate_copy(artist, o->ellipsis, truncated ? o->artist_len : -1);
+}
+
+static char *mpris_album(const struct sysinfo_media *p,
+		const struct mpris_opts *o, bool truncated) {
+	return utf8_truncate_copy(p->album, o->ellipsis, truncated ? o->album_len : -1);
+}
+
+static char *mpris_title(const struct sysinfo_media *p,
+		const struct mpris_opts *o, bool truncated) {
+	return utf8_truncate_copy(p->title, o->ellipsis, truncated ? o->title_len : -1);
+}
+
+// Waybar's getDynamicStr: the fields of dynamic-order that are set, fitted
+// into dynamic-len by dynamic-importance-order; html escapes and wraps
+// the times in <small>.
+static char *mpris_dynamic(const struct sysinfo_media *p,
+		const struct mpris_opts *o, bool truncated, bool html) {
+	char *artist = mpris_artist(p, o, truncated);
+	char *album = mpris_album(p, o, truncated);
+	char *title = mpris_title(p, o, truncated);
+	char *length = media_time(p->length_ms, truncated && o->truncate_hours);
+	// the position in the same format as the length
+	char *position = media_time(p->position_ms,
+		truncated && o->truncate_hours && strlen(length) < 6);
+
+	size_t artist_len = utf8_chars(artist), album_len = utf8_chars(album);
+	size_t title_len = utf8_chars(title), length_len = strlen(length);
+	size_t pos_len = strlen(position);
+	bool show_artist = artist_len && order_has(o->order, "artist");
+	bool show_album = album_len && order_has(o->order, "album");
+	bool show_title = title_len && order_has(o->order, "title");
+	bool show_length = length_len && order_has(o->order, "length");
+	bool show_pos = pos_len && order_has(o->order, "position");
+
+	if (truncated && o->dynamic_len >= 0) {
+		size_t sep_len = utf8_chars(o->separator);
+		size_t dynamic_len = (size_t)o->dynamic_len + sep_len;
+		if (show_artist) artist_len += sep_len;
+		if (show_album) album_len += sep_len;
+		if (show_title) album_len += sep_len;   // sic, as in Waybar
+		if (show_length) length_len += sep_len;
+		if (show_pos) pos_len += sep_len;
+		size_t total = 0;
+		for (int i = 0; order_item(o->priority, i); ++i) {
+			const char *item = order_item(o->priority, i);
+			if (strcmp(item, "artist") == 0) {
+				if (total + artist_len > dynamic_len) {
+					show_artist = false;
+				} else if (show_artist) {
+					total += artist_len;
+				}
+			} else if (strcmp(item, "album") == 0) {
+				if (total + album_len > dynamic_len) {
+					show_album = false;
+				} else if (show_album) {
+					total += album_len;
+				}
+			} else if (strcmp(item, "title") == 0) {
+				if (total + title_len > dynamic_len) {
+					show_title = false;
+				} else if (show_title) {
+					total += title_len;
+				}
+			} else if (strcmp(item, "length") == 0) {
+				if (total + length_len > dynamic_len) {
+					show_length = false;
+				} else if (show_length) {
+					total += length_len;
+					pos_len = (pos_len > 2 ? pos_len : 2) - 2;
+				}
+			} else if (strcmp(item, "position") == 0) {
+				if (total + pos_len > dynamic_len) {
+					show_pos = false;
+				} else if (show_pos) {
+					total += pos_len;
+					length_len = (length_len > 2 ? length_len : 2) - 2;
+				}
+			}
+		}
+	}
+
+	if (html) {
+		char *e = markup_escape(artist);
+		free(artist);
+		artist = e;
+		e = markup_escape(album);
+		free(album);
+		album = e;
+		e = markup_escape(title);
+		free(title);
+		title = e;
+	}
+
+	char *out = swine_strdup("");
+	bool times_shown = false, previous_shown = false;
+	const char *previous = "";
+	for (int i = 0; order_item(o->order, i); ++i) {
+		const char *item = order_item(o->order, i);
+		const char *text = NULL;
+		if (strcmp(item, "artist") == 0 && show_artist) {
+			text = artist;
+		} else if (strcmp(item, "album") == 0 && show_album) {
+			text = album;
+		} else if (strcmp(item, "title") == 0 && show_title) {
+			text = title;
+		}
+		char *next = NULL;
+		if (text) {
+			bool sep = previous_shown && strcmp(previous, "length") != 0 &&
+				strcmp(previous, "position") != 0;
+			next = format_str("%s%s%s", out, sep ? o->separator : "", text);
+			previous_shown = true;
+		} else if ((strcmp(item, "length") == 0 ||
+				strcmp(item, "position") == 0) && !times_shown &&
+				(show_length || show_pos)) {
+			char *times = format_str("[%s%s%s]", show_pos ? position : "",
+				show_pos && show_length ? "/" : "",
+				show_length ? length : "");
+			next = format_str("%s%s%s%s %s", out, html ? "<small>" : "",
+				previous_shown ? " " : "", times, html ? "</small>" : "");
+			free(times);
+			times_shown = true;
+		}
+		if (next) {
+			free(out);
+			out = next;
+		}
+		previous = item;
+	}
+	free(artist);
+	free(album);
+	free(title);
+	free(length);
+	free(position);
+	return out;
+}
+
+static const char *media_status_name(enum sysinfo_media_status status) {
+	return status == MEDIA_PLAYING ? "playing" :
+		status == MEDIA_PAUSED ? "paused" : "stopped";
+}
+
+static bool player_ignored(struct bar_module *m, const char *name) {
+	struct json_value *list = json_object_get(m->cfg, "ignored-players");
+	for (int i = 0; list && list->type == JSON_ARRAY &&
+			i < list->items->length; ++i) {
+		struct json_value *v = list->items->items[i];
+		if (v->type == JSON_STRING && swine_strcasecmp(v->string, name) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// The player the module shows: "player" by name, or with Waybar's default
+// ("playerctld", the most recently active) the one Windows thinks current;
+// never one of "ignored-players".
+static bool mpris_player(struct bar_module *m, struct sysinfo_media *out) {
+	struct sysinfo_media players[8];
+	int n = sysinfo_media_players(players, 8);
+	const char *wanted = json_get_string(m->cfg, "player", "playerctld");
+	bool any = strcmp(wanted, "playerctld") == 0;
+	for (int i = 0; i < n; ++i) {
+		if (player_ignored(m, players[i].player)) {
+			continue;
+		}
+		if (any || swine_strcasecmp(wanted, players[i].player) == 0) {
+			*out = players[i];
+			return true;
+		}
+	}
+	return false;
+}
+
+static const char *icon_for(struct bar_module *m, const char *key,
+		const char *name) {
+	struct json_value *icons = json_object_get(m->cfg, key);
+	if (!icons || icons->type != JSON_OBJECT) {
+		return "";
+	}
+	const char *icon = json_get_string(icons, name, NULL);
+	return icon ? icon : json_get_string(icons, "default", "");
+}
+
+static void build_mpris(struct build_ctx *ctx, struct bar_module *m,
+		int index) {
+	struct sysinfo_media p;
+	if (!mpris_player(m, &p)) {
+		return;   // no player: hidden
+	}
+	if (p.status == MEDIA_PAUSED && json_get_bool(m->cfg, "hide-on-paused", false)) {
+		return;
+	}
+	struct mpris_opts o;
+	mpris_options(m, &o);
+	const char *status = media_status_name(p.status);
+	char key[64];
+	snprintf(key, sizeof(key), "format-%s", status);
+	const char *format = json_get_string(m->cfg, key, NULL);
+	if (!format) {
+		format = json_get_string(m->cfg, "format",
+			"{player} ({status}): {dynamic}");
+	}
+	char *length = media_time(p.length_ms, o.truncate_hours);
+	char *position = media_time(p.position_ms,
+		o.truncate_hours && strlen(length) < 6);
+	char *player = markup_escape(p.player);
+	char *artist_raw = mpris_artist(&p, &o, true);
+	char *title_raw = mpris_title(&p, &o, true);
+	char *album_raw = mpris_album(&p, &o, true);
+	char *artist = markup_escape(artist_raw);
+	char *title = markup_escape(title_raw);
+	char *album = markup_escape(album_raw);
+	char *dynamic = mpris_dynamic(&p, &o, true, true);
+	struct fmt_arg args[] = {
+		{"player", FMT_STRING, player, 0},
+		{"status", FMT_STRING, status, 0},
+		{"artist", FMT_STRING, artist, 0},
+		{"title", FMT_STRING, title, 0},
+		{"album", FMT_STRING, album, 0},
+		{"length", FMT_STRING, length, 0},
+		{"position", FMT_STRING, position, 0},
+		{"dynamic", FMT_STRING, dynamic, 0},
+		{"player_icon", FMT_STRING, icon_for(m, "player-icons", p.player), 0},
+		{"status_icon", FMT_STRING, icon_for(m, "status-icons", status), 0},
+	};
+	int nargs = (int)(sizeof(args) / sizeof(args[0]));
+	const char *classes[] = {status, p.player, NULL};
+	struct bar_item *item = add_label(ctx, m, index,
+		format_waybar(format, args, nargs, &ctx->tm), classes);
+
+	// The tooltip: without enable-tooltip-len-limits the full fields.
+	bool limits = json_get_bool(m->cfg, "enable-tooltip-len-limits", false);
+	char *tip_length = limits || strlen(length) > 5 ? swine_strdup(length) :
+		media_time(p.length_ms, false);
+	char *tip_position = limits || strlen(position) > 5 ?
+		swine_strdup(position) : media_time(p.position_ms, false);
+	char *tip_artist_raw = mpris_artist(&p, &o, limits);
+	char *tip_title_raw = mpris_title(&p, &o, limits);
+	char *tip_album_raw = mpris_album(&p, &o, limits);
+	char *tip_artist = markup_escape(tip_artist_raw);
+	char *tip_title = markup_escape(tip_title_raw);
+	char *tip_album = markup_escape(tip_album_raw);
+	char *tip_dynamic = mpris_dynamic(&p, &o, limits, true);
+	struct fmt_arg tip_args[] = {
+		{"player", FMT_STRING, player, 0},
+		{"status", FMT_STRING, status, 0},
+		{"artist", FMT_STRING, tip_artist, 0},
+		{"title", FMT_STRING, tip_title, 0},
+		{"album", FMT_STRING, tip_album, 0},
+		{"length", FMT_STRING, tip_length, 0},
+		{"position", FMT_STRING, tip_position, 0},
+		{"dynamic", FMT_STRING, tip_dynamic, 0},
+		{"player_icon", FMT_STRING, icon_for(m, "player-icons", p.player), 0},
+		{"status_icon", FMT_STRING, icon_for(m, "status-icons", status), 0},
+	};
+	set_tooltip(ctx, m, item, status, "{player} ({status}): {dynamic}",
+		tip_args, nargs, NULL);
+
+	char *to_free[] = {length, position, player, artist_raw, title_raw,
+		album_raw, artist, title, album, dynamic, tip_length, tip_position,
+		tip_artist_raw, tip_title_raw, tip_album_raw, tip_artist, tip_title,
+		tip_album, tip_dynamic};
+	for (size_t i = 0; i < sizeof(to_free) / sizeof(to_free[0]); ++i) {
+		free(to_free[i]);
+	}
+}
+
+// Waybar's mpris clicks without on-click-*: left play/pause, middle the
+// previous track, right the next.
+static bool mpris_click(struct bar_module *m, const char *config_key,
+		enum sysinfo_media_action action) {
+	if (m->kind != MOD_MPRIS || json_object_get(m->cfg, config_key)) {
+		return false;
+	}
+	struct sysinfo_media p;
+	if (mpris_player(m, &p)) {
+		sysinfo_media_control(p.player, action);
+	}
+	return true;
+}
+
 // Changes the volume as Waybar's pulseaudio module does on a scroll.
 static void pulseaudio_scroll(struct bar_module *m, bool up) {
 	struct sysinfo_audio a = {0};
@@ -2335,7 +2835,7 @@ static void build_keyboard_state(struct build_ctx *ctx, struct bar_module *m,
 		};
 		char *text = format_waybar(format, args, 2, &ctx->tm);
 		struct bar_item *item = calloc(1, sizeof(*item));
-		item->text = markup_strip(text);
+		item_set_text(item, text, true, 0);
 		free(text);
 		const char *classes[] = {keys[i], locks[i] ? "locked" : NULL, NULL};
 		struct css_element el = {"label", NULL, classes, &box_el};
@@ -2838,6 +3338,12 @@ static void build_module(struct build_ctx *ctx, struct bar_module *m,
 	case MOD_POWER_PROFILES:
 		build_power_profiles(ctx, m, index);
 		return;
+	case MOD_BACKLIGHT:
+		build_backlight(ctx, m, index);
+		return;
+	case MOD_MPRIS:
+		build_mpris(ctx, m, index);
+		return;
 	case MOD_CUSTOM:
 		build_custom(ctx, m, index);
 		return;
@@ -2891,6 +3397,9 @@ void bar_model_free(struct bar_model *model) {
 		for (int j = 0; j < view->items->length; ++j) {
 			struct bar_item *item = view->items->items[j];
 			free(item->text);
+			if (item->spans) {
+				markup_spans_free(item->spans);
+			}
 			free(item->tooltip);
 			free(item->on_click);
 			free(item->on_click_middle);
@@ -2921,6 +3430,16 @@ void bar_module_clicked(int module_index) {
 	if (m->kind == MOD_POWER_PROFILES) {
 		power_profiles_cycle(m, 1);
 	}
+	mpris_click(m, "on-click", MEDIA_PLAY_PAUSE);
+	bar_script_event(m->script);
+}
+
+void bar_module_middle_clicked(int module_index) {
+	if (!bar.modules || module_index < 0 || module_index >= bar.modules->length) {
+		return;
+	}
+	struct bar_module *m = bar.modules->items[module_index];
+	mpris_click(m, "on-click-middle", MEDIA_PREVIOUS);
 	bar_script_event(m->script);
 }
 
@@ -2932,6 +3451,7 @@ void bar_module_right_clicked(int module_index) {
 	if (m->kind == MOD_POWER_PROFILES) {
 		power_profiles_cycle(m, -1);
 	}
+	mpris_click(m, "on-click-right", MEDIA_NEXT);
 	bar_script_event(m->script);
 }
 
@@ -2955,6 +3475,12 @@ bool bar_module_scroll(int module_index, bool up) {
 			!json_object_get(m->cfg, "on-scroll-up") &&
 			!json_object_get(m->cfg, "on-scroll-down")) {
 		pulseaudio_scroll(m, up);
+		return true;
+	}
+	if (m->kind == MOD_BACKLIGHT &&
+			!json_object_get(m->cfg, "on-scroll-up") &&
+			!json_object_get(m->cfg, "on-scroll-down")) {
+		backlight_scroll(m, up);
 		return true;
 	}
 	return false;

@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include "list.h"
+#include "swinewm/bar/css.h"
 
 // Waybar format strings use {fmt} syntax: "{name}", "{}" (first argument),
 // "{used:0.1f}" (number with a printf-like spec), "{:%H:%M}" (strftime on
@@ -41,14 +42,34 @@ char *markup_strip(const char *text);
 struct markup_span {
 	char *text;
 	bool bold, italic, underline, strikethrough;
+	bool has_color;              // foreground=, color=
+	struct swine_color color;
+	int alpha;                   // alpha=, fgalpha= (0-255) of the colour
+	                             // (the label's without color=), or -1
+	bool has_background;         // background=
+	struct swine_color background;
+	double scale;                // of the label's font size (<big>, size=large)
+	double size_pt;              // an absolute size (size=, font=), or 0
+	char font_family[64];        // font_family=, face=, font=; "" = the label's
+	bool monospace;              // <tt>
 };
 
-// Pango markup as runs: <b>, <i>, <u>, <s> and <span> with weight, style,
-// underline and strikethrough; the entities decoded. Other tags and
-// attributes are ignored, their text kept. Returns struct markup_span *
-// items, merged where the attributes are the same; free with
-// markup_spans_free.
+// Pango markup as runs: <b>, <i>, <u>, <s>, <big>, <small>, <tt>, <sub>,
+// <sup> and <span> with weight, style, underline, strikethrough,
+// foreground (color), background, alpha, size, font_family (face) and
+// font; the entities decoded. Other tags and attributes are ignored,
+// their text kept. Returns struct markup_span * items, merged where the
+// attributes are the same; free with markup_spans_free.
 list_t *markup_spans(const char *text);
 void markup_spans_free(list_t *spans);
+// A span of plain text (no attributes). Takes a copy of text.
+struct markup_span *markup_span_create(const char *text);
+// Whether a span has no attributes: it looks like plain text.
+bool markup_span_is_plain(const struct markup_span *span);
+// The spans' text, without markup. Caller frees.
+char *markup_spans_text(const list_t *spans);
+// Keeps the first max_chars characters (UTF-8) and adds U+2026 (...) if
+// anything was cut, as Waybar's max-length does. max_chars <= 0: all.
+void markup_spans_truncate(list_t *spans, int max_chars);
 
 #endif

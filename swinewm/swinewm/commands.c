@@ -7,6 +7,7 @@
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/commands.h"
+#include "swinewm/platform.h"
 #include "swinewm/config.h"
 #include "swinewm/criteria.h"
 #include "swinewm/input/seat.h"
@@ -204,6 +205,7 @@ static void set_handler_context(struct swine_node *node) {
 }
 
 list_t *execute_command(char *_exec, struct swine_container *con) {
+	platform_config_write_begin();
 	char matched_delim = ';';
 	char *exec = swine_strdup(_exec);
 	char *head = exec;
@@ -307,6 +309,7 @@ list_t *execute_command(char *_exec, struct swine_container *con) {
 cleanup:
 	free(exec);
 	list_free(containers);
+	platform_config_write_end();
 	return res_list;
 }
 

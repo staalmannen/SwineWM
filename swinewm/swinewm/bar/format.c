@@ -373,7 +373,131 @@ char *markup_strip(const char *text) {
 
 struct span_state {
 	bool bold, italic, underline, strikethrough;
+	bool has_color;
+	struct swine_color color;
+	int alpha;
+	bool has_background;
+	struct swine_color background;
+	double scale;
+	double size_pt;
+	char font_family[64];
+	bool monospace;
 };
+
+// Pango's colours: CSS names and #rgb.. as in GTK CSS, and #rrrrggggbbbb.
+static bool span_color(const char *text, struct swine_color *out) {
+	size_t len = strlen(text);
+	if (text[0] == '#' && len == 13) {
+		char short_form[8] = "#";
+		for (int i = 0; i < 3; ++i) {
+			short_form[1 + 2 * i] = text[1 + 4 * i];
+			short_form[2 + 2 * i] = text[2 + 4 * i];
+		}
+		short_form[7] = '\0';
+		return css_parse_color(NULL, short_form, out);
+	}
+	return css_parse_color(NULL, text, out);
+}
+
+// Pango's alpha: "50%" or 1..65535.
+static int span_alpha(const char *text) {
+	char *end;
+	double v = strtod(text, &end);
+	if (end == text) {
+		return -1;
+	}
+	if (*end == '%') {
+		v = v * 255 / 100;
+	} else {
+		v = v * 255 / 65535;
+	}
+	return v < 0 ? 0 : v > 255 ? 255 : (int)(v + 0.5);
+}
+
+// Pango's size=: a keyword (relative steps of 1.2), "larger"/"smaller",
+// "<n>pt", "<n>%" or 1024ths of a point.
+static void span_size(struct span_state *state, const char *v) {
+	static const struct { const char *name; int steps; } keywords[] = {
+		{"xx-small", -3}, {"x-small", -2}, {"small", -1}, {"medium", 0},
+		{"large", 1}, {"x-large", 2}, {"xx-large", 3},
+	};
+	for (size_t i = 0; i < sizeof(keywords) / sizeof(keywords[0]); ++i) {
+		if (strcmp(v, keywords[i].name) == 0) {
+			state->scale = pow(1.2, keywords[i].steps);
+			state->size_pt = 0;
+			return;
+		}
+	}
+	if (strcmp(v, "larger") == 0 || strcmp(v, "smaller") == 0) {
+		double f = v[0] == 'l' ? 1.2 : 1 / 1.2;
+		if (state->size_pt > 0) {
+			state->size_pt *= f;
+		} else {
+			state->scale *= f;
+		}
+		return;
+	}
+	char *end;
+	double n = strtod(v, &end);
+	if (end == v || n <= 0) {
+		return;
+	}
+	if (strcmp(end, "pt") == 0) {
+		state->size_pt = n;
+	} else if (strcmp(end, "%") == 0) {
+		state->scale *= n / 100;
+	} else if (*end == '\0') {
+		state->size_pt = n / 1024;
+	}
+}
+
+// Pango's font= (a font description): "Font Awesome 6 Free Bold 12" is
+// the family, then style words, then the size in points.
+static void span_font(struct span_state *state, const char *v) {
+	char buf[128];
+	snprintf(buf, sizeof(buf), "%s", v);
+	for (char *c = buf; *c; ++c) {
+		if (*c == ',') {
+			*c = ' ';
+		}
+	}
+	char *end = buf + strlen(buf);
+	for (;;) {
+		while (end > buf && end[-1] == ' ') {
+			*--end = '\0';
+		}
+		char *word = strrchr(buf, ' ');
+		word = word ? word + 1 : buf;
+		if (word == buf) {
+			break;
+		}
+		char *num_end;
+		double n = strtod(word, &num_end);
+		if (num_end != word && (*num_end == '\0' || strcmp(num_end, "px") == 0)) {
+			state->size_pt = *num_end ? n * 72 / 96 : n;
+		} else if (swine_strcasecmp(word, "Bold") == 0 ||
+				swine_strcasecmp(word, "Heavy") == 0 ||
+				swine_strcasecmp(word, "Semi-Bold") == 0) {
+			state->bold = true;
+		} else if (swine_strcasecmp(word, "Italic") == 0 ||
+				swine_strcasecmp(word, "Oblique") == 0) {
+			state->italic = true;
+		} else if (swine_strcasecmp(word, "Regular") != 0 &&
+				swine_strcasecmp(word, "Normal") != 0) {
+			break;
+		}
+		end = word;
+		*end = '\0';
+	}
+	if (buf[0]) {
+		size_t n = strlen(buf);
+		if (n >= sizeof(state->font_family)) {
+			n = sizeof(state->font_family) - 1;   // cut, as snprintf would
+		}
+		memcpy(state->font_family, buf, n);
+		state->font_family[n] = '\0';
+	}
+}
 
 // The value of attribute name in a tag's text (between '<' and '>'), or
 // NULL. Caller frees.
@@ -426,8 +550,75 @@ static void apply_tag(struct span_state *state, const char *tag, size_t len) {
 		}
 		return;
 	}
+	if ((name_len == 3 && (strncmp(tag, "big", 3) == 0 ||
+			strncmp(tag, "sub", 3) == 0 || strncmp(tag, "sup", 3) == 0)) ||
+			(name_len == 5 && strncmp(tag, "small", 5) == 0)) {
+		double f = tag[1] == 'i' ? 1.2 : 1 / 1.2;
+		if (state->size_pt > 0) {
+			state->size_pt *= f;
+		} else {
+			state->scale *= f;
+		}
+		return;
+	}
+	if (name_len == 2 && strncmp(tag, "tt", 2) == 0) {
+		state->monospace = true;
+		return;
+	}
 	if (name_len != 4 || strncmp(tag, "span", 4) != 0) {
 		return;
+	}
+	static const char *color_names[] = {"foreground", "fgcolor", "color"};
+	for (size_t i = 0; i < sizeof(color_names) / sizeof(color_names[0]); ++i) {
+		char *c = tag_attribute(tag, len, color_names[i]);
+		if (c) {
+			state->has_color = span_color(c, &state->color) || state->has_color;
+			free(c);
+		}
+	}
+	static const char *background_names[] = {"background", "bgcolor"};
+	for (size_t i = 0; i < 2; ++i) {
+		char *c = tag_attribute(tag, len, background_names[i]);
+		if (c) {
+			state->has_background = span_color(c, &state->background) ||
+				state->has_background;
+			free(c);
+		}
+	}
+	static const char *alpha_names[] = {"alpha", "fgalpha", "bgalpha"};
+	for (size_t i = 0; i < 3; ++i) {
+		char *c = tag_attribute(tag, len, alpha_names[i]);
+		int a = c ? span_alpha(c) : -1;
+		if (a >= 0 && i < 2) {
+			state->alpha = a;
+		} else if (a >= 0 && state->has_background) {
+			state->background.a = (uint8_t)a;
+		}
+		free(c);
+	}
+	char *font = tag_attribute(tag, len, "font");
+	if (!font) {
+		font = tag_attribute(tag, len, "font_desc");
+	}
+	if (font) {
+		span_font(state, font);
+		free(font);
+	}
+	static const char *family_names[] = {"font_family", "face"};
+	for (size_t i = 0; i < 2; ++i) {
+		char *f = tag_attribute(tag, len, family_names[i]);
+		if (f) {
+			snprintf(state->font_family, sizeof(state->font_family), "%s", f);
+			free(f);
+		}
+	}
+	char *size = tag_attribute(tag, len, "size");
+	if (!size) {
+		size = tag_attribute(tag, len, "font_size");
+	}
+	if (size) {
+		span_size(state, size);
+		free(size);
 	}
 	char *v = tag_attribute(tag, len, "weight");
 	if (!v) {
@@ -461,6 +652,26 @@ static void apply_tag(struct span_state *state, const char *tag, size_t len) {
 	}
 }
 
+static bool same_color(struct swine_color a, struct swine_color b) {
+	return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+}
+
+static bool same_attributes(const struct markup_span *span,
+		const struct span_state *state) {
+	return span->bold == state->bold && span->italic == state->italic &&
+		span->underline == state->underline &&
+		span->strikethrough == state->strikethrough &&
+		span->has_color == state->has_color &&
+		(!span->has_color || same_color(span->color, state->color)) &&
+		span->alpha == state->alpha &&
+		span->has_background == state->has_background &&
+		(!span->has_background ||
+			same_color(span->background, state->background)) &&
+		span->scale == state->scale && span->size_pt == state->size_pt &&
+		strcmp(span->font_family, state->font_family) == 0 &&
+		span->monospace == state->monospace;
+}
+
 static void add_span(list_t *spans, struct buf *text,
 		const struct span_state *state) {
 	if (!text->len) {
@@ -468,9 +679,7 @@ static void add_span(list_t *spans, struct buf *text,
 	}
 	struct markup_span *last = spans->length ?
 		spans->items[spans->length - 1] : NULL;
-	if (last && last->bold == state->bold && last->italic == state->italic &&
-			last->underline == state->underline &&
-			last->strikethrough == state->strikethrough) {
+	if (last && same_attributes(last, state)) {
 		size_t old = strlen(last->text);
 		last->text = realloc(last->text, old + text->len + 1);
 		memcpy(last->text + old, text->data, text->len + 1);
@@ -483,6 +692,16 @@ static void add_span(list_t *spans, struct buf *text,
 		span->italic = state->italic;
 		span->underline = state->underline;
 		span->strikethrough = state->strikethrough;
+		span->has_color = state->has_color;
+		span->color = state->color;
+		span->alpha = state->alpha;
+		span->has_background = state->has_background;
+		span->background = state->background;
+		span->scale = state->scale;
+		span->size_pt = state->size_pt;
+		memcpy(span->font_family, state->font_family,
+			sizeof(span->font_family));
+		span->monospace = state->monospace;
 		list_add(spans, span);
 	}
 	text->len = 0;
@@ -493,7 +712,10 @@ static void add_span(list_t *spans, struct buf *text,
 
 list_t *markup_spans(const char *text) {
 	enum { MAX_DEPTH = 32 };
-	struct span_state stack[MAX_DEPTH] = {{0}};
+	struct span_state stack[MAX_DEPTH];
+	memset(stack, 0, sizeof(stack));
+	stack[0].scale = 1;
+	stack[0].alpha = -1;
 	int depth = 0, overflow = 0;
 	list_t *spans = create_list();
 	struct buf b = {0};
@@ -533,6 +755,64 @@ list_t *markup_spans(const char *text) {
 	add_span(spans, &b, &stack[depth]);
 	free(b.data);
 	return spans;
+}
+
+struct markup_span *markup_span_create(const char *text) {
+	struct markup_span *span = calloc(1, sizeof(*span));
+	span->text = swine_strdup(text);
+	span->scale = 1;
+	span->alpha = -1;
+	return span;
+}
+
+bool markup_span_is_plain(const struct markup_span *span) {
+	return !span->bold && !span->italic && !span->underline &&
+		!span->strikethrough && !span->has_color && span->alpha < 0 &&
+		!span->has_background &&
+		span->scale == 1 && span->size_pt == 0 && !span->font_family[0] &&
+		!span->monospace;
+}
+
+char *markup_spans_text(const list_t *spans) {
+	struct buf b = {0};
+	buf_add(&b, "", 0);
+	for (int i = 0; spans && i < spans->length; ++i) {
+		buf_str(&b, ((struct markup_span *)spans->items[i])->text);
+	}
+	return b.data;
+}
+
+void markup_spans_truncate(list_t *spans, int max_chars) {
+	if (max_chars <= 0) {
+		return;
+	}
+	int chars = 0;
+	for (int i = 0; i < spans->length; ++i) {
+		struct markup_span *span = spans->items[i];
+		for (char *p = span->text; *p; ++p) {
+			if (((unsigned char)*p & 0xC0) == 0x80) {
+				continue;   // a continuation byte
+			}
+			if (chars == max_chars) {
+				size_t keep = (size_t)(p - span->text);
+				if (keep == 0 && i > 0) {
+					// cut between spans: the ellipsis ends the one before
+					span = spans->items[--i];
+					keep = strlen(span->text);
+				}
+				span->text = realloc(span->text, keep + 4);
+				memcpy(span->text + keep, "\xE2\x80\xA6", 4);
+				while (spans->length > i + 1) {
+					struct markup_span *rest = spans->items[spans->length - 1];
+					free(rest->text);
+					free(rest);
+					list_del(spans, spans->length - 1);
+				}
+				return;
+			}
+			chars++;
+		}
+	}
 }
 
 void markup_spans_free(list_t *spans) {

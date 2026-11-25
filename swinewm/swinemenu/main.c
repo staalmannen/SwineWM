@@ -496,6 +496,40 @@ static void launch(const char *command) {
 	free(w);
 }
 
+// Starts command as administrator (Ctrl+Shift+Enter, as in the Start
+// menu): ShellExecute's "runas" verb, so Windows asks for consent. Runs
+// here, not through swinewm, which does not run elevated.
+static void launch_elevated(const char *command) {
+	wchar_t *w = swinemenu_utf8_to_utf16(command);
+	wchar_t *file = w, *params = NULL;
+	if (*file == L'"') {
+		++file;
+		wchar_t *end = wcschr(file, L'"');
+		if (end) {
+			*end = L'\0';
+			params = end + 1;
+		}
+	} else if (GetFileAttributesW(file) == INVALID_FILE_ATTRIBUTES) {
+		// "program arguments" typed in: the first word is the program
+		wchar_t *space = wcschr(file, L' ');
+		if (space) {
+			*space = L'\0';
+			params = space + 1;
+		}
+	}
+	while (params && *params == L' ') {
+		++params;
+	}
+	SHELLEXECUTEINFOW sei = { .cbSize = sizeof(sei) };
+	sei.fMask = SEE_MASK_NOASYNC;
+	sei.lpVerb = L"runas";
+	sei.lpFile = file;
+	sei.lpParameters = params && *params ? params : NULL;
+	sei.nShow = SW_SHOWNORMAL;
+	ShellExecuteExW(&sei);   // the user may decline: no error then
+	free(w);
+}
+
 static int exit_status = 1;   // 0 once something was chosen
 
 static void close_menu(void) {
@@ -519,7 +553,9 @@ static wchar_t *display_query(void) {
 	return out;
 }
 
-static void accept(void) {
+// Enter: runs the choice; elevated (Ctrl+Shift+Enter) as administrator
+// where that means something (drun and run).
+static void accept(bool elevated) {
 	struct menu_entry *entry = selected_entry();
 	char *typed = swinemenu_utf16_to_utf8(menu.query);
 	if (menu.opt.exec_search && *typed) {
@@ -560,16 +596,18 @@ static void accept(void) {
 		free(file);
 		break;
 	}
-	default:
+	default: {
+		void (*start)(const char *) = elevated ? launch_elevated : launch;
 		if (entry) {
 			menu_history_record(menu.history_path, entry->name);
-			launch(entry->command ? entry->command : entry->name);
+			start(entry->command ? entry->command : entry->name);
 			exit_status = 0;
 		} else if (*typed) {
-			launch(typed);   // a command line typed by hand
+			start(typed);   // a command line typed by hand
 			exit_status = 0;
 		}
 		break;
+	}
 	}
 	free(typed);
 	close_menu();
@@ -899,7 +937,7 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 			close_menu();
 			return 0;
 		case VK_RETURN:
-			accept();
+			accept(ctrl && GetKeyState(VK_SHIFT) < 0);
 			return 0;
 		case VK_UP: move_selection(-1); return 0;
 		case VK_DOWN: move_selection(1); return 0;
@@ -952,7 +990,7 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 		int row = row_at(GET_Y_LPARAM(lparam));
 		if (row >= 0) {
 			menu.selected = row;
-			accept();
+			accept((wparam & (MK_CONTROL | MK_SHIFT)) == (MK_CONTROL | MK_SHIFT));
 		}
 		return 0;
 	}
@@ -993,7 +1031,8 @@ static const char usage[] =
 	"  --uninstall-open-with Undo --install-open-with\n"
 	"  -v, --version         Show the version number and quit\n"
 	"\n"
-	"Other wofi options are accepted and change nothing.\n";
+	"Other wofi options are accepted and change nothing.\n"
+	"Ctrl+Shift+Enter starts the entry as administrator (drun, run).\n";
 
 // Brings our window to the front. Windows only lets the process that
 // received the last input take the foreground; a zero-length synthetic
@@ -1166,11 +1205,17 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev, LPSTR cmd, int show) {
 	menu.images = menu.opt.allow_images >= 0 ? menu.opt.allow_images != 0 :
 		(menu.opt.mode == MENU_MODE_DRUN || menu.opt.mode == MENU_MODE_WINDOW);
 
-	// A second "swinemenu" closes the open one, so the key toggles it.
+	// A second "swinemenu" closes the open one, so the key toggles it. A
+	// menu that never got the keyboard (a game had it, or the display
+	// changed under it) is not seen, and clicking elsewhere cannot close
+	// it: it is closed and this one opens, so the key is not lost on it.
 	HWND open = FindWindowW(window_class, NULL);
 	if (open) {
+		bool seen = GetForegroundWindow() == open && IsWindowVisible(open);
 		PostMessageW(open, WM_CLOSE, 0, 0);
-		return 1;
+		if (seen) {
+			return 1;
+		}
 	}
 
 	switch (menu.opt.mode) {

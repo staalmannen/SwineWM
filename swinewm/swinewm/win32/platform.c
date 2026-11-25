@@ -71,12 +71,9 @@ void win32_run_command(const char *command) {
 static LRESULT handle_shell_message(HWND hwnd, UINT msg, WPARAM wparam,
 		LPARAM lparam) {
 	switch (msg) {
-	case WM_SWINE_BINDING: {
-		char *command = (char *)lparam;
-		win32_run_command(command);
-		free(command);
+	case WM_SWINE_BINDING:
+		win32_keyboard_binding_message(lparam);
 		return 0;
-	}
 	case WM_SWINE_IPC:
 		win32_ipc_handle((struct win32_ipc_request *)lparam);
 		return 0;
@@ -119,6 +116,9 @@ static LRESULT handle_shell_message(HWND hwnd, UINT msg, WPARAM wparam,
 		if (wparam == TIMER_DISPLAY) {
 			KillTimer(hwnd, TIMER_DISPLAY);
 			refresh_display_state();
+			// Rearranging can keep this thread busy; in case the keyboard
+			// hook was removed meanwhile.
+			win32_keyboard_rehook();
 		} else if (wparam == TIMER_SCRIPTS) {
 			KillTimer(hwnd, TIMER_SCRIPTS);
 			bar_scripts_tick(platform_now_ms());
@@ -352,6 +352,8 @@ void platform_finish(void) {
 	win32_tray_finish();
 	win32_titlebars_finish();
 	win32_appbar_finish();   // before the bar windows go
+	win32_backlight_finish();
+	win32_media_finish();
 	win32_bar_finish();
 	win32_scripts_finish();
 	win32_slurp_finish();

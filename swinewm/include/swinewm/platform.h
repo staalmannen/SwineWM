@@ -86,6 +86,11 @@ void platform_view_close(struct swine_view *view);
 // Runs a command line on the main loop soon (a mouse binding: the input
 // hook that found it must return quickly).
 void platform_queue_command(const char *command);
+// The keyboard hook reads the bindings from a thread of its own; the main
+// thread holds this while it runs commands or loads the config, which may
+// change them. Nests.
+void platform_config_write_begin(void);
+void platform_config_write_end(void);
 // The mouse pointer (virtual-desktop pixels).
 bool platform_cursor_position(int *x, int *y);
 void platform_cursor_warp(int x, int y);

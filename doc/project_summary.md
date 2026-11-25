@@ -196,6 +196,9 @@ What an existing sway config needs to load and behave.
 - swinemenu: icons, wofi's `config` and `style.css`, more modes (windows,
   like `rofi -show window`), translated names, App Paths, wofi's matching
   modes. Done.
+- Waybar: Pango markup drawn (colours, sizes, fonts), and the `backlight`
+  and `mpris` modules (panel/DDC/CI brightness, Windows' media sessions).
+  Done.
 - Next to Explorer (`--set-autostart`, experimental): register the bar as an
   AppBar so that Explorer reserves its space for every window. Done; which
   keys Explorer still takes is a 0.7.0 test.

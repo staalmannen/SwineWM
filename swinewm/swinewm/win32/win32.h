@@ -240,6 +240,13 @@ void win32_decor_save(FILE *f);
 // keyboard.c
 bool win32_keyboard_init(void);
 void win32_keyboard_finish(void);
+// The backlight and mpris modules' threads (backlight.c, media.c).
+void win32_backlight_finish(void);
+void win32_media_finish(void);
+// WM_SWINE_BINDING's lparam: publishes the binding event, runs the command.
+void win32_keyboard_binding_message(LPARAM lparam);
+// Installs the keyboard hook again (after display changes and resume).
+void win32_keyboard_rehook(void);
 uint32_t win32_keyboard_modifiers(void);
 // A mouse binding or move used these modifiers: releasing Win or Alt must
 // not open the Start menu or the window's menu bar.

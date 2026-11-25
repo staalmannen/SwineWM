@@ -489,7 +489,18 @@ static void apply_windows_theme(void) {
 	platform_set_windows_theme(mode);
 }
 
+static bool load_main_config_locked(const char *path, bool is_active,
+		bool validating);
+
 bool load_main_config(const char *path, bool is_active, bool validating) {
+	platform_config_write_begin();
+	bool ok = load_main_config_locked(path, is_active, validating);
+	platform_config_write_end();
+	return ok;
+}
+
+static bool load_main_config_locked(const char *path, bool is_active,
+		bool validating) {
 	char *text = path ? read_file(path) : NULL;
 	if (path && !text) {
 		swine_log(SWINE_ERROR, "Unable to read config file %s", path);

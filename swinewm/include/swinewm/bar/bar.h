@@ -25,6 +25,8 @@ enum bar_section {
 // then tray_id is set, text is empty and the platform draws the icon.
 struct bar_item {
 	char *text;              // markup already stripped
+	list_t *spans;           // struct markup_span *: the text with its Pango
+	                         // markup (colours, fonts...), or NULL if plain
 	char *tooltip;           // plain text with line breaks, or NULL
 	bool tooltip_mono;       // a fixed-width font (<tt>: the calendar)
 	char *on_click;          // swinewm command for a left click, or NULL
@@ -121,6 +123,8 @@ void bar_module_clicked(int module_index);
 void bar_module_event(int module_index);
 // A right click (power-profiles-daemon goes back a profile).
 void bar_module_right_clicked(int module_index);
+// A middle click (mpris: the previous track).
+void bar_module_middle_clicked(int module_index);
 // A scroll on a module without on-scroll-up/down: its own action (the
 // pulseaudio volume). Returns true if there was one.
 bool bar_module_scroll(int module_index, bool up);

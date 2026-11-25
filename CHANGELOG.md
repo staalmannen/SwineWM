@@ -10,6 +10,17 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- Waybar's `backlight` module: the brightness of a laptop's panel (WMI)
+  or of a monitor through DDC/CI, changed by scrolling.
+- Waybar's `mpris` module: the track playing in Spotify, a browser or any
+  app in Windows' media controls, with Waybar's `{dynamic}` text; a click
+  plays or pauses, middle and right click skip back and forward.
+- swinemenu: Ctrl+Shift+Enter (or Ctrl+Shift+click) starts the entry as
+  administrator, as in the Start menu.
+- Pango markup in Waybar formats is drawn instead of stripped: colours
+  (`<span color=…>`), backgrounds, sizes (`size=`, `<big>`, `<small>`),
+  fonts (`font=`, `face=`, `<tt>`), bold, italic, underline and
+  strikethrough. Notifications draw the same markup.
 - swinemenu: Start menu entries under the names Explorer shows (translated
   on non-English Windows); found also by their program's file name
   (`code`, `winver`), English name and description, and by initials
@@ -87,6 +98,13 @@ the MSI and zip with the matching section below as release notes.
 
 ### Fixed
 
+- `$mod+d` sometimes did nothing: a swinemenu that never got the keyboard
+  (a game had it) stayed open unseen, and the key only closed it. Now it
+  is replaced by a new menu; only a menu in use is toggled closed.
+- Key bindings could stop working after a game changed the display mode:
+  Windows removes a keyboard hook that answers too slowly, and the hook
+  shared its thread with everything else. It now has a thread of its own
+  and is installed again after display changes and every minute.
 - `swinemenu --dmenu` lists its choices in the order given, as wofi and
   dmenu do, instead of alphabetically.
 - `bindsym --release` bindings run when the modifier is let go before the
