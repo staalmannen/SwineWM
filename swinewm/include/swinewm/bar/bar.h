@@ -25,6 +25,8 @@ enum bar_section {
 // then tray_id is set, text is empty and the platform draws the icon.
 struct bar_item {
 	char *text;              // markup already stripped
+	list_t *spans;           // struct markup_span *: the text with its Pango
+	                         // markup (colours, fonts...), or NULL if plain
 	char *tooltip;           // plain text with line breaks, or NULL
 	bool tooltip_mono;       // a fixed-width font (<tt>: the calendar)
 	char *on_click;          // swinewm command for a left click, or NULL

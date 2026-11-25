@@ -180,8 +180,8 @@ static void test_format(void) {
 	list_t *spans = markup_spans("New <b>mail</b> from "
 		"<span weight=\"bold\" style='italic'>Jens</span>"
 		"<i><u>!</u></i><s>x</s><big>y</big> &amp; z");
-	CHECK_INT(spans->length, 7);
-	if (spans->length == 7) {
+	CHECK_INT(spans->length, 8);
+	if (spans->length == 8) {
 		struct markup_span **sp = (struct markup_span **)spans->items;
 		CHECK_STR(sp[0]->text, "New ");
 		CHECK(!sp[0]->bold && !sp[0]->italic);
@@ -194,8 +194,10 @@ static void test_format(void) {
 		CHECK(sp[4]->italic && sp[4]->underline && !sp[4]->bold);
 		CHECK_STR(sp[5]->text, "x");
 		CHECK(sp[5]->strikethrough && !sp[5]->underline);
-		// other tags add nothing: one run with what follows
-		CHECK_STR(sp[6]->text, "y & z");
+		CHECK_STR(sp[6]->text, "y");   // <big>: 1.2 times the size
+		CHECK(sp[6]->scale > 1.19 && sp[6]->scale < 1.21);
+		CHECK_STR(sp[7]->text, " & z");
+		CHECK(markup_span_is_plain(sp[7]));
 	}
 	markup_spans_free(spans);
 	spans = markup_spans("<b>a</b><span weight='700'>b</span>"
@@ -208,6 +210,51 @@ static void test_format(void) {
 	markup_spans_free(spans);
 	spans = markup_spans("");
 	CHECK_INT(spans->length, 0);
+	markup_spans_free(spans);
+
+	// Colours, sizes and fonts, as Waybar formats use them.
+	spans = markup_spans("<span color='#f38ba8'>A</span>"
+		"<span foreground=\"red\" background='#00000080'>B</span>"
+		"<span size='large'>C</span><span size='10240'>D</span>"
+		"<span font='Font Awesome 6 Free Bold 12'>E</span>"
+		"<span face='Consolas'>F</span><tt>G</tt>"
+		"<span fgcolor='#ffffff' alpha='50%'>H</span><small>I</small>"
+		"<span color='#111122223333'>J</span>");
+	CHECK_INT(spans->length, 10);
+	if (spans->length == 10) {
+		struct markup_span **sp = (struct markup_span **)spans->items;
+		CHECK(sp[0]->has_color && sp[0]->color.r == 0xf3 &&
+			sp[0]->color.g == 0x8b && sp[0]->color.b == 0xa8 &&
+			sp[0]->color.a == 255);
+		CHECK(sp[1]->has_color && sp[1]->color.r == 255 && sp[1]->color.g == 0);
+		CHECK(sp[1]->has_background && sp[1]->background.a == 0x80);
+		CHECK(sp[2]->scale > 1.19 && sp[2]->scale < 1.21);
+		CHECK(sp[3]->size_pt == 10);
+		CHECK_STR(sp[4]->font_family, "Font Awesome 6 Free");
+		CHECK(sp[4]->bold && sp[4]->size_pt == 12);
+		CHECK_STR(sp[5]->font_family, "Consolas");
+		CHECK(sp[6]->monospace);
+		CHECK(sp[7]->has_color && sp[7]->color.r == 255 &&
+			sp[7]->alpha == 128);
+		CHECK(sp[8]->scale < 0.84);
+		CHECK(sp[9]->color.r == 0x11 && sp[9]->color.g == 0x22 &&
+			sp[9]->color.b == 0x33);
+	}
+	char *joined = markup_spans_text(spans);
+	CHECK_STR(joined, "ABCDEFGHIJ");
+	free(joined);
+	// Waybar's max-length cuts the text, not the markup.
+	markup_spans_truncate(spans, 3);
+	joined = markup_spans_text(spans);
+	CHECK_STR(joined, "ABC\xE2\x80\xA6");
+	free(joined);
+	CHECK_INT(spans->length, 3);
+	markup_spans_free(spans);
+	spans = markup_spans("<b>\xC3\xA5\xC3\xA4</b>\xC3\xB6");
+	markup_spans_truncate(spans, 2);   // counts characters, not bytes
+	joined = markup_spans_text(spans);
+	CHECK_STR(joined, "\xC3\xA5\xC3\xA4\xE2\x80\xA6");
+	free(joined);
 	markup_spans_free(spans);
 }
 
@@ -420,6 +467,38 @@ static void test_tray(void) {
 	CHECK(!bar_has_tray());
 	tray_clear();
 	CHECK_INT(tray_get_items()->length, 0);
+	fake_teardown();
+}
+
+// Waybar formats with Pango markup: the bar keeps the runs (colours,
+// fonts, sizes); max-length cuts the text, not the tags.
+static void test_bar_markup(void) {
+	fake_setup();
+	config->bar_enabled = true;
+	bar_load_from_strings(
+		"{ \"modules-right\": [\"custom/a\", \"custom/b\", \"custom/c\"],\n"
+		"  \"custom/a\": { \"format\": \"<span color='#ff0000'>X</span> 42\" },\n"
+		"  \"custom/b\": { \"format\": \"<b>abc</b>def\", \"max-length\": 4 },\n"
+		"  \"custom/c\": { \"format\": \"plain &amp; simple\" } }\n", NULL);
+	struct swine_output *output = root->outputs->items[0];
+	struct bar_model *model = bar_build(output, 0);
+	struct bar_module_view *a = find_view(model, 0);
+	struct bar_module_view *b = find_view(model, 1);
+	struct bar_module_view *c = find_view(model, 2);
+	CHECK(a && b && c);
+	if (a && b && c) {
+		struct bar_item *ia = a->items->items[0];
+		CHECK_STR(ia->text, "X 42");
+		CHECK(ia->spans && ia->spans->length == 2);
+		CHECK(ia->spans && ((struct markup_span *)ia->spans->items[0])->has_color);
+		struct bar_item *ib = b->items->items[0];
+		CHECK_STR(ib->text, "abcd\xE2\x80\xA6");
+		CHECK(ib->spans && ib->spans->length == 2);
+		struct bar_item *ic = c->items->items[0];
+		CHECK_STR(ic->text, "plain & simple");
+		CHECK(ic->spans == NULL);   // plain text: drawn as before
+	}
+	bar_model_free(model);
 	fake_teardown();
 }
 
@@ -1148,6 +1227,7 @@ void test_bar_all(void) {
 	test_css();
 	test_format();
 	test_bar_model();
+	test_bar_markup();
 	test_bar_config_enabling();
 	test_tray();
 	test_language();

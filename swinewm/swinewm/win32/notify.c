@@ -256,8 +256,11 @@ static void update_icon(struct popup *p, const struct swine_notification *n) {
 static HFONT span_font(const struct popup *p, const struct notify_style *s,
 		const struct markup_span *span) {
 	// Pango sizes are points: 1pt = 1/72", 96 dpi at scale 1.
-	int px = (int)(s->font_size * 96.0 / 72.0 * p->scale + 0.5);
-	return win32_font(s->font_family, px, s->font_bold || span->bold,
+	double pt = span->size_pt > 0 ? span->size_pt : s->font_size * span->scale;
+	int px = (int)(pt * 96.0 / 72.0 * p->scale + 0.5);
+	const char *family = span->font_family[0] ? span->font_family :
+		span->monospace ? "monospace" : s->font_family;
+	return win32_font(family, px > 0 ? px : 1, s->font_bold || span->bold,
 		span->italic);
 }
 
@@ -276,11 +279,28 @@ struct placed {
 	int x;
 };
 
+// What layout_text does: measure only, draw the text in the label's
+// colour into the mask, or draw the runs with their own colour (or
+// background) straight onto the canvas.
+enum text_pass {
+	PASS_MEASURE,
+	PASS_PLAIN,
+	PASS_COLORED,
+};
+
+static bool span_colored(const struct markup_span *span) {
+	return span->has_color || span->alpha >= 0 || span->has_background;
+}
+
 struct text_layout {
 	HDC dc;
 	RECT area;
 	UINT align;           // 0 left, 1 center, 2 right
 	bool draw;
+	enum text_pass pass;
+	struct canvas *canvas;     // PASS_COLORED
+	struct swine_color color;  // the label's, for alpha= without color=
+	const RECT *clip;
 	int y;
 	int widest;
 	struct placed *placed;
@@ -345,7 +365,26 @@ static void flush_line(struct text_layout *t) {
 	for (int i = 0; t->draw && i < t->count; ++i) {
 		struct placed *pl = &t->placed[i];
 		const struct markup_span *span = pl->word->span;
+		if (span_colored(span) != (t->pass == PASS_COLORED)) {
+			continue;
+		}
 		int x = t->area.left + offset + pl->x;
+		RECT piece = {0};
+		if (t->pass == PASS_COLORED) {
+			// Its own mask, blended at once in its colour.
+			int w = extent(t->dc, pl->word->font, pl->word->text + pl->start,
+				pl->len);
+			int slack = ascent / 4 + 1;
+			RECT box = {x, t->y, x + w, t->y + ascent + descent};
+			if (span->has_background && IntersectRect(&box, &box, t->clip)) {
+				canvas_fill(t->canvas, &box, span->background);
+			}
+			RECT wide = {x - slack, t->y, x + w + slack, t->y + ascent + descent};
+			if (!IntersectRect(&piece, &wide, t->clip)) {
+				continue;
+			}
+			canvas_mask_clear(t->canvas, &piece, false);
+		}
 		HFONT old = SelectObject(t->dc, pl->word->font);
 		UINT old_align = SetTextAlign(t->dc, TA_BASELINE | TA_LEFT);
 		TextOutW(t->dc, x, baseline, pl->word->text + pl->start, pl->len);
@@ -377,6 +416,13 @@ static void flush_line(struct text_layout *t) {
 			}
 		}
 		SelectObject(t->dc, old);
+		if (t->pass == PASS_COLORED) {
+			struct swine_color color = span->has_color ? span->color : t->color;
+			if (span->alpha >= 0) {
+				color.a = (uint8_t)span->alpha;
+			}
+			canvas_mask_blend(t->canvas, &piece, color);
+		}
 	}
 	t->y += ascent + descent;
 	t->count = 0;
@@ -430,13 +476,18 @@ static void layout_line(struct text_layout *t, const struct word *words,
 // Measures (and with draw, draws white into dc) the lines inside area.
 // Returns the height; *width gets the widest line.
 static int layout_text(const struct popup *p, HDC dc,
-		const struct swine_notification *n, RECT area, bool draw, int *width) {
+		const struct swine_notification *n, RECT area, enum text_pass pass,
+		struct canvas *canvas, const RECT *clip, int *width) {
 	list_t *lines = notify_format_lines(n);
 	struct text_layout t = {
 		.dc = dc,
 		.area = area,
 		.align = (UINT)n->style.text_alignment,
-		.draw = draw,
+		.draw = pass != PASS_MEASURE,
+		.pass = pass,
+		.canvas = canvas,
+		.color = n->style.text,
+		.clip = clip,
 		.y = area.top,
 	};
 	for (int i = 0; i < lines->length && t.y < area.bottom; ++i) {
@@ -517,7 +568,8 @@ static void compute_layout(struct popup *p, const struct swine_notification *n,
 	HDC dc = CreateCompatibleDC(NULL);
 	RECT area = {0, 0, layout_w, layout_h};
 	int text_w = 0;
-	int text_h = layout_text(p, dc, n, area, false, &text_w);
+	int text_h = layout_text(p, dc, n, area, PASS_MEASURE, NULL, NULL,
+		&text_w);
 	DeleteDC(dc);
 
 	int h = text_h + border2 + pt + pb;
@@ -643,10 +695,12 @@ static void render_popup(struct popup *p, const struct swine_notification *n,
 		SetTextColor(c.mask_dc, RGB(255, 255, 255));
 		HRGN clip = CreateRectRgnIndirect(&text);
 		SelectClipRgn(c.mask_dc, clip);
-		layout_text(p, c.mask_dc, n, l->text, true, NULL);
+		layout_text(p, c.mask_dc, n, l->text, PASS_PLAIN, &c, &text, NULL);
+		canvas_mask_blend(&c, &text, n->style.text);
+		// Runs with their own colour (or background), one at a time.
+		layout_text(p, c.mask_dc, n, l->text, PASS_COLORED, &c, &text, NULL);
 		SelectClipRgn(c.mask_dc, NULL);
 		DeleteObject(clip);
-		canvas_mask_blend(&c, &text, n->style.text);
 	}
 	canvas_present(&c, p->hwnd, x, y);
 	canvas_finish(&c);

@@ -7,6 +7,7 @@
 #include "log.h"
 #include "stringop.h"
 #include "swinewm/bar/bar.h"
+#include "swinewm/bar/format.h"
 #include "swinewm/tree/output.h"
 #include "swinewm/tree/root.h"
 #include "win32.h"
@@ -93,6 +94,147 @@ static SIZE text_size(HDC dc, HFONT font, const wchar_t *text) {
 	return size;
 }
 
+// --- Pango markup -------------------------------------------------------
+// An item with markup (item->spans) is drawn run by run, each in its own
+// font and colour, on one baseline. Rotated items show the plain text.
+
+struct run {
+	const struct markup_span *span;
+	wchar_t *text;
+	int len;
+	HFONT font;
+	int x;          // from the start of the text
+	int width;
+};
+
+struct runs {
+	struct run *runs;
+	int count;
+	int width;
+	int ascent, descent;
+};
+
+static HFONT span_font(struct bar_window *bw, const struct swine_style *s,
+		const struct markup_span *span) {
+	// Pango's points are 1/72", at 96 dpi; CSS sizes are px.
+	double size = span->size_pt > 0 ? span->size_pt * 96.0 / 72.0 :
+		s->font_size * span->scale;
+	const char *family = span->font_family[0] ? span->font_family :
+		span->monospace ? "monospace" : s->font_family;
+	int height = px(bw, size);
+	return win32_font_rotated(family, height > 0 ? height : 1,
+		s->bold || span->bold, s->italic || span->italic, 0);
+}
+
+static void layout_runs(struct bar_window *bw, HDC dc,
+		const struct bar_item *item, struct runs *out) {
+	memset(out, 0, sizeof(*out));
+	out->runs = calloc((size_t)item->spans->length + 1, sizeof(struct run));
+	for (int i = 0; i < item->spans->length; ++i) {
+		const struct markup_span *span = item->spans->items[i];
+		struct run *r = &out->runs[out->count++];
+		r->span = span;
+		r->text = utf8_to_utf16(span->text);
+		r->len = r->text ? (int)wcslen(r->text) : 0;
+		r->font = span_font(bw, &item->style, span);
+		HFONT old = SelectObject(dc, r->font);
+		SIZE size = {0, 0};
+		if (r->len) {
+			GetTextExtentPoint32W(dc, r->text, r->len, &size);
+		}
+		TEXTMETRICW tm;
+		if (GetTextMetricsW(dc, &tm)) {
+			if (tm.tmAscent > out->ascent) out->ascent = tm.tmAscent;
+			if (tm.tmDescent > out->descent) out->descent = tm.tmDescent;
+		}
+		SelectObject(dc, old);
+		r->x = out->width;
+		r->width = size.cx;
+		out->width += size.cx;
+	}
+}
+
+static void free_runs(struct runs *runs) {
+	for (int i = 0; i < runs->count; ++i) {
+		free(runs->runs[i].text);
+	}
+	free(runs->runs);
+}
+
+static bool has_runs(const struct bar_item *item) {
+	return item->spans && item->rotate == 0;
+}
+
+// Draws the runs centred in rect: per run its background, then its text
+// through the mask in its colour, underline and strikethrough included.
+static void canvas_runs(struct bar_window *bw, struct canvas *c,
+		const RECT *rect, const struct bar_item *item) {
+	struct runs runs;
+	layout_runs(bw, c->mask_dc, item, &runs);
+	int w = rect->right - rect->left, h = rect->bottom - rect->top;
+	int left = rect->left + (runs.width < w ? (w - runs.width) / 2 : 0);
+	int baseline = rect->top + (h - runs.ascent - runs.descent) / 2 +
+		runs.ascent;
+	// Italic letters reach a little beyond their advance.
+	int slack = runs.ascent / 4 + 1;
+	for (int i = 0; i < runs.count; ++i) {
+		const struct run *r = &runs.runs[i];
+		const struct markup_span *span = r->span;
+		RECT box = {left + r->x, rect->top, left + r->x + r->width,
+			rect->bottom};
+		RECT clipped;
+		if (!IntersectRect(&clipped, &box, rect)) {
+			continue;
+		}
+		if (span->has_background) {
+			canvas_fill(c, &clipped, span->background);
+		}
+		RECT m = {box.left - slack, box.top, box.right + slack, box.bottom};
+		IntersectRect(&m, &m, rect);
+		canvas_mask_clear(c, &m, false);
+		HFONT old = SelectObject(c->mask_dc, r->font);
+		UINT old_align = SetTextAlign(c->mask_dc, TA_BASELINE | TA_LEFT);
+		SetTextColor(c->mask_dc, RGB(255, 255, 255));
+		ExtTextOutW(c->mask_dc, box.left, baseline, ETO_CLIPPED, &m, r->text,
+			(UINT)r->len, NULL);
+		SetTextAlign(c->mask_dc, old_align);
+		if (span->underline || span->strikethrough) {
+			OUTLINETEXTMETRICW otm;
+			otm.otmSize = sizeof(otm);
+			bool have = GetOutlineTextMetricsW(c->mask_dc, sizeof(otm), &otm) != 0;
+			int thick = have && otm.otmsUnderscoreSize > 0 ?
+				(int)otm.otmsUnderscoreSize : 1;
+			HBRUSH white = GetStockObject(WHITE_BRUSH);
+			if (span->underline) {
+				int under = have ? -otm.otmsUnderscorePosition :
+					runs.descent / 2 + 1;
+				RECT line = {box.left, baseline + under, box.right,
+					baseline + under + thick};
+				IntersectRect(&line, &line, &m);
+				FillRect(c->mask_dc, &line, white);
+			}
+			if (span->strikethrough) {
+				int through = have ? (int)otm.otmsStrikeoutPosition :
+					runs.ascent / 3;
+				int sthick = have && otm.otmsStrikeoutSize > 0 ?
+					(int)otm.otmsStrikeoutSize : thick;
+				RECT line = {box.left, baseline - through, box.right,
+					baseline - through + sthick};
+				IntersectRect(&line, &line, &m);
+				FillRect(c->mask_dc, &line, white);
+			}
+		}
+		SelectObject(c->mask_dc, old);
+		struct swine_color color = span->has_color ? span->color :
+			item->style.color;
+		if (span->alpha >= 0) {
+			color.a = (uint8_t)span->alpha;
+		}
+		canvas_mask_blend(c, &m, color);
+	}
+	free_runs(&runs);
+}
+
 // The content of an item (text or icon) as laid out: rotated text ("rotate"
 // 90 or 270) takes its height across and its width along.
 static SIZE content_size(struct bar_window *bw, HDC dc,
@@ -101,9 +243,17 @@ static SIZE content_size(struct bar_window *bw, HDC dc,
 		int size = px(bw, item->icon_size);
 		return (SIZE){size, size};
 	}
-	wchar_t *text = utf8_to_utf16(item->text);
-	SIZE size = text_size(dc, style_font(bw, &item->style, 0), text);
-	free(text);
+	SIZE size;
+	if (has_runs(item)) {
+		struct runs runs;
+		layout_runs(bw, dc, item, &runs);
+		size = (SIZE){runs.width, runs.ascent + runs.descent};
+		free_runs(&runs);
+	} else {
+		wchar_t *text = utf8_to_utf16(item->text);
+		size = text_size(dc, style_font(bw, &item->style, 0), text);
+		free(text);
+	}
 	if (item->icon_path) {
 		int icon = px(bw, item->icon_size ? item->icon_size : 16);
 		int gap = px(bw, 4);
@@ -314,10 +464,16 @@ static int draw_item(struct bar_window *bw, struct canvas *c, int pos,
 				text_rect.left = icon.right + gap;
 			}
 			canvas_tray_icon(bw, c, &icon, item);
-			wchar_t *text = utf8_to_utf16(item->text);
-			canvas_text(bw, c, &text_rect, text, s, item->rotate, s->color);
-			free(text);
+			if (has_runs(item)) {
+				canvas_runs(bw, c, &text_rect, item);
+			} else {
+				wchar_t *text = utf8_to_utf16(item->text);
+				canvas_text(bw, c, &text_rect, text, s, item->rotate, s->color);
+				free(text);
+			}
 		}
+	} else if (has_runs(item)) {
+		canvas_runs(bw, c, &content, item);
 	} else {
 		wchar_t *text = utf8_to_utf16(item->text);
 		canvas_text(bw, c, &content, text, s, item->rotate, s->color);

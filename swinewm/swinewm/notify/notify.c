@@ -1772,9 +1772,7 @@ list_t *notify_format_lines(const struct swine_notification *n) {
 		} else {
 			out->spans = create_list();
 			if (*line) {
-				struct markup_span *span = calloc(1, sizeof(*span));
-				span->text = swine_strdup(line);
-				list_add(out->spans, span);
+				list_add(out->spans, markup_span_create(line));
 			}
 		}
 		if (!out->spans->length) {

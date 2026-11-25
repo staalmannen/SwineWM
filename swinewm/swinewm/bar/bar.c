@@ -666,6 +666,28 @@ static char *truncate_utf8(char *text, int max_chars) {
 	return text;
 }
 
+// Sets an item's text from a module's output: Pango markup unless markup
+// is off, cut to max_length characters (0: all).
+static void item_set_text(struct bar_item *item, const char *text,
+		bool markup, int max_length) {
+	if (!markup) {
+		item->text = truncate_utf8(swine_strdup(text), max_length);
+		return;
+	}
+	list_t *spans = markup_spans(text);
+	markup_spans_truncate(spans, max_length);
+	item->text = markup_spans_text(spans);
+	bool plain = true;
+	for (int i = 0; i < spans->length && plain; ++i) {
+		plain = markup_span_is_plain(spans->items[i]);
+	}
+	if (plain) {
+		markup_spans_free(spans);
+	} else {
+		item->spans = spans;
+	}
+}
+
 // Adds a single-label module. Takes ownership of text; NULL or empty text
 // hides the module (as an empty format does in Waybar).
 static struct bar_item *add_label(struct build_ctx *ctx, struct bar_module *m,
@@ -674,9 +696,10 @@ static struct bar_item *add_label(struct build_ctx *ctx, struct bar_module *m,
 		free(text);
 		return NULL;
 	}
-	char *plain = markup_strip(text);
+	struct bar_item *item = calloc(1, sizeof(*item));
+	item_set_text(item, text, true,
+		(int)json_get_number(m->cfg, "max-length", 0));
 	free(text);
-	plain = truncate_utf8(plain, (int)json_get_number(m->cfg, "max-length", 0));
 
 	const char *all[MAX_CLASSES + 2];
 	int n = 0;
@@ -690,8 +713,6 @@ static struct bar_item *add_label(struct build_ctx *ctx, struct bar_module *m,
 
 	struct bar_module_view *view = new_view(m, index);
 	struct css_element el = {"label", m->css_id, all, &ctx->window_el};
-	struct bar_item *item = calloc(1, sizeof(*item));
-	item->text = plain;
 	item->rotate = ((int)json_get_number(m->cfg, "rotate", 0) % 360 + 360) % 360;
 	compute_item_style(&el, &ctx->model->window, item);
 	view->style = item->style;
@@ -1389,7 +1410,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			char *text = format_waybar(ws_format, args, 6, &ctx->tm);
 			free(windows);
 			struct bar_item *item = calloc(1, sizeof(*item));
-			item->text = disable_markup ? swine_strdup(text) : markup_strip(text);
+			item_set_text(item, text, !disable_markup, 0);
 			free(text);
 			struct css_element el = {"button", NULL, classes, &box_el};
 			compute_item_style(&el, &view->style, item);
@@ -1485,7 +1506,7 @@ static void build_workspaces(struct build_ctx *ctx, struct bar_module *m,
 			};
 			char *text = format_waybar(ws_format, args, 6, &ctx->tm);
 			struct bar_item *item = calloc(1, sizeof(*item));
-			item->text = disable_markup ? swine_strdup(text) : markup_strip(text);
+			item_set_text(item, text, !disable_markup, 0);
 			free(text);
 			const char *classes[6];
 			int n = 0;
@@ -2335,7 +2356,7 @@ static void build_keyboard_state(struct build_ctx *ctx, struct bar_module *m,
 		};
 		char *text = format_waybar(format, args, 2, &ctx->tm);
 		struct bar_item *item = calloc(1, sizeof(*item));
-		item->text = markup_strip(text);
+		item_set_text(item, text, true, 0);
 		free(text);
 		const char *classes[] = {keys[i], locks[i] ? "locked" : NULL, NULL};
 		struct css_element el = {"label", NULL, classes, &box_el};
@@ -2891,6 +2912,9 @@ void bar_model_free(struct bar_model *model) {
 		for (int j = 0; j < view->items->length; ++j) {
 			struct bar_item *item = view->items->items[j];
 			free(item->text);
+			if (item->spans) {
+				markup_spans_free(item->spans);
+			}
 			free(item->tooltip);
 			free(item->on_click);
 			free(item->on_click_middle);
