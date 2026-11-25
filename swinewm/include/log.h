@@ -27,6 +27,6 @@ bool _swine_assert(bool condition, const char *file, int line,
 // The format string is part of __VA_ARGS__ so that a call without extra
 // arguments needs no comma-elision extension (MSVC and C11 compatible).
 #define swine_log(verb, ...) _swine_log(verb, __FILE__, __LINE__, __VA_ARGS__)
-#define swine_assert(cond, ...) _swine_assert(cond, __FILE__, __LINE__, __VA_ARGS__)
+#define swine_assert(cond, ...) _swine_assert(!!(cond), __FILE__, __LINE__, __VA_ARGS__)
 
 #endif

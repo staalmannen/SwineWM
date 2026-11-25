@@ -179,15 +179,15 @@ static bool criteria_matches_view(struct criteria *criteria,
 		return false;
 	}
 	if (criteria->title && !string_token_matches(criteria->title,
-			view->title, focused ? focused->title : NULL, focused)) {
+			view->title, focused ? focused->title : NULL, focused != NULL)) {
 		return false;
 	}
 	if (criteria->shell && !string_token_matches(criteria->shell,
-			VIEW_SHELL, VIEW_SHELL, focused)) {
+			VIEW_SHELL, VIEW_SHELL, focused != NULL)) {
 		return false;
 	}
 	if (criteria->app_id && !string_token_matches(criteria->app_id,
-			view->app_id, focused ? focused->app_id : NULL, focused)) {
+			view->app_id, focused ? focused->app_id : NULL, focused != NULL)) {
 		return false;
 	}
 	// Windows has no sandboxes or tags: these never match, as in sway for
@@ -203,14 +203,14 @@ static bool criteria_matches_view(struct criteria *criteria,
 		return false;
 	}
 	if (criteria->class && !string_token_matches(criteria->class,
-			view->class_name, focused ? focused->class_name : NULL, focused)) {
+			view->class_name, focused ? focused->class_name : NULL, focused != NULL)) {
 		return false;
 	}
 	if (criteria->instance) {
 		char *instance = view_instance(view);
 		char *focused_instance = focused ? view_instance(focused) : NULL;
 		bool ok = string_token_matches(criteria->instance, instance,
-			focused_instance, focused);
+			focused_instance, focused != NULL);
 		free(instance);
 		free(focused_instance);
 		if (!ok) {
@@ -218,7 +218,7 @@ static bool criteria_matches_view(struct criteria *criteria,
 		}
 	}
 	if (criteria->window_role && !string_token_matches(criteria->window_role,
-			"", "", focused)) {
+			"", "", focused != NULL)) {
 		return false;
 	}
 	switch (criteria->window_type) {
