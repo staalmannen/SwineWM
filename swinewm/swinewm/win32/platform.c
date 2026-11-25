@@ -352,6 +352,8 @@ void platform_finish(void) {
 	win32_tray_finish();
 	win32_titlebars_finish();
 	win32_appbar_finish();   // before the bar windows go
+	win32_backlight_finish();
+	win32_media_finish();
 	win32_bar_finish();
 	win32_scripts_finish();
 	win32_slurp_finish();

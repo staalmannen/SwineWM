@@ -68,6 +68,13 @@ struct fake_platform_state {
 	double temperature;
 	struct sysinfo_network network;
 	struct sysinfo_audio audio;
+	bool has_backlight;
+	int backlight;
+	char last_backlight_device[64];
+	struct sysinfo_media media[4];
+	int media_count;
+	char last_media_player[64];
+	int last_media_action;      // enum sysinfo_media_action, -1 for none
 	double last_volume_set;
 	bool last_volume_source;
 	int mute_calls;

@@ -24,6 +24,7 @@ struct fake_platform_state fake;
 
 void fake_reset(void) {
 	memset(&fake, 0, sizeof(fake));
+	fake.last_media_action = -1;
 	fake.ipc_input_capabilities =
 		PLATFORM_IPC_INPUT_KEYBOARD | PLATFORM_IPC_INPUT_POINTER;
 }
@@ -343,6 +344,34 @@ bool sysinfo_network(const char *pattern, struct sysinfo_network *out) {
 	*out = fake.network;
 	return true;
 }
+bool sysinfo_backlight(const char *device, struct sysinfo_backlight *out) {
+	snprintf(fake.last_backlight_device, sizeof(fake.last_backlight_device),
+		"%s", device ? device : "");
+	out->percent = fake.backlight;
+	snprintf(out->device, sizeof(out->device), "%s", device ? device : "panel");
+	return fake.has_backlight;
+}
+
+void sysinfo_backlight_set(const char *device, int percent) {
+	(void)device;
+	fake.backlight = percent;
+}
+
+int sysinfo_media_players(struct sysinfo_media *out, int max) {
+	int n = fake.media_count < max ? fake.media_count : max;
+	for (int i = 0; i < n; ++i) {
+		out[i] = fake.media[i];
+	}
+	return n;
+}
+
+void sysinfo_media_control(const char *player,
+		enum sysinfo_media_action action) {
+	snprintf(fake.last_media_player, sizeof(fake.last_media_player), "%s",
+		player);
+	fake.last_media_action = (int)action;
+}
+
 bool sysinfo_audio(struct sysinfo_audio *out) {
 	*out = fake.audio;
 	return fake.audio.present;

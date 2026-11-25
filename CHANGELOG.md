@@ -10,6 +10,11 @@ the MSI and zip with the matching section below as release notes.
 
 ### Added
 
+- Waybar's `backlight` module: the brightness of a laptop's panel (WMI)
+  or of a monitor through DDC/CI, changed by scrolling.
+- Waybar's `mpris` module: the track playing in Spotify, a browser or any
+  app in Windows' media controls, with Waybar's `{dynamic}` text; a click
+  plays or pauses, middle and right click skip back and forward.
 - swinemenu: Ctrl+Shift+Enter (or Ctrl+Shift+click) starts the entry as
   administrator, as in the Start menu.
 - Pango markup in Waybar formats is drawn instead of stripped: colours

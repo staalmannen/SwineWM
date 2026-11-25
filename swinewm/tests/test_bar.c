@@ -502,6 +502,85 @@ static void test_bar_markup(void) {
 	fake_teardown();
 }
 
+static void test_backlight_mpris(void) {
+	fake_setup();
+	config->bar_enabled = true;
+	bar_load_from_strings(
+		"{ \"modules-right\": [\"backlight\", \"mpris\", \"mpris#short\"],\n"
+		"  \"backlight\": { \"format\": \"{percent}% {icon}\",\n"
+		"     \"format-icons\": [\"dim\", \"bright\"],\n"
+		"     \"states\": { \"low\": 0, \"high\": 80 },\n"
+		"     \"scroll-step\": 5, \"min-brightness\": 10 },\n"
+		"  \"mpris#short\": { \"format\": \"{dynamic}\", \"dynamic-len\": 10,\n"
+		"     \"ignored-players\": [\"firefox\"] } }\n", NULL);
+	struct swine_output *output = root->outputs->items[0];
+
+	// Nothing to show: no backlight, no player.
+	struct bar_model *model = bar_build(output, 0);
+	CHECK_INT(model->modules->length, 0);
+	bar_model_free(model);
+
+	fake.has_backlight = true;
+	fake.backlight = 85;
+	fake.media_count = 2;
+	struct sysinfo_media *firefox = &fake.media[0], *spotify = &fake.media[1];
+	snprintf(firefox->player, sizeof(firefox->player), "firefox");
+	firefox->status = MEDIA_PAUSED;
+	snprintf(firefox->title, sizeof(firefox->title), "A video");
+	firefox->length_ms = firefox->position_ms = -1;
+	snprintf(spotify->player, sizeof(spotify->player), "spotify");
+	spotify->status = MEDIA_PLAYING;
+	snprintf(spotify->title, sizeof(spotify->title), "Song");
+	snprintf(spotify->artist, sizeof(spotify->artist), "Band");
+	snprintf(spotify->album, sizeof(spotify->album), "Disc");
+	spotify->length_ms = 185000;
+	spotify->position_ms = 65000;
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 0), "85% bright");
+	struct bar_module_view *b = find_view(model, 0);
+	CHECK(b && b->items->length &&
+		strcmp(((struct bar_item *)b->items->items[0])->tooltip, "85% bright") == 0);
+	// Waybar's default format; the current player (firefox) first
+	CHECK_STR(item_text(model, 1), "firefox (paused): A video");
+	// dynamic-len 10 keeps title and artist (Waybar's counting: the
+	// title's separator is charged to the album); firefox is ignored here
+	CHECK_STR(item_text(model, 2), "Song - Band");
+	bar_model_free(model);
+
+	// The full {dynamic}, times in <small>.
+	fake.media_count = 1;
+	fake.media[0] = *spotify;
+	model = bar_build(output, 0);
+	CHECK_STR(item_text(model, 1),
+		"spotify (playing): Song - Band - Disc [01:05/03:05] ");
+	struct bar_module_view *v = find_view(model, 1);
+	CHECK(v && v->items->length &&
+		((struct bar_item *)v->items->items[0])->spans != NULL);
+	bar_model_free(model);
+
+	// Clicks: play/pause, previous, next on the shown player.
+	bar_module_clicked(1);
+	CHECK_STR(fake.last_media_player, "spotify");
+	CHECK_INT(fake.last_media_action, MEDIA_PLAY_PAUSE);
+	bar_module_middle_clicked(1);
+	CHECK_INT(fake.last_media_action, MEDIA_PREVIOUS);
+	bar_module_right_clicked(1);
+	CHECK_INT(fake.last_media_action, MEDIA_NEXT);
+
+	// Scrolling the backlight: steps of 5, not below 10.
+	CHECK(bar_module_scroll(0, true));
+	CHECK_INT(fake.backlight, 90);
+	fake.backlight = 12;
+	CHECK(bar_module_scroll(0, false));
+	CHECK_INT(fake.backlight, 10);
+	CHECK(bar_module_scroll(0, false));
+	CHECK_INT(fake.backlight, 10);
+	fake.backlight = 5;   // below the minimum already: left alone
+	CHECK(bar_module_scroll(0, false));
+	CHECK_INT(fake.backlight, 5);
+	fake_teardown();
+}
+
 static void test_bar_config_ipc(void) {
 	fake_setup();
 	config->bar_enabled = true;
@@ -1228,6 +1307,7 @@ void test_bar_all(void) {
 	test_format();
 	test_bar_model();
 	test_bar_markup();
+	test_backlight_mpris();
 	test_bar_config_enabling();
 	test_tray();
 	test_language();

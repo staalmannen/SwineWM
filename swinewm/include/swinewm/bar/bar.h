@@ -123,6 +123,8 @@ void bar_module_clicked(int module_index);
 void bar_module_event(int module_index);
 // A right click (power-profiles-daemon goes back a profile).
 void bar_module_right_clicked(int module_index);
+// A middle click (mpris: the previous track).
+void bar_module_middle_clicked(int module_index);
 // A scroll on a module without on-scroll-up/down: its own action (the
 // pulseaudio volume). Returns true if there was one.
 bool bar_module_scroll(int module_index, bool up);

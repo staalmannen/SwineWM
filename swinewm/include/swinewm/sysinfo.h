@@ -93,6 +93,44 @@ void sysinfo_audio_set_volume(bool source, double percent);
 // Mutes (1), unmutes (0) or toggles (-1) the default output or input.
 void sysinfo_audio_set_mute(bool source, int mode);
 
+// The display's brightness (Waybar's backlight module): the built-in
+// panel's, or with device an output's ("DISPLAY2", through DDC/CI). The
+// value is read in the background; false until there is one (or if the
+// display has no brightness Windows can read).
+struct sysinfo_backlight {
+	int percent;
+	char device[64];        // "panel", or the output's name
+};
+bool sysinfo_backlight(const char *device, struct sysinfo_backlight *out);
+// Sets the brightness (percent), in the background.
+void sysinfo_backlight_set(const char *device, int percent);
+
+// Media players (Waybar's mpris module): Windows' media sessions.
+enum sysinfo_media_status {
+	MEDIA_STOPPED,
+	MEDIA_PLAYING,
+	MEDIA_PAUSED,
+};
+struct sysinfo_media {
+	char player[64];        // "spotify", "firefox", ...: from the app's ID
+	enum sysinfo_media_status status;
+	char title[256];
+	char artist[256];
+	char album_artist[256];
+	char album[256];
+	long long length_ms;    // -1 if unknown
+	long long position_ms;  // -1 if unknown
+};
+// The players, the one Windows thinks current first; returns how many
+// (at most max). Read in the background.
+int sysinfo_media_players(struct sysinfo_media *out, int max);
+enum sysinfo_media_action {
+	MEDIA_PLAY_PAUSE,
+	MEDIA_NEXT,
+	MEDIA_PREVIOUS,
+};
+void sysinfo_media_control(const char *player, enum sysinfo_media_action action);
+
 // Keeps the display on and the computer awake (Waybar's idle_inhibitor),
 // for as long as swinewm runs or until switched off again.
 void sysinfo_inhibit_idle(bool enable);

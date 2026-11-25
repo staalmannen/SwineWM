@@ -917,7 +917,7 @@ static LRESULT CALLBACK bar_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 				free(copy);
 			}
 			if (middle) {
-				bar_module_event(index);
+				bar_module_middle_clicked(index);
 			} else {
 				bar_module_right_clicked(index);
 			}

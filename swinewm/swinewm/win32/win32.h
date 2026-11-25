@@ -240,6 +240,9 @@ void win32_decor_save(FILE *f);
 // keyboard.c
 bool win32_keyboard_init(void);
 void win32_keyboard_finish(void);
+// The backlight and mpris modules' threads (backlight.c, media.c).
+void win32_backlight_finish(void);
+void win32_media_finish(void);
 // WM_SWINE_BINDING's lparam: publishes the binding event, runs the command.
 void win32_keyboard_binding_message(LPARAM lparam);
 // Installs the keyboard hook again (after display changes and resume).

@@ -129,6 +129,7 @@ if(WIN32)
     swinewm/win32/exec.c
     swinewm/win32/appbar.c
     swinewm/win32/audio.c
+    swinewm/win32/backlight.c
     swinewm/win32/bar.c
     swinewm/win32/canvas.c
     swinewm/win32/decor.c
@@ -136,6 +137,7 @@ if(WIN32)
     swinewm/win32/ipc.c
     swinewm/win32/keyboard.c
     swinewm/win32/layout.c
+    swinewm/win32/media.c
     swinewm/win32/mouse.c
     swinewm/win32/network.c
     swinewm/win32/notify.c
@@ -160,7 +162,8 @@ if(WIN32)
   target_compile_definitions(swinewm PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN
     WINVER=0x0A00 _WIN32_WINNT=0x0A00)
   target_link_libraries(swinewm PRIVATE swinewm_core user32 gdi32 dwmapi shell32
-    shcore advapi32 ole32 windowscodecs msimg32 uuid iphlpapi wlanapi pdh ws2_32 powrprof)
+    shcore advapi32 ole32 oleaut32 windowscodecs msimg32 uuid iphlpapi wlanapi pdh
+    ws2_32 powrprof wbemuuid dxva2)
 
   # The bar's CSS engine and per-pixel alpha drawing, for wofi's style.css.
   add_executable(swinemenu WIN32 swinemenu/main.c swinemenu/apps.c
